@@ -156,7 +156,7 @@ export default function CreateUserType() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "linear-gradient(135deg,#f8fafc 0%,#eef2ff 100%)", fontFamily: "'Inter',sans-serif" }}>
-      <Navbar title="CRM Admin" />
+      <Navbar title="ERP Admin" />
 
       <main className="flex-1 flex flex-col w-full max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
 

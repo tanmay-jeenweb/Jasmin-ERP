@@ -208,7 +208,7 @@ export default function BankMaster() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "#f8fafc", fontFamily: "'Inter',sans-serif" }}>
-      <Navbar title="CRM Admin" />
+      <Navbar title="ERP Admin" />
 
       <FinanceCompanyModal
         isOpen={isModalOpen}
