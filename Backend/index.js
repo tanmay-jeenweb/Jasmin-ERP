@@ -23,6 +23,10 @@ const { createUserDevicesTable } = require("./models/deviceModel.js");
 const { createMobileBrandsTable } = require("./models/mobileBrandModel.js");
 const { createBankTable } = require("./models/bankModel.js");
 const { createFinanceMachineTable } = require("./models/financeMachineModel.js");
+const { createStateTable } = require("./models/stateModel.js");
+const stateRoutes = require("./routes/stateRoutes.js");
+const { createProductTypeTable } = require("./models/productTypeModel.js");
+const productTypeRoutes = require("./routes/productTypeRoutes.js");
 
 
 const app = express();
@@ -70,6 +74,8 @@ app.use(["/api/usertypes", "/usertypes"], userTypeMasterRoutes);
 app.use(["/api/mobilebrands", "/mobilebrands"], mobileBrandRoutes);
 app.use(["/api/banks", "/banks"], bankRoutes);
 app.use(["/api/financemachines", "/financemachines"], financeMachineRoutes);
+app.use(["/api/states", "/states"], stateRoutes);
+app.use(["/api/producttypes", "/producttypes"], productTypeRoutes);
 
 
 // Global 404 handler
@@ -97,6 +103,8 @@ const startServer = async () => {
         await createMobileBrandsTable();
         await createBankTable();
         await createFinanceMachineTable();
+        await createStateTable();
+        await createProductTypeTable();
 
         console.log("All database tables are initialized and ready.");
 

@@ -12,6 +12,8 @@ import CreateUserType from "./pages/admin/user/CreateUserType";
 import MobileBrandMaster from "./pages/admin/MobileBrandMaster";
 import BankMaster from "./pages/admin/BankMaster";
 import FinanceMachineMaster from "./pages/admin/FinanceMachineMaster";
+import StateMaster from "./pages/admin/StateMaster";
+import ProductTypeMaster from "./pages/admin/ProductTypeMaster";
 import ActivityReport from "./pages/admin/ActivityReport";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -100,6 +102,20 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/finance-machines"
                     element={<FinanceMachineMaster />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="state_master" requiredAction="read" />}>
+                <Route
+                    path="/admin/states"
+                    element={<StateMaster />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="product_type_master" requiredAction="read" />}>
+                <Route
+                    path="/admin/product-types"
+                    element={<ProductTypeMaster />}
                 />
             </Route>
 

@@ -87,6 +87,24 @@ export default function Navbar() {
             color: "bg-violet-50 text-violet-600 border border-violet-100/50",
             activeColor: "bg-violet-100 text-violet-700",
             desc: "Manage finance machines"
+        },
+        {
+            name: "State Master",
+            path: "/admin/states",
+            masterKey: "state_master",
+            icon: "fa-solid fa-map-location-dot",
+            color: "bg-blue-50 text-blue-600 border border-blue-100/50",
+            activeColor: "bg-blue-100 text-blue-700",
+            desc: "Manage geographic states"
+        },
+        {
+            name: "Product Type Master",
+            path: "/admin/product-types",
+            masterKey: "product_type_master",
+            icon: "fa-solid fa-tags",
+            color: "bg-emerald-50 text-emerald-600 border border-emerald-100/50",
+            activeColor: "bg-emerald-100 text-emerald-700",
+            desc: "Manage product type tags"
         }
     ];
 

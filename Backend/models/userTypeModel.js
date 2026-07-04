@@ -16,6 +16,8 @@ const MASTERS = [
     { key: 'deposit_stock_approval', label: 'Deposit & Stock Approval' },
     { key: 'user_master', label: 'User Master' },
     { key: 'device_approval', label: 'Device Approval' },
+    { key: 'state_master', label: 'State Master' },
+    { key: 'product_type_master', label: 'Product Type Master' },
 ];
 
 // ─── Table creation ──────────────────────────────────────────────────────────
