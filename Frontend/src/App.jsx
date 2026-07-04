@@ -1,7 +1,7 @@
 import AppRoutes from "./routes";
 import Footer from "./components/Footer";
 import { useLocation } from "react-router-dom";
-
+// New branch push
 function App() {
     const location = useLocation();
     const hideFooterOnPaths = ["/"];
