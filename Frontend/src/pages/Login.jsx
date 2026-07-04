@@ -79,11 +79,11 @@ export default function Login() {
                     <h1 className="text-3xl lg:text-4xl font-extrabold text-white leading-tight tracking-tight">
                         Empowering Connection,<br />
                         <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-                            Redefining CRM.
+                            Redefining ERP.
                         </span>
                     </h1>
                     <p className="mt-3 text-slate-400 text-xs leading-relaxed max-w-sm">
-                        Manage your Jasmin Mobile distribution, sales network, agreements, and client relationships in one advanced management platform.
+                        Manage your Jasmin Mobile distribution, sales network, agreements, and business processes in one advanced management platform.
                     </p>
                 </div>
             </div>
@@ -107,7 +107,7 @@ export default function Login() {
                             Welcome Back
                         </h2>
                         <p className="text-slate-400 text-xs mt-1 text-center">
-                            Sign in to your CRM dashboard
+                            Sign in to your ERP dashboard
                         </p>
                     </div>
 

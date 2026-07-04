@@ -33,6 +33,10 @@ const allowedOrigins = [
     "http://crm.jasminmobile.com",
     "https://www.crm.jasminmobile.com",
     "http://www.crm.jasminmobile.com",
+    "https://erp.jasminmobile.com",
+    "http://erp.jasminmobile.com",
+    "https://www.erp.jasminmobile.com",
+    "http://www.erp.jasminmobile.com",
     process.env.FRONTEND_URL
 ].filter(Boolean);
 
