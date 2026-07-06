@@ -13,6 +13,10 @@ function App() {
 
     useEffect(() => {
         const initWatermark = async () => {
+            if (location.pathname === "/") {
+                setWatermarkText("");
+                return;
+            }
             try {
                 const devId = await getDeviceId();
                 const userStr = localStorage.getItem("user");
