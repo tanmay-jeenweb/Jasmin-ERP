@@ -152,12 +152,6 @@ export default function AppRoutes() {
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="branch_master" requiredAction="update" />}>
-                <Route
-                    path="/admin/branches/edit/:id"
-                    element={<CreateBranch />}
-                />
-            </Route>
 
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="branch_master" requiredAction="write" />}>
                 <Route
