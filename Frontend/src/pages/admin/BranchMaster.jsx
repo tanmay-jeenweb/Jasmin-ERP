@@ -5,6 +5,7 @@ import { getBranches, updateBranch, deleteBranch, syncBranches } from "../../api
 import DataTable from "../../components/DataTable";
 import toast from "react-hot-toast";
 import { usePermission } from "../../context/PermissionContext";
+import * as XLSX from "xlsx";
 
 // ─── Branch View Modal (Read-Only Detail view) ───────────────────────────────────
 function BranchViewModal({ isOpen, row, onClose }) {
@@ -187,6 +188,43 @@ export default function BranchMaster() {
     }
   };
 
+  const handleExportExcel = () => {
+    try {
+      const dataToExport = branches.map((row, idx) => ({
+        "Sr.No.": idx + 1,
+        "Name": row.name || "",
+        "Code": row.code || "",
+        "City": row.city || "",
+        "State": row.state_name || "",
+        "PHONE": row.phone || "",
+        "Other phones": "",
+        "Store type": row.store_type ? row.store_type.charAt(0).toUpperCase() + row.store_type.slice(1) : "",
+        "Status": row.status === "active" ? "Active" : "InActive"
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+
+      const maxLens = {};
+      dataToExport.forEach(row => {
+        Object.keys(row).forEach(key => {
+          const val = String(row[key]);
+          maxLens[key] = Math.max(maxLens[key] || key.length, val.length);
+        });
+      });
+      worksheet["!cols"] = Object.keys(maxLens).map(key => ({
+        wch: maxLens[key] + 3
+      }));
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Branches");
+      XLSX.writeFile(workbook, "Branch_Master_Report.xlsx");
+      toast.success("Excel exported successfully!");
+    } catch (err) {
+      console.error("Failed to export Excel:", err);
+      toast.error("Failed to export Excel file.");
+    }
+  };
+
   const filteredBranches = useMemo(() => {
     return branches.filter(b => b.status === (showActive ? "active" : "inactive"));
   }, [branches, showActive]);
@@ -256,22 +294,6 @@ export default function BranchMaster() {
                   </svg>
                 </button>
               )}
-
-              {/* Edit Action */}
-              {canUpdate && (
-                <button
-                  onClick={() => {
-                    navigate(`/admin/branches/edit/${row.id}`);
-                  }}
-                  style={{ display: "flex", width: 32, height: 32, alignItems: "center", justifyContent: "center", borderRadius: 8, border: "1px solid #d8b4fe", background: "#f3e8ff", color: "#6804a1", cursor: "pointer" }}
-                  title="Edit"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" style={{ width: 15, height: 15 }}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931Z" />
-                  </svg>
-                </button>
-              )}
-
               {/* Code Action */}
               {canUpdate && (
                 <button
@@ -387,6 +409,31 @@ export default function BranchMaster() {
           }
           actionButton={
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {hasPermission("branch_master", "read") && (
+                <button
+                  onClick={handleExportExcel}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "10px 20px",
+                    borderRadius: 9,
+                    background: "linear-gradient(135deg,#10b981,#059669)",
+                    color: "#fff",
+                    border: "none",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 8px rgba(16,185,129,0.35)",
+                    fontWeight: 600,
+                    fontSize: 13
+                  }}
+                  title="Export to Excel"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" style={{ width: 16, height: 16 }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                  </svg>
+                  Export Excel
+                </button>
+              )}
               {hasPermission("branch_master", "write") && (
                 <button
                   onClick={handleSync}
