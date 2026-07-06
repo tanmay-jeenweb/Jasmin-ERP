@@ -25,9 +25,85 @@ function DetailModal({ isOpen, row, onClose }) {
     return vBefore !== vAfter;
   };
 
-  const formatValue = (val) => {
+  const formatValue = (val, key) => {
     if (val === null || val === undefined) return <span style={{ color: "#94a3b8" }}>—</span>;
     if (typeof val === "boolean") return val ? "True" : "False";
+    
+    if (key === "permissions" && Array.isArray(val)) {
+      const MASTERS_MAP = {
+        user_type: "User Type Master",
+        mobile_brand_master: "Brand Master",
+        bank_master: "Finance Company Master",
+        finance_machine_master: "Finance Machine Master",
+        user_master: "User Master",
+        device_approval: "Device Approval",
+        state_master: "State Master",
+        product_type_master: "Product Type Master",
+      };
+
+      const PERM_LABELS = { canRead: "Read", canWrite: "Write / Approval", canUpdate: "Update", canDelete: "Delete" };
+      const PERM_COLORS = {
+        canRead: { bg: "#f3e8ff", border: "#d8b4fe", text: "#6804a1" },
+        canWrite: { bg: "#f0fdf4", border: "#bbf7d0", text: "#15803d" },
+        canUpdate: { bg: "#fffbeb", border: "#fde68a", text: "#b45309" },
+        canDelete: { bg: "#fff1f2", border: "#fecdd3", text: "#be123c" }
+      };
+
+      const normalized = val.map(p => ({
+        masterName: p.masterName || p.master_name,
+        canRead: !!(p.canRead || p.can_read),
+        canWrite: !!(p.canWrite || p.can_write),
+        canUpdate: !!(p.canUpdate || p.can_update),
+        canDelete: !!(p.canDelete || p.can_delete)
+      }));
+
+      const rows = normalized.map((p) => {
+        const masterName = p.masterName;
+        if (!masterName) return null;
+        const label = MASTERS_MAP[masterName] || masterName;
+        const isApprovalRow = masterName.endsWith("_approval");
+        const applicablePerms = isApprovalRow
+          ? ["canRead", "canWrite"]
+          : ["canRead", "canWrite", "canUpdate", "canDelete"];
+        const granted = applicablePerms.filter((perm) => p[perm]);
+        if (granted.length === 0) return null;
+        return { label, granted, isApprovalRow };
+      }).filter(Boolean);
+
+      if (rows.length === 0) {
+        return <span style={{ color: "#94a3b8", fontSize: 12 }}>No access</span>;
+      }
+
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "4px 0" }}>
+          {rows.map(({ label, granted, isApprovalRow }, idx) => (
+            <div key={idx} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span style={{
+                fontSize: 11, fontWeight: 700, color: "#475569",
+                background: "#f1f5f9", border: "1px solid #e2e8f0",
+                borderRadius: 5, padding: "2px 7px", whiteSpace: "nowrap"
+              }}>
+                {label}
+              </span>
+              <span style={{ color: "#cbd5e1", fontSize: 11 }}>→</span>
+              {granted.map((perm) => {
+                const c = PERM_COLORS[perm];
+                const labelText = isApprovalRow && perm === "canWrite" ? "Approval" : PERM_LABELS[perm];
+                return (
+                  <span key={perm} style={{
+                    fontSize: 10, fontWeight: 700, padding: "2px 7px",
+                    borderRadius: 5, background: c.bg, color: c.text, border: `1px solid ${c.border}`
+                  }}>
+                    {labelText}
+                  </span>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
     if (typeof val === "object") return JSON.stringify(val);
     return String(val);
   };
@@ -109,7 +185,7 @@ function DetailModal({ isOpen, row, onClose }) {
                         background: changed ? "rgba(254, 243, 199, 0.4)" : "transparent"
                       }}>
                         <td style={{ padding: "10px 14px", fontWeight: 550, color: "#1e293b", width: "30%" }}>{key}</td>
-                        <td style={{ padding: "10px 14px", color: "#475569", width: "35%", wordBreak: "break-all" }}>{formatValue(beforeObj[key])}</td>
+                        <td style={{ padding: "10px 14px", color: "#475569", width: "35%", wordBreak: "break-all" }}>{formatValue(beforeObj[key], key)}</td>
                         <td style={{
                           padding: "10px 14px",
                           color: changed ? "#92400e" : "#475569",
@@ -117,7 +193,7 @@ function DetailModal({ isOpen, row, onClose }) {
                           width: "35%",
                           wordBreak: "break-all"
                         }}>
-                          {formatValue(afterObj[key])}
+                          {formatValue(afterObj[key], key)}
                         </td>
                       </tr>
                     );
