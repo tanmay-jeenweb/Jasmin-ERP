@@ -15,6 +15,7 @@ import FinanceMachineMaster from "./pages/admin/FinanceMachineMaster";
 import StateMaster from "./pages/admin/StateMaster";
 import ProductTypeMaster from "./pages/admin/ProductTypeMaster";
 import ItemModelMaster from "./pages/admin/ItemModelMaster";
+import ModelGroupMaster from "./pages/admin/ModelGroupMaster";
 import BranchMaster from "./pages/admin/BranchMaster";
 import CreateBranch from "./pages/admin/CreateBranch";
 import BranchFinanceCode from "./pages/admin/BranchFinanceCode";
@@ -130,6 +131,10 @@ export default function AppRoutes() {
                 />
             </Route>
 
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="model_group_master" requiredAction="read" />}>
+                <Route
+                    path="/admin/model-groups"
+                    element={<ModelGroupMaster />}
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="branch_master" requiredAction="read" />}>
                 <Route
                     path="/admin/branches"
