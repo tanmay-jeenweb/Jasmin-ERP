@@ -10,6 +10,7 @@ const MASTERS = [
     { key: 'device_approval', label: 'Device Approval' },
     { key: 'state_master', label: 'State Master' },
     { key: 'product_type_master', label: 'Product Type Master' },
+    { key: 'item_model_master', label: 'Model Master' },
 ];
 
 // ─── Table creation ──────────────────────────────────────────────────────────

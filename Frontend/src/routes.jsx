@@ -14,6 +14,7 @@ import BankMaster from "./pages/admin/BankMaster";
 import FinanceMachineMaster from "./pages/admin/FinanceMachineMaster";
 import StateMaster from "./pages/admin/StateMaster";
 import ProductTypeMaster from "./pages/admin/ProductTypeMaster";
+import ItemModelMaster from "./pages/admin/ItemModelMaster";
 import ActivityReport from "./pages/admin/ActivityReport";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -116,6 +117,13 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/product-types"
                     element={<ProductTypeMaster />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="item_model_master" requiredAction="read" />}>
+                <Route
+                    path="/admin/item-models"
+                    element={<ItemModelMaster />}
                 />
             </Route>
 
