@@ -123,6 +123,13 @@ export default function Navbar() {
             color: "bg-teal-50 text-teal-600 border border-teal-100/50",
             activeColor: "bg-teal-100 text-teal-700",
             desc: "Fetch and manage model groups"
+            name: "Branch Master",
+            path: "/admin/branches",
+            masterKey: "branch_master",
+            icon: "fa-solid fa-store",
+            color: "bg-emerald-50 text-emerald-600 border border-emerald-100/50",
+            activeColor: "bg-emerald-100 text-emerald-700",
+            desc: "Manage branches & franchise stores"
         }
     ];
 

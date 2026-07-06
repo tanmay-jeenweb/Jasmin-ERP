@@ -31,6 +31,10 @@ const { createItemModelsTable } = require("./models/itemModelModel.js");
 const itemModelRoutes = require("./routes/itemModelRoutes.js");
 const { createModelGroupsTable } = require("./models/modelGroupModel.js");
 const modelGroupRoutes = require("./routes/modelGroupRoutes.js");
+const { createBranchTable } = require("./models/branchModel.js");
+const branchRoutes = require("./routes/branchRoutes.js");
+const { createBranchFinanceCodeTables } = require("./models/branchFinanceModel.js");
+const branchFinanceRoutes = require("./routes/branchFinanceRoutes.js");
 
 
 const app = express();
@@ -82,6 +86,8 @@ app.use(["/api/states", "/states"], stateRoutes);
 app.use(["/api/producttypes", "/producttypes"], productTypeRoutes);
 app.use(["/api/itemmodels", "/itemmodels"], itemModelRoutes);
 app.use(["/api/modelgroups", "/modelgroups"], modelGroupRoutes);
+app.use(["/api/branches", "/branches"], branchRoutes);
+app.use(["/api/branches/finance-codes", "/branches/finance-codes"], branchFinanceRoutes);
 
 
 // Global 404 handler
@@ -113,6 +119,8 @@ const startServer = async () => {
         await createProductTypeTable();
         await createItemModelsTable();
         await createModelGroupsTable();
+        await createBranchTable();
+        await createBranchFinanceCodeTables();
 
         console.log("All database tables are initialized and ready.");
 
