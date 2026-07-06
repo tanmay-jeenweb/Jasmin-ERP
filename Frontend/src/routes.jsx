@@ -135,6 +135,9 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/model-groups"
                     element={<ModelGroupMaster />}
+                />
+            </Route>
+
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="branch_master" requiredAction="read" />}>
                 <Route
                     path="/admin/branches"

@@ -123,6 +123,8 @@ export default function Navbar() {
             color: "bg-teal-50 text-teal-600 border border-teal-100/50",
             activeColor: "bg-teal-100 text-teal-700",
             desc: "Fetch and manage model groups"
+        },
+        {
             name: "Branch Master",
             path: "/admin/branches",
             masterKey: "branch_master",
