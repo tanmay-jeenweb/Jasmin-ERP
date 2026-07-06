@@ -27,6 +27,8 @@ const { createStateTable } = require("./models/stateModel.js");
 const stateRoutes = require("./routes/stateRoutes.js");
 const { createProductTypeTable } = require("./models/productTypeModel.js");
 const productTypeRoutes = require("./routes/productTypeRoutes.js");
+const { createItemModelsTable } = require("./models/itemModelModel.js");
+const itemModelRoutes = require("./routes/itemModelRoutes.js");
 
 
 const app = express();
@@ -76,6 +78,7 @@ app.use(["/api/banks", "/banks"], bankRoutes);
 app.use(["/api/financemachines", "/financemachines"], financeMachineRoutes);
 app.use(["/api/states", "/states"], stateRoutes);
 app.use(["/api/producttypes", "/producttypes"], productTypeRoutes);
+app.use(["/api/itemmodels", "/itemmodels"], itemModelRoutes);
 
 
 // Global 404 handler
@@ -105,6 +108,7 @@ const startServer = async () => {
         await createFinanceMachineTable();
         await createStateTable();
         await createProductTypeTable();
+        await createItemModelsTable();
 
         console.log("All database tables are initialized and ready.");
 

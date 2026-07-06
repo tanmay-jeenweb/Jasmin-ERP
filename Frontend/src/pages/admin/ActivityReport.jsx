@@ -39,6 +39,7 @@ function DetailModal({ isOpen, row, onClose }) {
         device_approval: "Device Approval",
         state_master: "State Master",
         product_type_master: "Product Type Master",
+        item_model_master: "Model Master",
       };
 
       const PERM_LABELS = { canRead: "Read", canWrite: "Write / Approval", canUpdate: "Update", canDelete: "Delete" };

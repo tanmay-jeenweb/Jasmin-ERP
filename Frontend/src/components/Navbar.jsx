@@ -105,6 +105,15 @@ export default function Navbar() {
             color: "bg-emerald-50 text-emerald-600 border border-emerald-100/50",
             activeColor: "bg-emerald-100 text-emerald-700",
             desc: "Manage product type tags"
+        },
+        {
+            name: "Model Master",
+            path: "/admin/item-models",
+            masterKey: "item_model_master",
+            icon: "fa-solid fa-layer-group",
+            color: "bg-blue-50 text-blue-600 border border-blue-100/50",
+            activeColor: "bg-blue-100 text-blue-700",
+            desc: "Fetch and manage item models"
         }
     ];
 

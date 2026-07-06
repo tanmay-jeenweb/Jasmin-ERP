@@ -13,7 +13,7 @@ function App() {
 
     useEffect(() => {
         const initWatermark = async () => {
-            if (location.pathname === "/") {
+            if (location.pathname === "/" || location.pathname === "/device-registration") {
                 setWatermarkText("");
                 return;
             }
