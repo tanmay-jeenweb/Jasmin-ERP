@@ -15,6 +15,9 @@ import FinanceMachineMaster from "./pages/admin/FinanceMachineMaster";
 import StateMaster from "./pages/admin/StateMaster";
 import ProductTypeMaster from "./pages/admin/ProductTypeMaster";
 import ItemModelMaster from "./pages/admin/ItemModelMaster";
+import BranchMaster from "./pages/admin/BranchMaster";
+import CreateBranch from "./pages/admin/CreateBranch";
+import BranchFinanceCode from "./pages/admin/BranchFinanceCode";
 import ActivityReport from "./pages/admin/ActivityReport";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -124,6 +127,34 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/item-models"
                     element={<ItemModelMaster />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="branch_master" requiredAction="read" />}>
+                <Route
+                    path="/admin/branches"
+                    element={<BranchMaster />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="branch_master" requiredAction="write" />}>
+                <Route
+                    path="/admin/branches/create"
+                    element={<CreateBranch />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="branch_master" requiredAction="update" />}>
+                <Route
+                    path="/admin/branches/edit/:id"
+                    element={<CreateBranch />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="branch_master" requiredAction="write" />}>
+                <Route
+                    path="/admin/branches/code/:id"
+                    element={<BranchFinanceCode />}
                 />
             </Route>
 

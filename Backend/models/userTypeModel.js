@@ -11,6 +11,7 @@ const MASTERS = [
     { key: 'state_master', label: 'State Master' },
     { key: 'product_type_master', label: 'Product Type Master' },
     { key: 'item_model_master', label: 'Model Master' },
+    { key: 'branch_master', label: 'Branch Master' },
 ];
 
 // ─── Table creation ──────────────────────────────────────────────────────────
