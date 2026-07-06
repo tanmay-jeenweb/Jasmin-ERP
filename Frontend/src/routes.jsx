@@ -15,6 +15,7 @@ import FinanceMachineMaster from "./pages/admin/FinanceMachineMaster";
 import StateMaster from "./pages/admin/StateMaster";
 import ProductTypeMaster from "./pages/admin/ProductTypeMaster";
 import ItemModelMaster from "./pages/admin/ItemModelMaster";
+import ModelGroupMaster from "./pages/admin/ModelGroupMaster";
 import ActivityReport from "./pages/admin/ActivityReport";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -124,6 +125,13 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/item-models"
                     element={<ItemModelMaster />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="model_group_master" requiredAction="read" />}>
+                <Route
+                    path="/admin/model-groups"
+                    element={<ModelGroupMaster />}
                 />
             </Route>
 
