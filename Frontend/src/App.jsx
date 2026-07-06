@@ -3,7 +3,7 @@ import Footer from "./components/Footer";
 import { useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { getDeviceId } from "./utils/device";
-
+// New branch push
 function App() {
     const location = useLocation();
     const hideFooterOnPaths = ["/"];
@@ -13,6 +13,10 @@ function App() {
 
     useEffect(() => {
         const initWatermark = async () => {
+            if (location.pathname === "/") {
+                setWatermarkText("");
+                return;
+            }
             try {
                 const devId = await getDeviceId();
                 const userStr = localStorage.getItem("user");
