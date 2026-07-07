@@ -25,14 +25,14 @@ const upsertModelGroups = async (groups, addedBy, deviceId) => {
     try {
         await connection.beginTransaction();
 
+        // Clear existing model groups so we only keep the active synced ones
+        await connection.execute('DELETE FROM model_group_master');
+
         for (const g of groups) {
             const query = `
                 INSERT INTO model_group_master (
                     brand_name, model_group_name, added_by, device_id
                 ) VALUES (?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE
-                    added_by = VALUES(added_by),
-                    device_id = VALUES(device_id)
             `;
             
             await connection.execute(query, [
