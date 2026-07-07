@@ -12,7 +12,7 @@ const syncModelGroupsController = async (req, res) => {
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
 
         // 1. Fetch from external API
-        const apiUrl = 'https://apxwapi.jasminmobile.com:81/api/apxapi/GetItemModelInfo?CompanyCode=JITPL&Status=ALL&ItemClassificationType=0';
+        const apiUrl = 'https://apxwapi.jasminmobile.com:81/api/apxapi/GetItemModelInfo?CompanyCode=JITPL&Status=Active&ItemClassificationType=0';
         const response = await fetch(apiUrl, {
             method: 'GET',
             headers: {
