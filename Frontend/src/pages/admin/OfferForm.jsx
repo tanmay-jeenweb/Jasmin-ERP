@@ -612,11 +612,7 @@ export default function OfferForm() {
                               onChange={(e) => handleTxChange(idx, "relative_offer", e.target.value)}
                               style={{ width: "100%", boxSizing: "border-box", border: "1px solid #cbd5e1", borderRadius: 7, padding: "8px 10px", background: "#fff", outline: "none", color: "#334155" }}
                             >
-                              <option value=""></option>
-                              <option value="Cash Transaction">Cash Transaction</option>
-                              <option value="Card/Swipe Transaction">Card/Swipe Transaction</option>
-                              <option value="Finance Transaction">Finance Transaction</option>
-                              <option value="Bundle Transaction">Bundle Transaction</option>
+                              <option value="">-select-</option>
                             </select>
                           </td>
 
