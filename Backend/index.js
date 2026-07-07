@@ -35,6 +35,8 @@ const { createBranchTable } = require("./models/branchModel.js");
 const branchRoutes = require("./routes/branchRoutes.js");
 const { createBranchFinanceCodeTables } = require("./models/branchFinanceModel.js");
 const branchFinanceRoutes = require("./routes/branchFinanceRoutes.js");
+const { createOffersTable } = require("./models/offerModel.js");
+const offerRoutes = require("./routes/offerRoutes.js");
 
 
 const app = express();
@@ -88,6 +90,7 @@ app.use(["/api/itemmodels", "/itemmodels"], itemModelRoutes);
 app.use(["/api/modelgroups", "/modelgroups"], modelGroupRoutes);
 app.use(["/api/branches", "/branches"], branchRoutes);
 app.use(["/api/branches/finance-codes", "/branches/finance-codes"], branchFinanceRoutes);
+app.use(["/api/offers", "/offers"], offerRoutes);
 
 
 // Global 404 handler
@@ -121,6 +124,7 @@ const startServer = async () => {
         await createModelGroupsTable();
         await createBranchTable();
         await createBranchFinanceCodeTables();
+        await createOffersTable();
 
         console.log("All database tables are initialized and ready.");
 

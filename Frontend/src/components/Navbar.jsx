@@ -314,6 +314,24 @@ export default function Navbar() {
                             </div>
                         )}
 
+                        {/* Offers Tab */}
+                        {isAdmin && (
+                            <div className="relative">
+                                <button
+                                    onClick={() => {
+                                        navigate("/admin/offers");
+                                    }}
+                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${
+                                        location.pathname.startsWith("/admin/offers") ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                    }`}
+                                >
+                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                        <span className="font-semibold text-white truncate">Offers</span>
+                                    </span>
+                                </button>
+                            </div>
+                        )}
+
                         {/* Report Tab */}
                         {isAdmin && (
                             <div className="relative">

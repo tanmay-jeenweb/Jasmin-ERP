@@ -20,6 +20,8 @@ import BranchMaster from "./pages/admin/BranchMaster";
 import CreateBranch from "./pages/admin/CreateBranch";
 import BranchFinanceCode from "./pages/admin/BranchFinanceCode";
 import ActivityReport from "./pages/admin/ActivityReport";
+import Offers from "./pages/admin/Offers";
+import OfferForm from "./pages/admin/OfferForm";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -58,6 +60,21 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/dashboard"
                     element={<AdminDashboard />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" />}>
+                <Route
+                    path="/admin/offers"
+                    element={<Offers />}
+                />
+                <Route
+                    path="/admin/offers/create"
+                    element={<OfferForm />}
+                />
+                <Route
+                    path="/admin/offers/edit/:id"
+                    element={<OfferForm />}
                 />
             </Route>
 
