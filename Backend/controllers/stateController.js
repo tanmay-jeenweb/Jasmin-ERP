@@ -9,7 +9,7 @@ const { createAuditLog } = require('../models/auditLogModel.js');
 
 const addStateController = async (req, res) => {
     try {
-        const { name } = req.body;
+        const { name, live } = req.body;
         const addedBy = req.user.id;
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
 
@@ -17,7 +17,9 @@ const addStateController = async (req, res) => {
             return res.status(400).json({ success: false, message: 'State name is required' });
         }
 
-        const result = await createState(name.trim(), addedBy, deviceId);
+        const stateLive = (live === 'Yes' || live === 'No') ? live : 'Yes';
+
+        const result = await createState(name.trim(), addedBy, deviceId, stateLive);
         
         await createAuditLog(
             addedBy,
@@ -30,14 +32,15 @@ const addStateController = async (req, res) => {
                 id: result.insertId,
                 name: name.trim(),
                 added_by: addedBy,
-                device_id: deviceId
+                device_id: deviceId,
+                live: stateLive
             }
         );
 
         res.status(201).json({
             success: true,
             message: 'State added successfully',
-            data: { id: result.insertId, name: name.trim() }
+            data: { id: result.insertId, name: name.trim(), live: stateLive }
         });
     } catch (error) {
         console.error('Error adding state:', error);
@@ -71,7 +74,7 @@ const getAllStatesController = async (req, res) => {
 const updateStateController = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name } = req.body;
+        const { name, live } = req.body;
 
         if (!name || !name.trim()) {
             return res.status(400).json({ success: false, message: 'State name is required' });
@@ -83,7 +86,9 @@ const updateStateController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'State not found' });
         }
 
-        await updateState(id, name.trim());
+        const stateLive = (live === 'Yes' || live === 'No') ? live : beforeData.live;
+
+        await updateState(id, name.trim(), stateLive);
         
         await createAuditLog(
             req.user?.id,
@@ -94,7 +99,8 @@ const updateStateController = async (req, res) => {
             beforeData,
             {
                 ...beforeData,
-                name: name.trim()
+                name: name.trim(),
+                live: stateLive
             }
         );
 

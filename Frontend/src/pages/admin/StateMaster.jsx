@@ -8,12 +8,15 @@ import { usePermission } from "../../context/PermissionContext";
 // ─── State Modal (Handles both Create and Edit) ───────────────────────────────────
 function StateModal({ isOpen, row, onClose, onSave, saving }) {
   const [name, setName] = useState("");
+  const [live, setLive] = useState("Yes");
 
   useEffect(() => {
     if (row) {
       setName(row.name || "");
+      setLive(row.live || "Yes");
     } else {
       setName("");
+      setLive("Yes");
     }
   }, [row, isOpen]);
 
@@ -24,7 +27,7 @@ function StateModal({ isOpen, row, onClose, onSave, saving }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onSave(isEdit ? row.id : null, name.trim());
+    onSave(isEdit ? row.id : null, name.trim(), live);
   };
 
   return (
@@ -53,7 +56,7 @@ function StateModal({ isOpen, row, onClose, onSave, saving }) {
         {/* Modal Body */}
         <form onSubmit={handleSubmit}>
           <div style={{ padding: "24px 28px" }}>
-            <div style={{ marginBottom: 8 }}>
+            <div style={{ marginBottom: 20 }}>
               <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
                 State Name <span style={{ color: "#e11d48" }}>*</span>
               </label>
@@ -67,6 +70,34 @@ function StateModal({ isOpen, row, onClose, onSave, saving }) {
                 onFocus={e => e.target.style.borderColor = "#6804a1"}
                 onBlur={e => e.target.style.borderColor = "#cbd5e1"}
               />
+            </div>
+
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                Live <span style={{ color: "#e11d48" }}>*</span>
+              </label>
+              <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 15, color: "#1e293b", cursor: "pointer", fontWeight: 500 }}>
+                  <input
+                    type="radio"
+                    name="live"
+                    checked={live === "Yes"}
+                    onChange={() => setLive("Yes")}
+                    style={{ width: 18, height: 18, accentColor: "#6804a1" }}
+                  />
+                  Yes
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 15, color: "#1e293b", cursor: "pointer", fontWeight: 500 }}>
+                  <input
+                    type="radio"
+                    name="live"
+                    checked={live === "No"}
+                    onChange={() => setLive("No")}
+                    style={{ width: 18, height: 18, accentColor: "#6804a1" }}
+                  />
+                  No
+                </label>
+              </div>
             </div>
           </div>
 
@@ -118,16 +149,16 @@ export default function StateMaster() {
     loadStates();
   }, []);
 
-  const handleSave = async (id, name) => {
+  const handleSave = async (id, name, live) => {
     setSaving(true);
     try {
       if (id) {
         // Edit Mode
-        await updateState(id, { name });
+        await updateState(id, { name, live });
         toast.success("State updated successfully");
       } else {
         // Create Mode
-        await createState({ name });
+        await createState({ name, live });
         toast.success("State created successfully");
       }
       setIsModalOpen(false);
@@ -162,6 +193,23 @@ export default function StateMaster() {
       {
         key: "name", label: "State Name",
         render: (row) => <span style={{ fontWeight: 700, color: "#0f172a" }}>{row.name}</span>
+      },
+      {
+        key: "live", label: "Live",
+        render: (row) => (
+          <span style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "4px 10px",
+            borderRadius: "9999px",
+            fontSize: "12px",
+            fontWeight: "700",
+            background: row.live === "Yes" ? "#ecfdf5" : "#f1f5f9",
+            color: row.live === "Yes" ? "#047857" : "#475569"
+          }}>
+            {row.live || "Yes"}
+          </span>
+        )
       }
     ];
 
