@@ -101,7 +101,7 @@ const getAllItemModels = async () => {
             COALESCE(u.name, 'System') AS added_by_name
         FROM item_model_master imm
         LEFT JOIN users u ON imm.added_by = u.id
-        ORDER BY imm.timestamp DESC
+        ORDER BY CAST(imm.item_code AS UNSIGNED) ASC, imm.item_code ASC
     `;
     const [results] = await db.execute(query);
     return results;

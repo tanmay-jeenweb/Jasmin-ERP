@@ -63,7 +63,7 @@ const getAllModelGroups = async () => {
             COALESCE(u.name, 'System') AS added_by_name
         FROM model_group_master mgm
         LEFT JOIN users u ON mgm.added_by = u.id
-        ORDER BY mgm.timestamp DESC
+        ORDER BY mgm.id ASC
     `;
     const [results] = await db.execute(query);
     return results;
