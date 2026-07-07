@@ -22,7 +22,14 @@ function App() {
                 const userStr = localStorage.getItem("user");
                 const user = userStr ? JSON.parse(userStr) : null;
                 const username = user?.username || user?.name || "Guest";
-                setWatermarkText(`${username}-${devId}`);
+
+                const today = new Date();
+                const dd = String(today.getDate()).padStart(2, '0');
+                const mm = String(today.getMonth() + 1).padStart(2, '0');
+                const yyyy = today.getFullYear();
+                const dateStr = `${dd}/${mm}/${yyyy}`;
+
+                setWatermarkText(`${username}-${dateStr}-${devId}`);
             } catch (e) {
                 console.error("Watermark init failed", e);
             }
@@ -30,15 +37,15 @@ function App() {
         initWatermark();
     }, [location.pathname]);
 
-    const svgString = watermarkText ? `<svg xmlns="http://www.w3.org/2000/svg" width="450" height="280">
+    const svgString = watermarkText ? `<svg xmlns="http://www.w3.org/2000/svg" width="340" height="200">
   <text 
     x="50%" 
     y="50%" 
-    font-size="14" 
+    font-size="11" 
     font-family="'Inter', sans-serif" 
     fill="rgba(255, 3, 3, 0.32)" 
     text-anchor="middle" 
-    transform="rotate(-28, 225, 140)"
+    transform="rotate(-25, 140, 70)"
   >
     ${watermarkText}
   </text>

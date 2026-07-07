@@ -7,18 +7,31 @@ const createStateTable = async () => {
             name VARCHAR(150) NOT NULL UNIQUE,
             added_by INT NOT NULL,
             device_id VARCHAR(255),
+            live ENUM('Yes', 'No') DEFAULT 'Yes',
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE CASCADE
         )
     `;
     await db.execute(query);
+
+    // Migration to add live column if it doesn't exist on already created table
+    try {
+        const [columns] = await db.execute(`SHOW COLUMNS FROM state_master LIKE 'live'`);
+        if (columns.length === 0) {
+            await db.execute(`ALTER TABLE state_master ADD COLUMN live ENUM('Yes', 'No') DEFAULT 'Yes'`);
+            console.log("Added 'live' column to 'state_master' table");
+        }
+    } catch (err) {
+        console.error("Error migrating state_master live column:", err);
+    }
+
     console.log("State master table ready");
 };
 
-const createState = async (name, addedBy, deviceId) => {
-    const query = `INSERT INTO state_master (name, added_by, device_id) VALUES (?, ?, ?)`;
-    const [result] = await db.execute(query, [name, addedBy, deviceId]);
+const createState = async (name, addedBy, deviceId, live) => {
+    const query = `INSERT INTO state_master (name, added_by, device_id, live) VALUES (?, ?, ?, ?)`;
+    const [result] = await db.execute(query, [name, addedBy, deviceId, live || 'Yes']);
     return result;
 };
 
@@ -27,6 +40,7 @@ const getAllStates = async () => {
         SELECT
             sm.id,
             sm.name,
+            sm.live,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             sm.device_id,
             sm.timestamp
@@ -38,9 +52,9 @@ const getAllStates = async () => {
     return results;
 };
 
-const updateState = async (id, name) => {
-    const query = `UPDATE state_master SET name = ? WHERE id = ?`;
-    const [result] = await db.execute(query, [name, id]);
+const updateState = async (id, name, live) => {
+    const query = `UPDATE state_master SET name = ?, live = ? WHERE id = ?`;
+    const [result] = await db.execute(query, [name, live || 'Yes', id]);
     return result;
 };
 
@@ -52,7 +66,7 @@ const deleteState = async (id) => {
 
 const getStateById = async (id) => {
     const query = `
-        SELECT id, name, added_by, device_id, timestamp 
+        SELECT id, name, live, added_by, device_id, timestamp 
         FROM state_master 
         WHERE id = ?
     `;
