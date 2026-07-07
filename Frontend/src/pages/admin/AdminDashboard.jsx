@@ -172,6 +172,96 @@ export default function AdminDashboard() {
             render: (row) => <span className="text-sm text-slate-600">{row.mob_no || '—'}</span>
         },
         {
+            key: 'state',
+            label: 'State',
+            render: (row) => {
+                if (!row.state) return '—';
+                try {
+                    const arr = typeof row.state === 'string' ? JSON.parse(row.state) : row.state;
+                    if (Array.isArray(arr)) {
+                        if (arr.includes('All')) return 'All';
+                        return arr.join(', ');
+                    }
+                    return String(row.state);
+                } catch (e) {
+                    return String(row.state);
+                }
+            }
+        },
+        {
+            key: 'city',
+            label: 'City',
+            render: (row) => <span className="text-sm text-slate-600">{row.city || '—'}</span>
+        },
+        {
+            key: 'branch',
+            label: 'Branch',
+            render: (row) => {
+                if (!row.branch) return '—';
+                try {
+                    const arr = typeof row.branch === 'string' ? JSON.parse(row.branch) : row.branch;
+                    if (Array.isArray(arr)) {
+                        if (arr.includes('All')) return 'All';
+                        return arr.join(', ');
+                    }
+                    return String(row.branch);
+                } catch (e) {
+                    return String(row.branch);
+                }
+            }
+        },
+        {
+            key: 'product_type',
+            label: 'Product Type',
+            render: (row) => {
+                if (!row.product_type) return '—';
+                try {
+                    const arr = typeof row.product_type === 'string' ? JSON.parse(row.product_type) : row.product_type;
+                    if (Array.isArray(arr)) {
+                        if (arr.includes('All')) return 'All';
+                        return arr.join(', ');
+                    }
+                    return String(row.product_type);
+                } catch (e) {
+                    return String(row.product_type);
+                }
+            }
+        },
+        {
+            key: 'landing_type',
+            label: 'Landing Type',
+            render: (row) => {
+                if (!row.landing_type) return '—';
+                try {
+                    const arr = typeof row.landing_type === 'string' ? JSON.parse(row.landing_type) : row.landing_type;
+                    if (Array.isArray(arr)) {
+                        if (arr.includes('All')) return 'All';
+                        return arr.join(', ');
+                    }
+                    return String(row.landing_type);
+                } catch (e) {
+                    return String(row.landing_type);
+                }
+            }
+        },
+        {
+            key: 'brand',
+            label: 'Brand',
+            render: (row) => {
+                if (!row.brand) return '—';
+                try {
+                    const arr = typeof row.brand === 'string' ? JSON.parse(row.brand) : row.brand;
+                    if (Array.isArray(arr)) {
+                        if (arr.includes('All')) return 'All';
+                        return arr.join(', ');
+                    }
+                    return String(row.brand);
+                } catch (e) {
+                    return String(row.brand);
+                }
+            }
+        },
+        {
             key: "active",
             label: "Status",
             render: (row) => row.active ? (

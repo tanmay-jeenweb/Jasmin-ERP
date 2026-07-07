@@ -25,7 +25,8 @@ const fetchUsers = async (req, res) => {
             SELECT 
                 u.id, u.name, u.username, u.email, u.mob_no, u.role,
                 d.status AS device_status, ut.type_name,
-                d.device_id, device_verification_required, u.active
+                d.device_id, device_verification_required, u.active,
+                u.state, u.city, u.branch, u.product_type, u.landing_type
             FROM users u
             LEFT JOIN user_devices d ON d.user_id = u.id AND d.closed_at IS NULL
             LEFT JOIN user_types ut ON u.user_type_id = ut.id
@@ -55,7 +56,13 @@ const createUserByAdmin = async (req, res) => {
             mobNo,
             dateOfJoin,
             deviceVerificationRequired,
-            role
+            role,
+            state,
+            city,
+            branch,
+            productType,
+            landingType,
+            brand
         } = req.body;
 
         if (!name || !username || !email || !password) {
@@ -73,7 +80,13 @@ const createUserByAdmin = async (req, res) => {
             dateOfJoin || null,
             typeof deviceVerificationRequired === 'boolean' ? deviceVerificationRequired : true,
             true,
-            role || 'user'
+            role || 'user',
+            state || null,
+            city || null,
+            branch || null,
+            productType || null,
+            landingType || null,
+            brand || null
         );
 
         const adminDeviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
@@ -93,7 +106,13 @@ const createUserByAdmin = async (req, res) => {
                 mob_no: mobNo || null,
                 date_of_join: dateOfJoin || null,
                 device_verification_required: deviceVerificationRequired,
-                role: role || 'user'
+                role: role || 'user',
+                state,
+                city,
+                branch,
+                product_type: productType,
+                landing_type: landingType,
+                brand: brand
             }
         );
 
