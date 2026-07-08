@@ -22,6 +22,7 @@ import BranchFinanceCode from "./pages/admin/BranchFinanceCode";
 import ActivityReport from "./pages/admin/ActivityReport";
 import Offers from "./pages/admin/Offers";
 import OfferForm from "./pages/admin/OfferForm";
+import TargetVsAchievement from "./pages/admin/TargetVsAchievement";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -75,6 +76,13 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/offers/edit/:id"
                     element={<OfferForm />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" />}>
+                <Route
+                    path="/admin/target-vs-achievement"
+                    element={<TargetVsAchievement />}
                 />
             </Route>
 
