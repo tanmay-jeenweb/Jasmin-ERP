@@ -1,12 +1,16 @@
 import { useEffect, useState, useMemo } from "react";
 import Navbar from "../../components/Navbar";
 import { getTargetVsAchievements } from "../../api/targetVsAchievementApi";
+import { getBranches } from "../../api/branchApi";
 import DataTable from "../../components/DataTable";
+import * as XLSX from "xlsx-js-style";
+import toast from "react-hot-toast";
 
 export default function TargetVsAchievement() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -25,6 +29,67 @@ export default function TargetVsAchievement() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const response = await getBranches();
+      const branches = response.data.data || [];
+      
+      const monthName = new Date().toLocaleString('en-US', { month: 'long' });
+      const monthYear = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
+      
+      const qtyTgtHeader = `${monthName} QTY TGT`;
+      const qtyValHeader = `${monthName} QTY Val`;
+      
+      const dataToExport = branches.map((branch) => ({
+        "Month": monthYear,
+        "ID": "",
+        "Branch Name": branch.name || "",
+        "Updated ABM name": "",
+        [qtyTgtHeader]: "",
+        [qtyValHeader]: ""
+      }));
+      
+      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+      
+      // Auto-fit columns
+      const maxLens = {};
+      dataToExport.forEach(row => {
+        Object.keys(row).forEach(key => {
+          const val = String(row[key]);
+          maxLens[key] = Math.max(maxLens[key] || key.length, val.length);
+        });
+      });
+      worksheet["!cols"] = Object.keys(maxLens).map(key => ({
+        wch: maxLens[key] + 3
+      }));
+      
+      // Make header row bold
+      if (worksheet["!ref"]) {
+        const range = XLSX.utils.decode_range(worksheet["!ref"]);
+        for (let col = range.s.c; col <= range.e.c; col++) {
+          const address = XLSX.utils.encode_cell({ r: 0, c: col });
+          if (worksheet[address]) {
+            worksheet[address].s = {
+              font: { bold: true }
+            };
+          }
+        }
+      }
+      
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Template");
+      XLSX.writeFile(workbook, "Target_vs_Achievement_Template.xlsx");
+      
+      toast.success("Excel template exported successfully!");
+    } catch (err) {
+      console.error("Failed to export Excel template:", err);
+      toast.error("Failed to export Excel template. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Format quantities, values and percentages
   const formatQty = (val) => {
@@ -212,6 +277,19 @@ export default function TargetVsAchievement() {
           columns={columns}
           loading={loading}
           searchPlaceholder="Search target or achievement..."
+          actionButton={
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center gap-2 h-10 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none focus:outline-none"
+              title="Export Excel Template"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className={`w-4 h-4 ${exporting ? 'animate-bounce' : ''}`}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+              {exporting ? "Exporting..." : "Export"}
+            </button>
+          }
         />
       </main>
     </div>
