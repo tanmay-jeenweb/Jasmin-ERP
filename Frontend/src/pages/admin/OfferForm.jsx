@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import { getOfferById, createOffer, updateOffer } from "../../api/offerApi";
@@ -18,6 +18,12 @@ export default function OfferForm() {
   const [offer_type, setOfferType] = useState("Cashback Offer");
   const [from_date, setFromDate] = useState("");
   const [to_date, setToDate] = useState("");
+
+  // Brand dropdown & search state
+  const [isBrandDropdownOpen, setIsBrandDropdownOpen] = useState(false);
+  const [brandSearch, setBrandSearch] = useState("");
+  const brandDropdownRef = useRef(null);
+  const brandSearchInputRef = useRef(null);
 
   // Dynamic transaction rows
   const [transactions, setTransactions] = useState([
@@ -91,6 +97,33 @@ export default function OfferForm() {
     const brands = modelGroupsList.map(item => item.brand_name).filter(Boolean);
     return [...new Set(brands)].sort();
   }, [modelGroupsList]);
+
+  // Filtered brands based on search input
+  const filteredBrands = useMemo(() => {
+    return uniqueBrands.filter(b =>
+      b.toLowerCase().includes(brandSearch.toLowerCase())
+    );
+  }, [uniqueBrands, brandSearch]);
+
+  // Click outside brand dropdown listener
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (brandDropdownRef.current && !brandDropdownRef.current.contains(event.target)) {
+        setIsBrandDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // Auto-focus search input when brand dropdown opens
+  useEffect(() => {
+    if (isBrandDropdownOpen && brandSearchInputRef.current) {
+      brandSearchInputRef.current.focus();
+    }
+  }, [isBrandDropdownOpen]);
 
   // Extract model groups for selected brand
   const modelGroupsForSelectedBrand = useMemo(() => {
@@ -260,24 +293,171 @@ export default function OfferForm() {
                   {/* Left Inputs column */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                     {/* Brand */}
-                    <div>
+                    <div ref={brandDropdownRef} style={{ position: "relative" }}>
                       <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
                         Brand <span style={{ color: "#e11d48" }}>*</span>
                       </label>
-                      <select
-                        value={brand_name}
-                        onChange={(e) => {
-                          setBrandName(e.target.value);
-                          setSelectedModelGroups([]); // reset selections on brand change
+                      
+                      {/* Dropdown trigger header */}
+                      <div
+                        onClick={() => setIsBrandDropdownOpen(!isBrandDropdownOpen)}
+                        style={{
+                          width: "100%",
+                          boxSizing: "border-box",
+                          border: isBrandDropdownOpen ? "1.5px solid #6804a1" : "1.5px solid #cbd5e1",
+                          borderRadius: 9,
+                          padding: "11px 14px",
+                          fontSize: 14,
+                          outline: "none",
+                          color: brand_name ? "#1e293b" : "#94a3b8",
+                          background: "#fff",
+                          cursor: "pointer",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          userSelect: "none",
+                          boxShadow: isBrandDropdownOpen ? "0 0 0 3px rgba(104, 4, 161, 0.15)" : "none",
+                          transition: "all 0.15s ease-in-out"
                         }}
-                        required
-                        style={{ width: "100%", boxSizing: "border-box", border: "1.5px solid #cbd5e1", borderRadius: 9, padding: "11px 14px", fontSize: 14, outline: "none", color: "#1e293b", background: "#fff" }}
                       >
-                        <option value="">Select Brand</option>
-                        {uniqueBrands.map((b) => (
-                          <option key={b} value={b}>{b}</option>
-                        ))}
-                      </select>
+                        <span>{brand_name || "Select Brand"}</span>
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          strokeWidth={2.5}
+                          stroke="currentColor"
+                          style={{
+                            width: 14,
+                            height: 14,
+                            color: "#64748b",
+                            transform: isBrandDropdownOpen ? "rotate(180deg)" : "none",
+                            transition: "transform 0.2s ease"
+                          }}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                        </svg>
+                      </div>
+
+                      {/* Dropdown panel */}
+                      {isBrandDropdownOpen && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: "100%",
+                            left: 0,
+                            right: 0,
+                            zIndex: 100,
+                            marginTop: 6,
+                            background: "#fff",
+                            border: "1px solid #e2e8f0",
+                            borderRadius: 10,
+                            boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+                            padding: 8,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 8
+                          }}
+                        >
+                          {/* Search bar inside dropdown */}
+                          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              strokeWidth={2}
+                              stroke="currentColor"
+                              style={{
+                                position: "absolute",
+                                left: 10,
+                                width: 15,
+                                height: 15,
+                                color: "#94a3b8"
+                              }}
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                            </svg>
+                            <input
+                              ref={brandSearchInputRef}
+                              type="text"
+                              placeholder="Search brand..."
+                              value={brandSearch}
+                              onChange={(e) => setBrandSearch(e.target.value)}
+                              onClick={(e) => e.stopPropagation()} // Keep dropdown open when searching
+                              style={{
+                                width: "100%",
+                                boxSizing: "border-box",
+                                border: "1.5px solid #cbd5e1",
+                                borderRadius: 7,
+                                padding: "8px 12px 8px 32px",
+                                fontSize: 13,
+                                outline: "none",
+                                color: "#1e293b",
+                                background: "#fff",
+                                transition: "border-color 0.15s ease",
+                              }}
+                              onFocus={(e) => e.target.style.borderColor = "#6804a1"}
+                              onBlur={(e) => e.target.style.borderColor = "#cbd5e1"}
+                            />
+                          </div>
+
+                          {/* Options list */}
+                          <div
+                            style={{
+                              maxHeight: 180,
+                              overflowY: "auto",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 2
+                            }}
+                          >
+                            {filteredBrands.length > 0 ? (
+                              filteredBrands.map((b) => {
+                                const isSelected = b === brand_name;
+                                return (
+                                  <div
+                                    key={b}
+                                    onClick={() => {
+                                      setBrandName(b);
+                                      setSelectedModelGroups([]); // reset selections on brand change
+                                      setBrandSearch("");
+                                      setIsBrandDropdownOpen(false);
+                                    }}
+                                    style={{
+                                      padding: "8px 12px",
+                                      fontSize: 13.5,
+                                      borderRadius: 7,
+                                      cursor: "pointer",
+                                      color: isSelected ? "#6804a1" : "#334155",
+                                      fontWeight: isSelected ? 600 : 400,
+                                      background: isSelected ? "#f3e8ff" : "transparent",
+                                      transition: "background-color 0.1s ease, color 0.1s ease"
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      if (!isSelected) {
+                                        e.currentTarget.style.background = "#f1f5f9";
+                                        e.currentTarget.style.color = "#0f172a";
+                                      }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      if (!isSelected) {
+                                        e.currentTarget.style.background = "transparent";
+                                        e.currentTarget.style.color = "#334155";
+                                      }
+                                    }}
+                                  >
+                                    {b}
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <div style={{ padding: "16px 12px", fontSize: 13, color: "#94a3b8", textAlign: "center" }}>
+                                No brands found
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* State */}

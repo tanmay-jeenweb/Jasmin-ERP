@@ -37,6 +37,8 @@ const { createBranchFinanceCodeTables } = require("./models/branchFinanceModel.j
 const branchFinanceRoutes = require("./routes/branchFinanceRoutes.js");
 const { createOffersTable } = require("./models/offerModel.js");
 const offerRoutes = require("./routes/offerRoutes.js");
+const { createTargetVsAchievementsTable } = require("./models/targetVsAchievementModel.js");
+const targetVsAchievementRoutes = require("./routes/targetVsAchievementRoutes.js");
 
 
 const app = express();
@@ -91,6 +93,7 @@ app.use(["/api/modelgroups", "/modelgroups"], modelGroupRoutes);
 app.use(["/api/branches", "/branches"], branchRoutes);
 app.use(["/api/branches/finance-codes", "/branches/finance-codes"], branchFinanceRoutes);
 app.use(["/api/offers", "/offers"], offerRoutes);
+app.use(["/api/target-vs-achievement", "/target-vs-achievement"], targetVsAchievementRoutes);
 
 
 // Global 404 handler
@@ -125,6 +128,7 @@ const startServer = async () => {
         await createBranchTable();
         await createBranchFinanceCodeTables();
         await createOffersTable();
+        await createTargetVsAchievementsTable();
 
         console.log("All database tables are initialized and ready.");
 
