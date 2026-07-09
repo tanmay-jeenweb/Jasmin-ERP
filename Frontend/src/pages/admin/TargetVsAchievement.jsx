@@ -120,7 +120,7 @@ export default function TargetVsAchievement() {
       key: "sr_no",
       label: "Sr. No",
       minWidth: "70px",
-      render: (row) => <span className="font-semibold text-slate-500">{row.sr_no}</span>
+      render: (row) => <span className="font-semibold text-slate-505">{row.sr_no}</span>
     },
     {
       key: "branch_name",
@@ -261,12 +261,12 @@ export default function TargetVsAchievement() {
   ], []);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "#f8fafc", fontFamily: "'Inter',sans-serif" }}>
+    <div className="flex flex-col flex-1 bg-slate-50 font-sans">
       <Navbar title="ERP Admin" />
 
-      <main style={{ flex: 1, display: "flex", flexDirection: "column", width: "100%", margin: "0 auto", padding: "32px 30px" }}>
+      <main className="flex-1 flex flex-col w-full mx-auto px-[30px] py-8">
         {error && (
-          <div style={{ background: "#fff1f2", border: "1px solid #fecdd3", color: "#be123c", padding: "12px 16px", borderRadius: 10, marginBottom: 20, fontSize: 14, fontWeight: 500 }}>
+          <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-lg mb-5 text-sm font-medium">
             {error}
           </div>
         )}

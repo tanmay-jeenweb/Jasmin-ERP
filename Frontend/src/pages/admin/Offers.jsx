@@ -50,33 +50,24 @@ export default function Offers() {
       { key: "id", label: "ID", minWidth: "60px" },
       {
         key: "brand_name", label: "Brand",
-        render: (row) => <span style={{ fontWeight: 700, color: "#0f172a" }}>{row.brand_name}</span>
+        render: (row) => <span className="font-bold text-slate-900">{row.brand_name}</span>
       },
       {
         key: "model_group_name", label: "Model Group(s)",
         render: (row) => (
-          <span style={{ fontWeight: 700, color: "#6804a1", whiteSpace: "normal", wordBreak: "break-all" }}>
+          <span className="font-bold text-indigo-650 whitespace-normal break-all">
             {row.model_group_name || "—"}
           </span>
         )
       },
       {
         key: "state_name", label: "State",
-        render: (row) => <span style={{ color: "#334155" }}>{row.state_name || "—"}</span>
+        render: (row) => <span className="text-slate-650">{row.state_name || "—"}</span>
       },
       {
         key: "offer_type", label: "Offer Type",
         render: (row) => (
-          <span style={{
-            display: "inline-flex",
-            alignItems: "center",
-            padding: "4px 10px",
-            borderRadius: "9999px",
-            fontSize: "12px",
-            fontWeight: "700",
-            background: row.offer_type === "Cashback Offer" ? "#e0f2fe" : row.offer_type === "Bundle Offer" ? "#fef3c7" : "#ecfdf5",
-            color: row.offer_type === "Cashback Offer" ? "#0369a1" : row.offer_type === "Bundle Offer" ? "#b45309" : "#047857"
-          }}>
+          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${row.offer_type === "Cashback Offer" ? "bg-sky-100 text-sky-700" : row.offer_type === "Bundle Offer" ? "bg-amber-100 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
             {row.offer_type}
           </span>
         )
@@ -98,14 +89,14 @@ export default function Offers() {
       cols.push({
         key: "actions", label: "Actions", sortable: false, minWidth: "120px",
         render: (row) => (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="flex items-center gap-2">
             {canUpdate && (
               <button
                 onClick={() => navigate(`/admin/offers/edit/${row.id}`)}
-                style={{ display: "flex", width: 32, height: 32, alignItems: "center", borderRadius: 8, border: "1px solid #d8b4fe", background: "#f3e8ff", color: "#6804a1", cursor: "pointer", justifyContent: "center" }}
+                className="flex w-8 h-8 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-indigo-650 cursor-pointer hover:bg-purple-100 transition-colors"
                 title="Edit"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" style={{ width: 15, height: 15 }}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-[15px] h-[15px]">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931Z" />
                 </svg>
               </button>
@@ -114,10 +105,10 @@ export default function Offers() {
               <button
                 onClick={() => handleDelete(row.id)}
                 disabled={deleting}
-                style={{ display: "flex", width: 32, height: 32, alignItems: "center", borderRadius: 8, border: "1px solid #fecdd3", background: "#fff1f2", color: "#be123c", cursor: deleting ? "not-allowed" : "pointer", justifyContent: "center" }}
+                className="flex w-8 h-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 cursor-pointer hover:bg-rose-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Delete"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" style={{ width: 15, height: 15 }}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-[15px] h-[15px]">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5h12m-1.5 0-.563 12.375A2.25 2.25 0 0113.693 21H10.307a2.25 2.25 0 01-2.244-2.125L7.5 7.5m3-3h3A1.5 1.5 0 0115 6v1.5H9V6a1.5 1.5 0 011.5-1.5Z" />
                 </svg>
               </button>
@@ -131,12 +122,12 @@ export default function Offers() {
   }, [deleting, navigate]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "#f8fafc", fontFamily: "'Inter',sans-serif" }}>
+    <div className="flex flex-col flex-1 bg-slate-50 font-sans">
       <Navbar title="ERP Admin" />
 
-      <main style={{ flex: 1, display: "flex", flexDirection: "column", width: "100%", margin: "0 auto", padding: "32px 30px" }}>
+      <main className="flex-1 flex flex-col w-full mx-auto px-[30px] py-8">
         {error && (
-          <div style={{ background: "#fff1f2", border: "1px solid #fecdd3", color: "#be123c", padding: "12px 16px", borderRadius: 10, marginBottom: 20, fontSize: 14, fontWeight: 500 }}>
+          <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-lg mb-5 text-sm font-medium">
             {error}
           </div>
         )}
@@ -150,10 +141,10 @@ export default function Offers() {
           actionButton={
             <button
               onClick={() => navigate("/admin/offers/create")}
-              style={{ display: "flex", width: 40, height: 40, alignItems: "center", justifyContent: "center", borderRadius: 9, background: "linear-gradient(135deg,#6804a1,#52037e)", color: "#fff", border: "none", cursor: "pointer", boxShadow: "0 2px 8px rgba(104,4,161,0.35)" }}
+              className="flex w-10 h-10 items-center justify-center rounded-[9px] bg-gradient-to-br from-indigo-650 to-indigo-755 text-white border-none cursor-pointer shadow-[0_2px_8px_rgba(104,4,161,0.35)] hover:opacity-95 transition-opacity"
               title="Create Offer"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" style={{ width: 18, height: 18 }}>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-[18px] h-[18px]">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
               </svg>
             </button>
