@@ -157,6 +157,11 @@ export default function Navbar() {
             name: "Target vs Achievement",
             path: "/admin/target-vs-achievement",
             icon: "fa-solid fa-bullseye",
+        },
+        {
+            name: "Stock vs Cash Deposit",
+            path: "/admin/stock-vs-cash-deposit",
+            icon: "fa-solid fa-money-bill-transfer",
         }
     ];
 
@@ -357,7 +362,7 @@ export default function Navbar() {
                                 <button
                                     onClick={() => setIsReportsOpen(!isReportsOpen)}
                                     className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${
-                                        isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement")
+                                        isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/stock-vs-cash-deposit")
                                             ? "bg-white/15"
                                             : "bg-[#6804a1] hover:bg-white/5"
                                     }`}
