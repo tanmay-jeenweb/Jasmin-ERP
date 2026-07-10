@@ -26,7 +26,7 @@ function DetailModal({ isOpen, row, onClose }) {
   };
 
   const formatValue = (val, key) => {
-    if (val === null || val === undefined) return <span style={{ color: "#94a3b8" }}>—</span>;
+    if (val === null || val === undefined) return <span className="text-slate-400">—</span>;
     if (typeof val === "boolean") return val ? "True" : "False";
     
     if (key === "permissions" && Array.isArray(val)) {
@@ -44,11 +44,11 @@ function DetailModal({ isOpen, row, onClose }) {
       };
 
       const PERM_LABELS = { canRead: "Read", canWrite: "Write / Approval", canUpdate: "Update", canDelete: "Delete" };
-      const PERM_COLORS = {
-        canRead: { bg: "#f3e8ff", border: "#d8b4fe", text: "#6804a1" },
-        canWrite: { bg: "#f0fdf4", border: "#bbf7d0", text: "#15803d" },
-        canUpdate: { bg: "#fffbeb", border: "#fde68a", text: "#b45309" },
-        canDelete: { bg: "#fff1f2", border: "#fecdd3", text: "#be123c" }
+      const PERM_CLASSES = {
+        canRead: "bg-purple-50 text-indigo-650 border-purple-205",
+        canWrite: "bg-green-50 text-green-700 border-green-205",
+        canUpdate: "bg-amber-50 text-amber-800 border-amber-205",
+        canDelete: "bg-rose-50 text-rose-700 border-rose-205"
       };
 
       const normalized = val.map(p => ({
@@ -73,29 +73,21 @@ function DetailModal({ isOpen, row, onClose }) {
       }).filter(Boolean);
 
       if (rows.length === 0) {
-        return <span style={{ color: "#94a3b8", fontSize: 12 }}>No access</span>;
+        return <span className="text-slate-400 text-xs">No access</span>;
       }
 
       return (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "4px 0" }}>
+        <div className="flex flex-col gap-1.5 py-1">
           {rows.map(({ label, granted, isApprovalRow }, idx) => (
-            <div key={idx} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-              <span style={{
-                fontSize: 11, fontWeight: 700, color: "#475569",
-                background: "#f1f5f9", border: "1px solid #e2e8f0",
-                borderRadius: 5, padding: "2px 7px", whiteSpace: "nowrap"
-              }}>
+            <div key={idx} className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-bold text-slate-600 bg-slate-100 border border-slate-200 rounded-[5px] px-1.75 py-0.5 whitespace-nowrap">
                 {label}
               </span>
-              <span style={{ color: "#cbd5e1", fontSize: 11 }}>→</span>
+              <span className="text-slate-300 text-[11px]">→</span>
               {granted.map((perm) => {
-                const c = PERM_COLORS[perm];
                 const labelText = isApprovalRow && perm === "canWrite" ? "Approval" : PERM_LABELS[perm];
                 return (
-                  <span key={perm} style={{
-                    fontSize: 10, fontWeight: 700, padding: "2px 7px",
-                    borderRadius: 5, background: c.bg, color: c.text, border: `1px solid ${c.border}`
-                  }}>
+                  <span key={perm} className={`text-[10px] font-bold px-1.75 py-0.5 rounded-[5px] border ${PERM_CLASSES[perm]}`}>
                     {labelText}
                   </span>
                 );
@@ -111,42 +103,34 @@ function DetailModal({ isOpen, row, onClose }) {
   };
 
   return (
-    <div style={{
-      position: "fixed", inset: 0, zIndex: 1000,
-      background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)",
-      display: "flex", alignItems: "center", justifyContent: "center", padding: 16
-    }}>
-      <div style={{
-        background: "#fff", borderRadius: 18, width: "100%", maxWidth: 700, margin: "0 auto",
-        boxShadow: "0 25px 60px rgba(0,0,0,0.2)", overflow: "hidden", display: "flex", flexDirection: "column",
-        maxHeight: "90vh"
-      }}>
+    <div className="fixed inset-0 z-[1000] bg-slate-900/55 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-[18px] w-full max-w-[700px] mx-auto shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
-        <div style={{ padding: "20px 28px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", justifyContent: "space-between", background: "linear-gradient(135deg,#6804a1,#52037e)" }}>
-          <div style={{ flex: 1 }}>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#fff" }}>Activity Log Detail</h2>
-            <p style={{ margin: "4px 0 0", fontSize: 13, color: "#d9e2ec" }}>
+        <div className="px-7 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-br from-indigo-600 to-indigo-700">
+          <div className="flex-1">
+            <h2 className="m-0 text-lg font-bold text-white">Activity Log Detail</h2>
+            <p className="mt-1 text-[13px] text-indigo-100">
               {row.master_name} — {row.change_type.toUpperCase()} by {row.username}
             </p>
           </div>
-          <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, width: 34, height: 34, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" style={{ width: 18, height: 18 }}>
+          <button onClick={onClose} className="bg-white/15 border-none rounded-lg w-[34px] h-[34px] cursor-pointer flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-[18px] h-[18px]">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         {/* Modal Body */}
-        <div style={{ padding: "20px 28px", overflowY: "auto", flex: 1, background: "#f8fafc" }}>
+        <div className="px-7 py-5 overflow-y-auto flex-1 bg-slate-50">
           {/* Metadata Grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 20, background: "#fff", padding: 16, borderRadius: 12, border: "1px solid #e2e8f0" }}>
+          <div className="grid grid-cols-3 gap-4 mb-5 bg-white p-4 rounded-xl border border-slate-200">
             <div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>User</span>
-              <p style={{ margin: "2px 0 0", fontSize: 14, fontWeight: 600, color: "#1e293b" }}>{row.username || "System"}</p>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">User</span>
+              <p className="mt-0.5 text-sm font-semibold text-slate-800">{row.username || "System"}</p>
             </div>
             <div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Action Type</span>
-              <p style={{ margin: "2px 0 0" }}>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Action Type</span>
+              <p className="mt-0.5">
                 <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
                   row.change_type === 'created' || row.change_type === 'approved' ? 'bg-green-100 text-green-800' :
                   row.change_type === 'updated' ? 'bg-amber-100 text-amber-800' :
@@ -158,43 +142,34 @@ function DetailModal({ isOpen, row, onClose }) {
               </p>
             </div>
             <div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Timestamp</span>
-              <p style={{ margin: "2px 0 0", fontSize: 14, color: "#1e293b" }}>{new Date(row.created_at).toLocaleString()}</p>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Timestamp</span>
+              <p className="mt-0.5 text-sm text-slate-800">{new Date(row.created_at).toLocaleString()}</p>
             </div>
           </div>
 
           {/* Table View */}
-          <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e2e8f0", overflow: "hidden" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}>
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <table className="w-full border-collapse text-left text-sm">
               <thead>
-                <tr style={{ background: "#f1f5f9", borderBottom: "1px solid #e2e8f0" }}>
-                  <th style={{ padding: "10px 14px", fontWeight: 600, color: "#475569" }}>Field</th>
-                  <th style={{ padding: "10px 14px", fontWeight: 600, color: "#475569" }}>Before</th>
-                  <th style={{ padding: "10px 14px", fontWeight: 600, color: "#475569" }}>After</th>
+                <tr className="bg-slate-100 border-b border-slate-200">
+                  <th className="px-3.5 py-2.5 font-semibold text-slate-600">Field</th>
+                  <th className="px-3.5 py-2.5 font-semibold text-slate-600">Before</th>
+                  <th className="px-3.5 py-2.5 font-semibold text-slate-600">After</th>
                 </tr>
               </thead>
               <tbody>
                 {allKeys.length === 0 ? (
                   <tr>
-                    <td colSpan={3} style={{ padding: 14, textAlign: "center", color: "#64748b" }}>No details available</td>
+                    <td colSpan={3} className="p-3.5 text-center text-slate-500">No details available</td>
                   </tr>
                 ) : (
                   allKeys.map((key) => {
                     const changed = isFieldChanged(key);
                     return (
-                      <tr key={key} style={{
-                        borderBottom: "1px solid #f1f5f9",
-                        background: changed ? "rgba(254, 243, 199, 0.4)" : "transparent"
-                      }}>
-                        <td style={{ padding: "10px 14px", fontWeight: 550, color: "#1e293b", width: "30%" }}>{key}</td>
-                        <td style={{ padding: "10px 14px", color: "#475569", width: "35%", wordBreak: "break-all" }}>{formatValue(beforeObj[key], key)}</td>
-                        <td style={{
-                          padding: "10px 14px",
-                          color: changed ? "#92400e" : "#475569",
-                          fontWeight: changed ? 600 : 400,
-                          width: "35%",
-                          wordBreak: "break-all"
-                        }}>
+                      <tr key={key} className={`border-b border-slate-100 last:border-b-0 ${changed ? "bg-amber-50/40" : "bg-transparent"}`}>
+                        <td className="px-3.5 py-2.5 font-medium text-slate-800 w-[30%]">{key}</td>
+                        <td className="px-3.5 py-2.5 text-slate-600 w-[35%] break-all">{formatValue(beforeObj[key], key)}</td>
+                        <td className={`px-3.5 py-2.5 w-[35%] break-all ${changed ? "text-amber-850 font-semibold" : "text-slate-600 font-normal"}`}>
                           {formatValue(afterObj[key], key)}
                         </td>
                       </tr>
@@ -207,9 +182,9 @@ function DetailModal({ isOpen, row, onClose }) {
         </div>
 
         {/* Modal Footer */}
-        <div style={{ padding: "16px 28px", borderTop: "1px solid #f1f5f9", display: "flex", justifyContent: "flex-end", background: "#fafafa" }}>
+        <div className="px-7 py-4 border-t border-slate-100 flex justify-end bg-slate-50">
           <button type="button" onClick={onClose}
-            style={{ padding: "9px 24px", borderRadius: 8, border: "1.5px solid #cbd5e1", color: "#475569", background: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+            className="px-6 py-2.25 rounded-lg border-[1.5px] border-slate-300 text-slate-600 bg-white font-bold text-[13px] cursor-pointer hover:bg-slate-50 transition-colors">
             Close
           </button>
         </div>

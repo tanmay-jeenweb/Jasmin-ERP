@@ -139,25 +139,25 @@ export default function CreateBranch() {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "linear-gradient(135deg,#f8fafc 0%,#eef2ff 100%)", fontFamily: "'Inter',sans-serif" }}>
+    <div className="flex flex-col flex-1 bg-gradient-to-br from-slate-50 to-indigo-50 font-sans">
       <Navbar title="ERP Admin" />
 
       <main className="flex-1 flex flex-col w-full max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
+        <div className="flex items-center justify-between mb-7">
           <div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, color: "#1e293b", margin: 0 }}>
+            <h1 className="text-2xl font-bold text-slate-800 m-0">
               {isEdit ? "Edit Branch Details" : "Create New Branch"}
             </h1>
-            <p style={{ color: "#64748b", marginTop: 4, fontSize: 14 }}>
+            <p className="text-slate-500 mt-1 text-sm">
               {isEdit ? "Modify existing branch master attributes." : "Add a new branch location to the ERP system."}
             </p>
           </div>
           <button
             onClick={() => navigate("/admin/branches")}
-            style={{ display: "flex", alignItems: "center", gap: 6, color: "#64748b", background: "none", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 500 }}
+            className="flex items-center gap-1.5 text-slate-500 bg-none border-none cursor-pointer text-sm font-medium hover:text-slate-700 transition-colors"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" style={{ width: 16, height: 16 }}>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
             </svg>
             Back to Branch List
@@ -165,19 +165,18 @@ export default function CreateBranch() {
         </div>
 
         {loading ? (
-          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "100px 0" }}>
-            <span style={{ fontSize: 16, color: "#475569", fontWeight: 600 }}>Loading branch details...</span>
+          <div className="flex justify-center items-center py-[100px]">
+            <span className="text-base text-slate-600 font-semibold">Loading branch details...</span>
           </div>
         ) : (
-          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "32px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "24px" }}>
+          <div className="bg-white border border-slate-200 rounded-xl p-8 shadow-sm">
+            <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-6">
                 {formFields.map((f) => {
-                  const gridColumn = f.fullWidth ? "span 2" : "span 1";
                   return (
-                    <div key={f.name} style={{ gridColumn: f.fullWidth ? "1 / -1" : "auto" }}>
-                      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
-                        {f.label} {f.required && <span style={{ color: "#e11d48" }}>*</span>}
+                    <div key={f.name} className={f.fullWidth ? "col-span-full" : ""}>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                        {f.label} {f.required && <span className="text-rose-600">*</span>}
                       </label>
                       {f.type === "textarea" ? (
                         <textarea
@@ -187,9 +186,7 @@ export default function CreateBranch() {
                           required={f.required}
                           placeholder={f.placeholder}
                           rows={4}
-                          style={{ width: "100%", boxSizing: "border-box", border: "1.5px solid #cbd5e1", borderRadius: 9, padding: "11px 14px", fontSize: 14, outline: "none", color: "#1e293b", fontFamily: "inherit", resize: "none" }}
-                          onFocus={e => e.target.style.borderColor = "#6804a1"}
-                          onBlur={e => e.target.style.borderColor = "#cbd5e1"}
+                          className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-[11px] text-sm outline-none text-slate-800 font-sans resize-none focus:border-indigo-650 transition-colors"
                         />
                       ) : f.type === "select" ? (
                         <select
@@ -197,9 +194,7 @@ export default function CreateBranch() {
                           value={formData[f.name]}
                           onChange={handleChange}
                           required={f.required}
-                          style={{ width: "100%", boxSizing: "border-box", border: "1.5px solid #cbd5e1", borderRadius: 9, padding: "11px 14px", fontSize: 14, outline: "none", color: "#1e293b", background: "#fff" }}
-                          onFocus={e => e.target.style.borderColor = "#6804a1"}
-                          onBlur={e => e.target.style.borderColor = "#cbd5e1"}
+                          className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-[11px] text-sm outline-none text-slate-800 bg-white focus:border-indigo-650 transition-colors"
                         >
                           {f.prompt && <option value="">{f.prompt}</option>}
                           {f.options.map(opt => (
@@ -214,9 +209,7 @@ export default function CreateBranch() {
                           onChange={handleChange}
                           required={f.required}
                           placeholder={f.placeholder}
-                          style={{ width: "100%", boxSizing: "border-box", border: "1.5px solid #cbd5e1", borderRadius: 9, padding: "11px 14px", fontSize: 14, outline: "none", color: "#1e293b" }}
-                          onFocus={e => e.target.style.borderColor = "#6804a1"}
-                          onBlur={e => e.target.style.borderColor = "#cbd5e1"}
+                          className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-[11px] text-sm outline-none text-slate-800 focus:border-indigo-650 transition-colors"
                         />
                       )}
                     </div>
@@ -225,30 +218,18 @@ export default function CreateBranch() {
               </div>
 
               {/* Actions */}
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 12, paddingTop: 20, borderTop: "1px solid #f1f5f9" }}>
+              <div className="flex justify-end gap-3 mt-3 pt-5 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => navigate("/admin/branches")}
-                  style={{
-                    padding: "10px 22px", borderRadius: 9, border: "1.5px solid #cbd5e1",
-                    color: "#475569", background: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer",
-                    transition: "background 0.15s"
-                  }}
-                  onMouseEnter={e => e.target.style.background = "#f8fafc"}
-                  onMouseLeave={e => e.target.style.background = "#fff"}
+                  className="px-5.5 py-2.5 rounded-[9px] border-[1.5px] border-slate-300 text-slate-600 bg-white font-semibold text-sm cursor-pointer hover:bg-slate-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  style={{
-                    padding: "10px 28px", borderRadius: 9, border: "none",
-                    background: saving ? "#94a3b8" : "linear-gradient(135deg,#6804a1,#52037e)",
-                    color: "#fff", fontWeight: 700, fontSize: 14, cursor: saving ? "not-allowed" : "pointer",
-                    boxShadow: saving ? "none" : "0 2px 8px rgba(104,4,161,0.35)",
-                    transition: "all 0.2s"
-                  }}
+                  className="px-7 py-2.5 rounded-[9px] border-none text-white font-bold text-sm bg-gradient-to-br from-indigo-600 to-indigo-700 shadow-[0_2px_8px_rgba(104,4,161,0.35)] cursor-pointer disabled:bg-slate-400 disabled:cursor-not-allowed disabled:shadow-none hover:opacity-95 transition-all"
                 >
                   {saving ? "Saving…" : isEdit ? "Save Changes" : "Create Branch"}
                 </button>

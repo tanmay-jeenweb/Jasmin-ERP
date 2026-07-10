@@ -1,4 +1,10 @@
-const { getAllTargetVsAchievements } = require('../models/targetVsAchievementModel.js');
+const { 
+    getAllTargetVsAchievements, 
+    upsertTargetVsAchievements,
+    upsertAchievements
+} = require('../models/targetVsAchievementModel.js');
+const { getAllBranches } = require('../models/branchModel.js');
+const { createAuditLog } = require('../models/auditLogModel.js');
 
 const getAllTargetVsAchievementsController = async (req, res) => {
     try {
@@ -17,6 +23,291 @@ const getAllTargetVsAchievementsController = async (req, res) => {
     }
 };
 
+const importTargetVsAchievementsController = async (req, res) => {
+    try {
+        const records = req.body;
+        const addedBy = req.user.id;
+        const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+
+        if (!Array.isArray(records) || records.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid records list'
+            });
+        }
+
+        // Validate branch name is present in all rows
+        for (const r of records) {
+            if (!r.branch_name) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Branch Name is required for all rows'
+                });
+            }
+        }
+
+        const now = new Date();
+        const totalDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const remainingDays = totalDays - now.getDate();
+        const remDays = remainingDays > 0 ? remainingDays : 1;
+
+        await upsertTargetVsAchievements(records, addedBy, deviceId, remDays);
+
+        try {
+            await createAuditLog(
+                addedBy,
+                req.user?.name || req.user?.username || 'Unknown',
+                deviceId,
+                'Target vs Achievement Import',
+                'updated',
+                null,
+                {
+                    imported_count: records.length,
+                    imported_at: new Date().toISOString()
+                }
+            );
+        } catch (auditErr) {
+            console.error("Failed to write audit log for target vs achievement import:", auditErr);
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Successfully imported ${records.length} target records.`
+        });
+    } catch (error) {
+        console.error('Error importing target records:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error while importing targets'
+        });
+    }
+};
+
+const syncTargetVsAchievementsController = async (req, res) => {
+    try {
+        const addedBy = req.user.id;
+        const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+
+        // 1. Determine target date (default to current local date)
+        let targetYear, targetMonth, targetDay;
+        if (req.body.date) {
+            const parts = req.body.date.split('-'); // Expected "YYYY-MM-DD"
+            if (parts.length === 3) {
+                targetYear = parseInt(parts[0], 10);
+                targetMonth = parseInt(parts[1], 10) - 1;
+                targetDay = parseInt(parts[2], 10);
+            }
+        }
+
+        if (targetYear === undefined) {
+            const now = new Date();
+            targetYear = now.getFullYear();
+            targetMonth = now.getMonth();
+            targetDay = now.getDate();
+        }
+
+        const targetDate = new Date(targetYear, targetMonth, targetDay);
+        const lmTargetDate = new Date(targetYear, targetMonth - 1, targetDay);
+        const firstDayCurrentMonth = new Date(targetYear, targetMonth, 1);
+        const firstDayLastMonth = new Date(targetYear, targetMonth - 1, 1);
+
+        const formatToYYYYMMDD = (d) => {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}${month}${day}`;
+        };
+
+        const startDateStr = formatToYYYYMMDD(firstDayLastMonth);
+        const endDateStr = formatToYYYYMMDD(targetDate);
+
+        console.log(`Syncing achievements from external API for date ${req.body.date || 'today'} (${formatToYYYYMMDD(targetDate)})`);
+        console.log(`Fetch range: ${startDateStr} to ${endDateStr}`);
+
+        // 2. Fetch invoice details from external API
+        const apiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetExtendedInvoiceDetails?CompanyCode=JITPL&InvoiceStartDate=${startDateStr}&InvoiceEndDate=${endDateStr}&SalespersonCode=0`;
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+                'userid': process.env.MODEL_API_USERID || 'WebSite',
+                'Securitycode': process.env.MODEL_API_SECURITYCODE || '1151-8111-6444-4166',
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            return res.status(response.status).json({
+                success: false,
+                message: `External API returned status: ${response.statusText}`
+            });
+        }
+
+        const invoices = await response.json();
+        console.log(`Fetched ${invoices.length || 0} invoice records from API.`);
+
+        // 3. Load branches to map branch codes to names
+        const branches = await getAllBranches();
+        const branchNameLookup = {};
+        for (const b of branches) {
+            if (b.code) {
+                branchNameLookup[b.code.toUpperCase()] = b.name;
+            }
+            if (b.name) {
+                branchNameLookup[b.name.toUpperCase()] = b.name;
+            }
+        }
+
+        // Initialize achievement statistics map
+        const achievementsMap = {};
+        for (const b of branches) {
+            achievementsMap[b.name] = {
+                branch_name: b.name,
+                ftd_qty_ach: 0,
+                ftd_value_ach: 0.00,
+                lmftd_qty_ach: 0,
+                lmftd_value_ach: 0.00,
+                mtd_qty_ach: 0,
+                mtd_value_ach: 0.00,
+                lmtd_qty_ach: 0,
+                lmtd_value_ach: 0.00,
+                btd_qty: 0,
+                btd_value: 0.00,
+                ddr_qty: 0,
+                ddr_value: 0.00,
+                growth_qty_percentage: 0.00,
+                growth_value_percentage: 0.00
+            };
+        }
+
+        // 4. Aggregate data
+        const ftdYYYYMMDD = formatToYYYYMMDD(targetDate);
+        const lmftdYYYYMMDD = formatToYYYYMMDD(lmTargetDate);
+        const mtdStartYYYYMMDD = formatToYYYYMMDD(firstDayCurrentMonth);
+        const lmtdStartYYYYMMDD = formatToYYYYMMDD(firstDayLastMonth);
+
+        for (const invoice of invoices) {
+            const invoiceCode = (invoice.invoicePrimaryData?.BranchCode || '').toUpperCase();
+            const invoiceName = (invoice.invoicePrimaryData?.BranchName || '').toUpperCase();
+            const branchName = branchNameLookup[invoiceCode] || branchNameLookup[invoiceName];
+
+            if (!branchName) continue;
+
+            const invoiceDateStr = invoice.invoicePrimaryData?.InvoiceDate;
+            if (!invoiceDateStr) continue;
+
+            const [id, im, iy] = invoiceDateStr.split('/');
+            const invDate = new Date(parseInt(iy, 10), parseInt(im, 10) - 1, parseInt(id, 10));
+            const invYYYYMMDD = formatToYYYYMMDD(invDate);
+
+            const value = parseFloat(invoice.invoicePrimaryData?.InvoiceValue) || 0;
+            let qty = 0;
+            if (Array.isArray(invoice.invoiceItemData)) {
+                for (const item of invoice.invoiceItemData) {
+                    qty += parseFloat(item.Qty) || 0;
+                }
+            }
+
+            // FTD
+            if (invYYYYMMDD === ftdYYYYMMDD) {
+                achievementsMap[branchName].ftd_qty_ach += qty;
+                achievementsMap[branchName].ftd_value_ach += value;
+            }
+
+            // LMFTD
+            if (invYYYYMMDD === lmftdYYYYMMDD) {
+                achievementsMap[branchName].lmftd_qty_ach += qty;
+                achievementsMap[branchName].lmftd_value_ach += value;
+            }
+
+            // MTD
+            if (invYYYYMMDD >= mtdStartYYYYMMDD && invYYYYMMDD <= ftdYYYYMMDD) {
+                achievementsMap[branchName].mtd_qty_ach += qty;
+                achievementsMap[branchName].mtd_value_ach += value;
+            }
+
+            // LMTD
+            if (invYYYYMMDD >= lmtdStartYYYYMMDD && invYYYYMMDD <= lmftdYYYYMMDD) {
+                achievementsMap[branchName].lmtd_qty_ach += qty;
+                achievementsMap[branchName].lmtd_value_ach += value;
+            }
+        }
+
+        // 5. Query current target values to calculate MTD percentages
+        const currentTargetVsAchievements = await getAllTargetVsAchievements();
+        const targetsLookup = {};
+        for (const r of currentTargetVsAchievements) {
+            targetsLookup[r.branch_name] = {
+                qty_tgt: r.qty_tgt,
+                value_tgt: r.value_tgt
+            };
+        }
+
+        // 6. Calculate percentages, BTD, DDR, and Growth percentages
+        const totalDays = new Date(targetYear, targetMonth + 1, 0).getDate();
+        const remainingDays = totalDays - targetDay;
+        const remDays = remainingDays > 0 ? remainingDays : 1;
+
+        for (const name of Object.keys(achievementsMap)) {
+            const ach = achievementsMap[name];
+            const target = targetsLookup[name] || { qty_tgt: null, value_tgt: null };
+
+            const qtyTgt = parseFloat(target.qty_tgt) || 0;
+            const valTgt = parseFloat(target.value_tgt) || 0;
+
+            ach.mtd_qty_percentage_ach = qtyTgt > 0 ? (ach.mtd_qty_ach / qtyTgt) * 100 : 0.00;
+            ach.mtd_value_percentage_ach = valTgt > 0 ? (ach.mtd_value_ach / valTgt) * 100 : 0.00;
+
+            // BTD calculations
+            ach.btd_qty = qtyTgt - ach.mtd_qty_ach;
+            ach.btd_value = valTgt - ach.mtd_value_ach;
+
+            // DDR calculations
+            ach.ddr_qty = ach.btd_qty / remDays;
+            ach.ddr_value = ach.btd_value / remDays;
+
+            // Growth % calculations: (MTD / TGT) * 100
+            ach.growth_qty_percentage = qtyTgt > 0 ? (ach.mtd_qty_ach / qtyTgt) * 100 : 0.00;
+            ach.growth_value_percentage = valTgt > 0 ? (ach.mtd_value_ach / valTgt) * 100 : 0.00;
+        }
+
+        // 7. Save changes
+        const recordsArray = Object.values(achievementsMap);
+        await upsertAchievements(recordsArray, addedBy, deviceId);
+
+        try {
+            await createAuditLog(
+                addedBy,
+                req.user?.name || req.user?.username || 'Unknown',
+                deviceId,
+                'Target vs Achievement Sync',
+                'updated',
+                null,
+                {
+                    target_date: ftdYYYYMMDD,
+                    sync_count: recordsArray.length,
+                    synced_at: new Date().toISOString()
+                }
+            );
+        } catch (auditErr) {
+            console.error("Failed to write audit log for target sync:", auditErr);
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Synced achievements for ${recordsArray.length} branches relative to date ${ftdYYYYMMDD}.`
+        });
+
+    } catch (error) {
+        console.error('Error syncing target vs achievements:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error while syncing achievements'
+        });
+    }
+};
+
 module.exports = {
-    getAllTargetVsAchievementsController
+    getAllTargetVsAchievementsController,
+    importTargetVsAchievementsController,
+    syncTargetVsAchievementsController
 };

@@ -233,92 +233,63 @@ export default function OfferForm() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", background: "#f8fafc", fontFamily: "'Inter',sans-serif" }}>
+    <div className="flex flex-col min-h-screen bg-slate-50 font-sans">
       <Navbar title="ERP Admin" />
 
-      <main style={{ flex: 1, width: "100%", maxWidth: 1200, margin: "0 auto", padding: "30px 24px" }}>
+      <main className="flex-1 w-full max-w-[1200px] mx-auto py-7 px-6">
         
         {/* Back navigation & Title */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+        <div className="flex items-center gap-3 mb-6">
           <button
             onClick={() => navigate("/admin/offers")}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 38,
-              height: 38,
-              borderRadius: 10,
-              border: "1.5px solid #e2e8f0",
-              background: "#fff",
-              color: "#475569",
-              cursor: "pointer",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
-            }}
+            className="flex items-center justify-center w-[38px] h-[38px] rounded-lg border-[1.5px] border-slate-200 bg-white text-slate-600 cursor-pointer shadow-sm hover:bg-slate-50 transition-colors"
             title="Go back"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" style={{ width: 16, height: 16 }}>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
             </svg>
           </button>
           <div>
-            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#0f172a" }}>
+            <h1 className="m-0 text-xl font-extrabold text-slate-900">
               {isEdit ? "Edit Offer" : "Create New Offer"}
             </h1>
-            <p style={{ margin: "2px 0 0", fontSize: 13, color: "#64748b" }}>
+            <p className="mt-0.5 text-[13px] text-slate-500">
               {isEdit ? "Modify existing offer details and parameters" : "Configure brand and model groups offer parameters"}
             </p>
           </div>
         </div>
 
         {loading ? (
-          <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0", padding: 60, textAlign: "center", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)" }}>
-            <div className="animate-spin" style={{ display: "inline-block", width: 30, height: 30, border: "3px solid #e2e8f0", borderTopColor: "#6804a1", borderRadius: "50%", marginBottom: 12 }}></div>
-            <p style={{ margin: 0, color: "#64748b", fontWeight: 600 }}>Loading parameters details...</p>
+          <div className="bg-white rounded-2xl border border-slate-200 p-[60px] text-center shadow-sm">
+            <div className="animate-spin inline-block w-[30px] h-[30px] border-3 border-slate-200 border-t-indigo-650 rounded-full mb-3"></div>
+            <p className="m-0 text-slate-505 font-semibold">Loading parameters details...</p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-6">
             
             {/* Unified Form Card Container */}
-            <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0", padding: "28px 30px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)", display: "flex", flexDirection: "column", gap: 32 }}>
+            <div className="bg-white rounded-2xl border border-slate-200 p-[28px_30px] shadow-sm flex flex-col gap-8">
               
               {/* Section 1: Offer Scope & Parameters */}
               <div>
-                <h2 style={{ margin: "0 0 20px", fontSize: 16, fontWeight: 700, color: "#1e293b", borderBottom: "1.5px solid #f1f5f9", paddingBottom: 12 }}>
+                <h2 className="m-0 mb-5 text-base font-bold text-slate-800 border-b-[1.5px] border-slate-100 pb-3">
                   Offer Scope & Parameters
                 </h2>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24 }}>
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-6">
                   
                   {/* Left Inputs column */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                  <div className="flex flex-col gap-4.5">
                     {/* Brand */}
-                    <div ref={brandDropdownRef} style={{ position: "relative" }}>
-                      <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-                        Brand <span style={{ color: "#e11d48" }}>*</span>
+                    <div ref={brandDropdownRef} className="relative">
+                      <label className="block text-xs font-bold text-slate-655 uppercase tracking-wider mb-2">
+                        Brand <span className="text-rose-600">*</span>
                       </label>
                       
                       {/* Dropdown trigger header */}
                       <div
                         onClick={() => setIsBrandDropdownOpen(!isBrandDropdownOpen)}
-                        style={{
-                          width: "100%",
-                          boxSizing: "border-box",
-                          border: isBrandDropdownOpen ? "1.5px solid #6804a1" : "1.5px solid #cbd5e1",
-                          borderRadius: 9,
-                          padding: "11px 14px",
-                          fontSize: 14,
-                          outline: "none",
-                          color: brand_name ? "#1e293b" : "#94a3b8",
-                          background: "#fff",
-                          cursor: "pointer",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          userSelect: "none",
-                          boxShadow: isBrandDropdownOpen ? "0 0 0 3px rgba(104, 4, 161, 0.15)" : "none",
-                          transition: "all 0.15s ease-in-out"
-                        }}
+                        className={`w-full border-[1.5px] rounded-[9px] px-3.5 py-[11px] text-sm outline-none bg-white cursor-pointer flex justify-between items-center select-none transition-all ${isBrandDropdownOpen ? "border-indigo-650 shadow-[0_0_0_3px_rgba(104,4,161,0.15)]" : "border-slate-300"} ${brand_name ? "text-slate-800" : "text-slate-400"}`}
                       >
                         <span>{brand_name || "Select Brand"}</span>
                         <svg
@@ -327,13 +298,7 @@ export default function OfferForm() {
                           viewBox="0 0 24 24"
                           strokeWidth={2.5}
                           stroke="currentColor"
-                          style={{
-                            width: 14,
-                            height: 14,
-                            color: "#64748b",
-                            transform: isBrandDropdownOpen ? "rotate(180deg)" : "none",
-                            transition: "transform 0.2s ease"
-                          }}
+                          className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${isBrandDropdownOpen ? "rotate-180" : ""}`}
                         >
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                         </svg>
@@ -341,39 +306,16 @@ export default function OfferForm() {
 
                       {/* Dropdown panel */}
                       {isBrandDropdownOpen && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            top: "100%",
-                            left: 0,
-                            right: 0,
-                            zIndex: 100,
-                            marginTop: 6,
-                            background: "#fff",
-                            border: "1px solid #e2e8f0",
-                            borderRadius: 10,
-                            boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
-                            padding: 8,
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 8
-                          }}
-                        >
+                        <div className="absolute top-full left-0 right-0 z-[100] mt-1.5 bg-white border border-slate-200 rounded-lg shadow-lg p-2 flex flex-col gap-2">
                           {/* Search bar inside dropdown */}
-                          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                          <div className="relative flex items-center">
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
                               fill="none"
                               viewBox="0 0 24 24"
                               strokeWidth={2}
                               stroke="currentColor"
-                              style={{
-                                position: "absolute",
-                                left: 10,
-                                width: 15,
-                                height: 15,
-                                color: "#94a3b8"
-                              }}
+                              className="absolute left-2.5 w-[15px] h-[15px] text-slate-400"
                             >
                               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
                             </svg>
@@ -384,33 +326,12 @@ export default function OfferForm() {
                               value={brandSearch}
                               onChange={(e) => setBrandSearch(e.target.value)}
                               onClick={(e) => e.stopPropagation()} // Keep dropdown open when searching
-                              style={{
-                                width: "100%",
-                                boxSizing: "border-box",
-                                border: "1.5px solid #cbd5e1",
-                                borderRadius: 7,
-                                padding: "8px 12px 8px 32px",
-                                fontSize: 13,
-                                outline: "none",
-                                color: "#1e293b",
-                                background: "#fff",
-                                transition: "border-color 0.15s ease",
-                              }}
-                              onFocus={(e) => e.target.style.borderColor = "#6804a1"}
-                              onBlur={(e) => e.target.style.borderColor = "#cbd5e1"}
+                              className="w-full border-[1.5px] border-slate-300 rounded-md py-2 pl-8 pr-3 text-sm outline-none text-slate-800 bg-white focus:border-indigo-650 transition-colors"
                             />
                           </div>
 
                           {/* Options list */}
-                          <div
-                            style={{
-                              maxHeight: 180,
-                              overflowY: "auto",
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 2
-                            }}
-                          >
+                          <div className="max-h-[180px] overflow-y-auto flex flex-col gap-0.5">
                             {filteredBrands.length > 0 ? (
                               filteredBrands.map((b) => {
                                 const isSelected = b === brand_name;
@@ -423,35 +344,14 @@ export default function OfferForm() {
                                       setBrandSearch("");
                                       setIsBrandDropdownOpen(false);
                                     }}
-                                    style={{
-                                      padding: "8px 12px",
-                                      fontSize: 13.5,
-                                      borderRadius: 7,
-                                      cursor: "pointer",
-                                      color: isSelected ? "#6804a1" : "#334155",
-                                      fontWeight: isSelected ? 600 : 400,
-                                      background: isSelected ? "#f3e8ff" : "transparent",
-                                      transition: "background-color 0.1s ease, color 0.1s ease"
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      if (!isSelected) {
-                                        e.currentTarget.style.background = "#f1f5f9";
-                                        e.currentTarget.style.color = "#0f172a";
-                                      }
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      if (!isSelected) {
-                                        e.currentTarget.style.background = "transparent";
-                                        e.currentTarget.style.color = "#334155";
-                                      }
-                                    }}
+                                    className={`px-3 py-2 text-[13.5px] rounded-md cursor-pointer transition-colors ${isSelected ? "text-indigo-650 font-semibold bg-purple-50" : "text-slate-650 bg-transparent hover:bg-slate-50 hover:text-slate-850"}`}
                                   >
                                     {b}
                                   </div>
                                 );
                               })
                             ) : (
-                              <div style={{ padding: "16px 12px", fontSize: 13, color: "#94a3b8", textAlign: "center" }}>
+                              <div className="py-4 px-3 text-[13px] text-slate-405 text-center">
                                 No brands found
                               </div>
                             )}
@@ -462,14 +362,14 @@ export default function OfferForm() {
 
                     {/* State */}
                     <div>
-                      <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-                        State  <span style={{ color: "#e11d48" }}>*</span>
+                      <label className="block text-xs font-bold text-slate-655 uppercase tracking-wider mb-2">
+                        State  <span className="text-rose-600">*</span>
                       </label>
                       <select
                         value={state_id}
                         onChange={(e) => setStateId(e.target.value)}
                         required
-                        style={{ width: "100%", boxSizing: "border-box", border: "1.5px solid #cbd5e1", borderRadius: 9, padding: "11px 14px", fontSize: 14, outline: "none", color: "#1e293b", background: "#fff" }}
+                        className="w-full border-[1.5px] border-slate-350 rounded-[9px] px-3.5 py-[11px] text-sm outline-none text-slate-800 bg-white focus:border-indigo-655 transition-colors"
                       >
                         <option value="">Select State</option>
                         {statesList.map((s) => (
@@ -480,14 +380,14 @@ export default function OfferForm() {
 
                     {/* Offer Type */}
                     <div>
-                      <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-                        Offer Type <span style={{ color: "#e11d48" }}>*</span>
+                      <label className="block text-xs font-bold text-slate-655 uppercase tracking-wider mb-2">
+                        Offer Type <span className="text-rose-600">*</span>
                       </label>
                       <select
                         value={offer_type}
                         onChange={(e) => setOfferType(e.target.value)}
                         required
-                        style={{ width: "100%", boxSizing: "border-box", border: "1.5px solid #cbd5e1", borderRadius: 9, padding: "11px 14px", fontSize: 14, outline: "none", color: "#1e293b", background: "#fff" }}
+                        className="w-full border-[1.5px] border-slate-350 rounded-[9px] px-3.5 py-[11px] text-sm outline-none text-slate-800 bg-white focus:border-indigo-655 transition-colors"
                       >
                         <option value="Cashback Offer">Cashback Offer</option>
                         <option value="Bundle Offer">Bundle Offer</option>
@@ -496,73 +396,53 @@ export default function OfferForm() {
                     </div>
 
                     {/* From & To dates side by side */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                    <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-                          From Date <span style={{ color: "#e11d48" }}>*</span>
+                        <label className="block text-xs font-bold text-slate-655 uppercase tracking-wider mb-2">
+                          From Date <span className="text-rose-600">*</span>
                         </label>
                         <input
                           type="date"
                           value={from_date}
                           onChange={(e) => setFromDate(e.target.value)}
                           required
-                          style={{ width: "100%", boxSizing: "border-box", border: "1.5px solid #cbd5e1", borderRadius: 9, padding: "10px 12px", fontSize: 14, outline: "none", color: "#1e293b", background: "#fff" }}
+                          className="w-full border-[1.5px] border-slate-350 rounded-[9px] px-3 py-2.5 text-sm outline-none text-slate-800 bg-white focus:border-indigo-655 transition-colors"
                         />
                       </div>
                       <div>
-                        <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-                          To Date <span style={{ color: "#e11d48" }}>*</span>
+                        <label className="block text-xs font-bold text-slate-655 uppercase tracking-wider mb-2">
+                          To Date <span className="text-rose-600">*</span>
                         </label>
                         <input
                           type="date"
                           value={to_date}
                           onChange={(e) => setToDate(e.target.value)}
                           required
-                          style={{ width: "100%", boxSizing: "border-box", border: "1.5px solid #cbd5e1", borderRadius: 9, padding: "10px 12px", fontSize: 14, outline: "none", color: "#1e293b", background: "#fff" }}
+                          className="w-full border-[1.5px] border-slate-350 rounded-[9px] px-3 py-2.5 text-sm outline-none text-slate-800 bg-white focus:border-indigo-655 transition-colors"
                         />
                       </div>
                     </div>
                   </div>
 
                   {/* Right Selector Column: Multi-Select Model Groups */}
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-                      Model Groups <span style={{ color: "#e11d48" }}>*</span>
+                  <div className="flex flex-col">
+                    <label className="block text-xs font-bold text-slate-655 uppercase tracking-wider mb-2">
+                      Model Groups <span className="text-rose-600">*</span>
                     </label>
 
                     {/* Selected items tags display */}
                     {selectedModelGroups.length > 0 && (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                      <div className="flex flex-wrap gap-1.5 mb-3">
                         {selectedModelGroups.map((mg) => (
                           <span
                             key={mg}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 6,
-                              padding: "4px 10px",
-                              borderRadius: 9999,
-                              fontSize: 12,
-                              fontWeight: 600,
-                              background: "#f3e8ff",
-                              color: "#6804a1",
-                              border: "1px solid #e9d5ff"
-                            }}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-indigo-650 border border-purple-100"
                           >
                             {mg}
                             <button
                               type="button"
                               onClick={() => handleModelGroupToggle(mg)}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                color: "#a855f7",
-                                cursor: "pointer",
-                                padding: "0 2px",
-                                fontSize: 14,
-                                fontWeight: "bold",
-                                lineHeight: 1
-                              }}
+                              className="bg-none border-none text-purple-400 cursor-pointer px-0.5 text-sm font-bold leading-none hover:text-purple-650 transition-colors"
                             >
                               &times;
                             </button>
@@ -573,37 +453,20 @@ export default function OfferForm() {
 
                     {/* Filter Search Input */}
                     {brand_name && (
-                      <div style={{ marginBottom: 10 }}>
+                      <div className="mb-2.5">
                         <input
                           type="text"
                           placeholder="Search model groups..."
                           value={modelGroupSearch}
                           onChange={(e) => setModelGroupSearch(e.target.value)}
-                          style={{
-                            width: "100%",
-                            boxSizing: "border-box",
-                            border: "1.5px solid #cbd5e1",
-                            borderRadius: 8,
-                            padding: "8px 12px",
-                            fontSize: 13,
-                            outline: "none",
-                            color: "#1e293b",
-                            background: "#fff"
-                          }}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none text-slate-800 bg-white focus:border-indigo-655 transition-colors"
                         />
                       </div>
                     )}
 
                     {/* Checkboxes scrollbox */}
                     <div
-                      style={{
-                        border: "1.5px solid #e2e8f0",
-                        borderRadius: 10,
-                        padding: 12,
-                        maxHeight: 180,
-                        overflowY: "auto",
-                        background: brand_name ? "#fff" : "#f8fafc"
-                      }}
+                      className={`border-[1.5px] border-slate-200 rounded-xl p-3 max-h-[180px] overflow-y-auto ${brand_name ? "bg-white" : "bg-slate-50"}`}
                     >
                       {brand_name ? (
                         filteredModelGroups.length > 0 ? (
@@ -612,47 +475,33 @@ export default function OfferForm() {
                             return (
                               <label
                                 key={mg}
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 10,
-                                  padding: "6px 4px",
-                                  fontSize: 14,
-                                  color: "#334155",
-                                  cursor: "pointer",
-                                  borderBottom: "1px solid #f8fafc"
-                                }}
+                                className="flex items-center gap-2.5 py-1.5 px-1 text-sm text-slate-650 cursor-pointer border-b border-slate-50/50 last:border-b-0"
                               >
                                 <input
                                   type="checkbox"
                                   checked={isChecked}
                                   onChange={() => handleModelGroupToggle(mg)}
-                                  style={{
-                                    width: 16,
-                                    height: 16,
-                                    accentColor: "#6804a1",
-                                    cursor: "pointer"
-                                  }}
+                                  className="w-4 h-4 accent-indigo-650 cursor-pointer"
                                 />
-                                <span style={{ fontWeight: isChecked ? 600 : 400, color: isChecked ? "#6804a1" : "#334155" }}>
+                                <span className={isChecked ? "font-semibold text-indigo-650" : "font-normal text-slate-600"}>
                                   {mg}
                                 </span>
                               </label>
                             );
                           })
                         ) : (
-                          <div style={{ color: "#94a3b8", fontSize: 13, textAlign: "center", padding: "12px 0" }}>
+                          <div className="text-slate-400 text-[13px] text-center py-3">
                             No matching model groups found.
                           </div>
                         )
                       ) : (
-                        <div style={{ color: "#94a3b8", fontSize: 13, textAlign: "center", padding: "20px 0" }}>
+                        <div className="text-slate-400 text-[13px] text-center py-5">
                           Please select a Brand to load model groups.
                         </div>
                       )}
                     </div>
                     {brand_name && (
-                      <div style={{ fontSize: 11, color: "#64748b", marginTop: 6, display: "flex", justifyContent: "space-between" }}>
+                      <div className="text-[11px] text-slate-400 mt-1.5 flex justify-between">
                         <span>Selected: {selectedModelGroups.length} group(s)</span>
                         <button
                           type="button"
@@ -663,7 +512,7 @@ export default function OfferForm() {
                               setSelectedModelGroups([...modelGroupsForSelectedBrand]);
                             }
                           }}
-                          style={{ border: "none", background: "none", color: "#6804a1", cursor: "pointer", fontWeight: 600, fontSize: 11 }}
+                          className="border-none bg-none text-indigo-600 cursor-pointer font-semibold text-[11px] hover:underline"
                         >
                           {selectedModelGroups.length === modelGroupsForSelectedBrand.length ? "Deselect All" : "Select All"}
                         </button>
@@ -675,60 +524,48 @@ export default function OfferForm() {
               </div>
 
               {/* Section 2: Transaction Rules - inside the same container */}
-              <div style={{ borderTop: "1.5px solid #f1f5f9", paddingTop: 24 }}>
+              <div className="border-t-[1.5px] border-slate-100 pt-6">
                 
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-                  <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#1e293b" }}>
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="m-0 text-base font-bold text-slate-800">
                     Transaction Rules
                   </h2>
                   <button
                     type="button"
                     onClick={addTransactionRow}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      padding: "7px 15px",
-                      borderRadius: 8,
-                      background: "rgba(104,4,161,0.08)",
-                      color: "#6804a1",
-                      border: "none",
-                      cursor: "pointer",
-                      fontSize: 12,
-                      fontWeight: 700
-                    }}
+                    className="flex items-center gap-1.5 px-3.5 py-1.75 rounded-lg bg-indigo-50 text-indigo-650 border-none cursor-pointer text-xs font-bold hover:bg-indigo-100 transition-colors"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" style={{ width: 14, height: 14 }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                     </svg>
                     Add Transaction Type
                   </button>
                 </div>
 
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-sm">
                     <thead>
-                      <tr style={{ background: "#f8fafc", borderBottom: "1.5px solid #e2e8f0" }}>
-                        <th style={{ padding: "12px 10px", textAlign: "left", color: "#64748b", fontWeight: 700, minWidth: 180 }}>Transaction Type *</th>
-                        <th style={{ padding: "12px 10px", textAlign: "left", color: "#64748b", fontWeight: 700, minWidth: 120 }}>Value Type *</th>
-                        <th style={{ padding: "12px 10px", textAlign: "left", color: "#64748b", fontWeight: 700, minWidth: 130 }}>Offer Type</th>
-                        <th style={{ padding: "12px 10px", textAlign: "left", color: "#64748b", fontWeight: 700, minWidth: 110 }}>Upto Value</th>
-                        <th style={{ padding: "12px 10px", textAlign: "left", color: "#64748b", fontWeight: 700, minWidth: 180 }}>Offer Text</th>
-                        <th style={{ padding: "12px 10px", textAlign: "left", color: "#64748b", fontWeight: 700, minWidth: 160 }}>Relative Offer</th>
-                        <th style={{ padding: "12px 10px", textAlign: "center", color: "#64748b", fontWeight: 700, width: 70 }}>Action</th>
+                      <tr className="bg-slate-50 border-b-[1.5px] border-slate-200">
+                        <th className="px-2.5 py-3 text-left text-slate-500 font-bold" style={{ minWidth: "180px" }}>Transaction Type *</th>
+                        <th className="px-2.5 py-3 text-left text-slate-500 font-bold" style={{ minWidth: "120px" }}>Value Type *</th>
+                        <th className="px-2.5 py-3 text-left text-slate-500 font-bold" style={{ minWidth: "130px" }}>Offer Type</th>
+                        <th className="px-2.5 py-3 text-left text-slate-500 font-bold" style={{ minWidth: "110px" }}>Upto Value</th>
+                        <th className="px-2.5 py-3 text-left text-slate-500 font-bold" style={{ minWidth: "180px" }}>Offer Text</th>
+                        <th className="px-2.5 py-3 text-left text-slate-500 font-bold" style={{ minWidth: "160px" }}>Relative Offer</th>
+                        <th className="px-2.5 py-3 text-center text-slate-500 font-bold" style={{ width: "70px" }}>Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {transactions.map((tx, idx) => (
-                        <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <tr key={idx} className="border-b border-slate-100 last:border-b-0">
                           
                           {/* Transaction Type */}
-                          <td style={{ padding: "10px 8px" }}>
+                          <td className="p-2">
                             <select
                               value={tx.transaction_type}
                               onChange={(e) => handleTxChange(idx, "transaction_type", e.target.value)}
                               required
-                              style={{ width: "100%", boxSizing: "border-box", border: "1px solid #cbd5e1", borderRadius: 7, padding: "8px 10px", background: "#fff", outline: "none", color: "#334155" }}
+                              className="w-full border border-slate-300 rounded-md px-2.5 py-2 bg-white outline-none text-slate-700 text-sm focus:border-indigo-650 transition-colors"
                             >
                               <option value="Cash Transaction">Cash Transaction</option>
                               <option value="Card/Swipe Transaction">Card/Swipe Transaction</option>
@@ -738,12 +575,12 @@ export default function OfferForm() {
                           </td>
 
                           {/* Value Type */}
-                          <td style={{ padding: "10px 8px" }}>
+                          <td className="p-2">
                             <select
                               value={tx.value_type}
                               onChange={(e) => handleTxChange(idx, "value_type", e.target.value)}
                               required
-                              style={{ width: "100%", boxSizing: "border-box", border: "1px solid #cbd5e1", borderRadius: 7, padding: "8px 10px", background: "#fff", outline: "none", color: "#334155" }}
+                              className="w-full border border-slate-300 rounded-md px-2.5 py-2 bg-white outline-none text-slate-700 text-sm focus:border-indigo-650 transition-colors"
                             >
                               <option value="In Rs.">In Rs.</option>
                               <option value="In %">In %</option>
@@ -751,18 +588,18 @@ export default function OfferForm() {
                           </td>
 
                           {/* Offer Type Value text */}
-                          <td style={{ padding: "10px 8px" }}>
+                          <td className="p-2">
                             <input
                               type="text"
                               value={tx.offer_type_value}
                               onChange={(e) => handleTxChange(idx, "offer_type_value", e.target.value)}
                               placeholder="e.g. 2000"
-                              style={{ width: "100%", boxSizing: "border-box", border: "1px solid #cbd5e1", borderRadius: 7, padding: "8px 10px", outline: "none", color: "#334155" }}
+                              className="w-full border border-slate-300 rounded-md px-2.5 py-2 outline-none text-slate-700 text-sm focus:border-indigo-655 transition-colors"
                             />
                           </td>
 
                           {/* Upto Value */}
-                          <td style={{ padding: "10px 8px" }}>
+                          <td className="p-2">
                             <input
                               type="number"
                               value={tx.upto_value}
@@ -770,52 +607,41 @@ export default function OfferForm() {
                               placeholder="Max cap"
                               min="0"
                               step="any"
-                              style={{ width: "100%", boxSizing: "border-box", border: "1px solid #cbd5e1", borderRadius: 7, padding: "8px 10px", outline: "none", color: "#334155" }}
+                              className="w-full border border-slate-300 rounded-md px-2.5 py-2 outline-none text-slate-700 text-sm focus:border-indigo-655 transition-colors"
                             />
                           </td>
 
                           {/* Offer Text */}
-                          <td style={{ padding: "10px 8px" }}>
+                          <td className="p-2">
                             <input
                               type="text"
                               value={tx.offer_text}
                               onChange={(e) => handleTxChange(idx, "offer_text", e.target.value)}
                               placeholder="Enter description"
-                              style={{ width: "100%", boxSizing: "border-box", border: "1px solid #cbd5e1", borderRadius: 7, padding: "8px 10px", outline: "none", color: "#334155" }}
+                              className="w-full border border-slate-300 rounded-md px-2.5 py-2 outline-none text-slate-700 text-sm focus:border-indigo-655 transition-colors"
                             />
                           </td>
 
                           {/* Relative Offer */}
-                          <td style={{ padding: "10px 8px" }}>
+                          <td className="p-2">
                             <select
                               value={tx.relative_offer}
                               onChange={(e) => handleTxChange(idx, "relative_offer", e.target.value)}
-                              style={{ width: "100%", boxSizing: "border-box", border: "1px solid #cbd5e1", borderRadius: 7, padding: "8px 10px", background: "#fff", outline: "none", color: "#334155" }}
+                              className="w-full border border-slate-300 rounded-md px-2.5 py-2 bg-white outline-none text-slate-700 text-sm focus:border-indigo-650 transition-colors"
                             >
                               <option value="">-select-</option>
                             </select>
                           </td>
 
                           {/* Action delete */}
-                          <td style={{ padding: "10px 8px", textAlign: "center" }}>
+                          <td className="p-2 text-center">
                             <button
                               type="button"
                               onClick={() => removeTransactionRow(idx)}
-                              style={{
-                                display: "inline-flex",
-                                width: 32,
-                                height: 32,
-                                alignItems: "center",
-                                justifyContent: "center",
-                                borderRadius: 8,
-                                border: "1px solid #fecdd3",
-                                background: "#fff1f2",
-                                color: "#be123c",
-                                cursor: "pointer"
-                              }}
+                              className="inline-flex w-8 h-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 cursor-pointer hover:bg-rose-100 transition-colors"
                               title="Delete row"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" style={{ width: 15, height: 15 }}>
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-[15px] h-[15px]">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                               </svg>
                             </button>
@@ -831,38 +657,19 @@ export default function OfferForm() {
             </div>
 
             {/* Bottom Actions Row */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 10 }}>
+            <div className="flex justify-end gap-3 mt-2.5">
               <button
                 type="button"
                 onClick={() => navigate("/admin/offers")}
                 disabled={saving}
-                style={{
-                  padding: "11px 24px",
-                  borderRadius: 9,
-                  border: "1.5px solid #cbd5e1",
-                  color: "#475569",
-                  background: "#fff",
-                  fontWeight: 600,
-                  fontSize: 14,
-                  cursor: "pointer"
-                }}
+                className="px-6 py-2.75 rounded-[9px] border-[1.5px] border-slate-300 text-slate-600 bg-white font-semibold text-sm cursor-pointer hover:bg-slate-50 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                style={{
-                  padding: "11px 32px",
-                  borderRadius: 9,
-                  border: "none",
-                  background: saving ? "#94a3b8" : "linear-gradient(135deg,#6804a1,#52037e)",
-                  color: "#fff",
-                  fontWeight: 700,
-                  fontSize: 14,
-                  cursor: saving ? "not-allowed" : "pointer",
-                  boxShadow: saving ? "none" : "0 3px 10px rgba(104,4,161,0.3)"
-                }}
+                className="px-8 py-2.75 rounded-[9px] border-none text-white font-bold text-sm bg-gradient-to-br from-indigo-600 to-indigo-700 shadow-[0_3px_10px_rgba(104,4,161,0.3)] cursor-pointer disabled:bg-slate-400 disabled:cursor-not-allowed disabled:shadow-none hover:opacity-95 transition-all"
               >
                 {saving ? "Saving Offer…" : isEdit ? "Save Changes" : "Save Offer"}
               </button>

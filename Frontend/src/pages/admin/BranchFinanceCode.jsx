@@ -77,25 +77,25 @@ export default function BranchFinanceCode() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "linear-gradient(135deg,#f8fafc 0%,#eef2ff 100%)", fontFamily: "'Inter',sans-serif" }}>
+    <div className="flex flex-col flex-1 bg-gradient-to-br from-slate-50 to-indigo-50 font-sans">
       <Navbar title="ERP Admin" />
 
-      <main style={{ flex: 1, display: "flex", flexDirection: "column", width: "100%", maxWidth: 1200, margin: "0 auto", padding: "32px 30px" }}>
+      <main className="flex-1 flex flex-col w-full max-w-[1200px] mx-auto px-[30px] py-8">
         {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
+        <div className="flex items-center justify-between mb-7">
           <div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, color: "#1e293b", margin: 0 }}>
+            <h1 className="text-2xl font-bold text-slate-800 m-0">
               Branch Finance Code
             </h1>
-            <p style={{ color: "#64748b", marginTop: 4, fontSize: 14 }}>
+            <p className="text-slate-500 mt-1 text-sm">
               Manage brand codes, machine mappings, and finance company configurations.
             </p>
           </div>
           <button
             onClick={() => navigate("/admin/branches")}
-            style={{ display: "flex", alignItems: "center", gap: 6, color: "#64748b", background: "none", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 500 }}
+            className="flex items-center gap-1.5 text-slate-500 bg-none border-none cursor-pointer text-sm font-medium hover:text-slate-700 transition-colors"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" style={{ width: 16, height: 16 }}>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
             </svg>
             Back to Branch List
@@ -103,43 +103,43 @@ export default function BranchFinanceCode() {
         </div>
 
         {loading ? (
-          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "100px 0" }}>
-            <span style={{ fontSize: 16, color: "#475569", fontWeight: 600 }}>Loading finance code configurations...</span>
+          <div className="flex justify-center items-center py-[100px]">
+            <span className="text-base text-slate-600 font-semibold">Loading finance code configurations...</span>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-7">
             
             {/* Branch Details Card */}
             {branch && (
-              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "28px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-                <h2 style={{ fontSize: 13, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 14, borderBottom: "1px solid #f1f5f9", paddingBottom: 8 }}>
+              <div className="bg-white border border-slate-200 rounded-xl p-7 shadow-sm">
+                <h2 className="text-[13px] font-bold text-slate-600 uppercase tracking-wider mb-3.5 border-b border-slate-100 pb-2">
                   Branch Details & Credentials
                 </h2>
                 
                 {/* Branch Info Row (Read-only) */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 20, marginBottom: 24 }}>
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-5 mb-6">
                   <div>
-                    <span style={{ display: "block", fontSize: 12, color: "#94a3b8", fontWeight: 500 }}>Name</span>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: "#1e293b" }}>{branch.name}</span>
+                    <span className="block text-xs text-slate-400 font-medium">Name</span>
+                    <span className="text-[15px] font-bold text-slate-800">{branch.name}</span>
                   </div>
                   <div>
-                    <span style={{ display: "block", fontSize: 12, color: "#94a3b8", fontWeight: 500 }}>Code</span>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: "#1e293b" }}>{branch.code}</span>
+                    <span className="block text-xs text-slate-400 font-medium">Code</span>
+                    <span className="text-[15px] font-bold text-slate-800">{branch.code}</span>
                   </div>
                   <div>
-                    <span style={{ display: "block", fontSize: 12, color: "#94a3b8", fontWeight: 500 }}>Phone</span>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: "#1e293b" }}>{branch.phone}</span>
+                    <span className="block text-xs text-slate-400 font-medium">Phone</span>
+                    <span className="text-[15px] font-bold text-slate-800">{branch.phone}</span>
                   </div>
                   <div>
-                    <span style={{ display: "block", fontSize: 12, color: "#94a3b8", fontWeight: 500 }}>Email</span>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: "#1e293b" }}>{branch.email}</span>
+                    <span className="block text-xs text-slate-400 font-medium">Email</span>
+                    <span className="text-[15px] font-bold text-slate-800">{branch.email}</span>
                   </div>
                 </div>
 
                 {/* QR Code and Remarks (Editable) */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20, borderTop: "1.5px solid #f1f5f9", paddingTop: 24 }}>
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-5 border-t-[1.5px] border-slate-100 pt-6">
                   <div>
-                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                       QR Code ID & Password
                     </label>
                     <input
@@ -147,13 +147,11 @@ export default function BranchFinanceCode() {
                       value={details.qr_code_id_password}
                       onChange={(e) => setDetails(prev => ({ ...prev, qr_code_id_password: e.target.value }))}
                       placeholder="Enter QR Code credentials (e.g. ID: test_id / Pwd: test_pwd)"
-                      style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "10px 14px", fontSize: 14, outline: "none", boxSizing: "border-box" }}
-                      onFocus={e => e.target.style.borderColor = "#6804a1"}
-                      onBlur={e => e.target.style.borderColor = "#cbd5e1"}
+                      className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm outline-none text-slate-800 focus:border-indigo-650 transition-colors"
                     />
                   </div>
                   <div>
-                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                       Remarks
                     </label>
                     <textarea
@@ -161,9 +159,7 @@ export default function BranchFinanceCode() {
                       onChange={(e) => setDetails(prev => ({ ...prev, remarks: e.target.value }))}
                       placeholder="Add any additional remarks or notes here..."
                       rows={2}
-                      style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "10px 14px", fontSize: 14, outline: "none", boxSizing: "border-box", resize: "none", fontFamily: "inherit" }}
-                      onFocus={e => e.target.style.borderColor = "#6804a1"}
-                      onBlur={e => e.target.style.borderColor = "#cbd5e1"}
+                      className="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm outline-none text-slate-800 resize-none font-sans focus:border-indigo-650 transition-colors"
                     />
                   </div>
                 </div>
@@ -171,21 +167,21 @@ export default function BranchFinanceCode() {
             )}
 
             {/* Section 1. Brand Codes */}
-            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "28px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: "#1e293b", marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ width: 4, height: 16, background: "#6804a1", borderRadius: 2 }}></span>
+            <div className="bg-white border border-slate-200 rounded-xl p-7 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-800 mb-5 flex items-center gap-2">
+                <span className="w-1 h-4 bg-indigo-600 rounded-[2px]"></span>
                 1. Brand Codes
               </h3>
               {brands.length === 0 ? (
-                <p style={{ fontSize: 13, fontStyle: "italic", color: "#94a3b8" }}>No brands defined in Brand Master.</p>
+                <p className="text-[13px] italic text-slate-400">No brands defined in Brand Master.</p>
               ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-5">
                   {brands.map((b, idx) => (
-                    <div key={b.brand_id} style={{ display: "flex", alignItems: "center", border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden" }}>
-                      <div style={{ width: "120px", background: "#f8fafc", padding: "12px 16px", borderRight: "1px solid #e2e8f0", fontWeight: 700, fontSize: 12, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>
+                    <div key={b.brand_id} className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white">
+                      <div className="w-[120px] bg-slate-50 py-3 px-4 border-r border-slate-200 font-bold text-xs text-slate-600 uppercase tracking-wider text-center flex-shrink-0">
                         {b.brand_name}
                       </div>
-                      <div style={{ flex: 1, padding: 8 }}>
+                      <div className="flex-1 p-2">
                         <input
                           type="text"
                           value={b.brand_code}
@@ -194,9 +190,7 @@ export default function BranchFinanceCode() {
                             setBrands(prev => prev.map((item, i) => i === idx ? { ...item, brand_code: val } : item));
                           }}
                           placeholder={`Enter ${b.brand_name} code`}
-                          style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "8px 12px", fontSize: 14, outline: "none", boxSizing: "border-box" }}
-                          onFocus={e => e.target.style.borderColor = "#6804a1"}
-                          onBlur={e => e.target.style.borderColor = "#cbd5e1"}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none text-slate-800 focus:border-indigo-650 transition-colors"
                         />
                       </div>
                     </div>
@@ -206,32 +200,32 @@ export default function BranchFinanceCode() {
             </div>
 
             {/* Section 2. Finance Machine Details */}
-            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "28px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: "#1e293b", marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ width: 4, height: 16, background: "#6804a1", borderRadius: 2 }}></span>
+            <div className="bg-white border border-slate-200 rounded-xl p-7 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-800 mb-5 flex items-center gap-2">
+                <span className="w-1 h-4 bg-indigo-600 rounded-[2px]"></span>
                 2. Finance Machine Details
               </h3>
               {machines.length === 0 ? (
-                <p style={{ fontSize: 13, fontStyle: "italic", color: "#94a3b8" }}>No machines defined in Finance Machine Master.</p>
+                <p className="text-[13px] italic text-slate-400">No machines defined in Finance Machine Master.</p>
               ) : (
-                <div style={{ border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse min-w-[600px] bg-white">
                       <thead>
-                        <tr style={{ background: "#f8fafc", borderBottom: "1.5px solid #cbd5e1" }}>
-                          <th style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>Finance Machine</th>
-                          <th style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>TID</th>
-                          <th style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>POS ID</th>
-                          <th style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>Serial NO</th>
+                        <tr className="bg-slate-50 border-b-[1.5px] border-slate-300">
+                          <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-550 uppercase tracking-wider">Finance Machine</th>
+                          <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-550 uppercase tracking-wider">TID</th>
+                          <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-550 uppercase tracking-wider">POS ID</th>
+                          <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-550 uppercase tracking-wider">Serial NO</th>
                         </tr>
                       </thead>
                       <tbody>
                         {machines.map((m, idx) => (
-                          <tr key={m.machine_id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                            <td style={{ padding: "12px 16px", fontWeight: 700, fontSize: 13, color: "#334155", background: "#fafafa", width: "250px" }}>
+                          <tr key={m.machine_id} className="border-b border-slate-100 last:border-b-0">
+                            <td className="px-4 py-3 font-bold text-sm text-slate-650 bg-slate-50/50 w-[250px]">
                               {m.machine_name}
                             </td>
-                            <td style={{ padding: "8px 12px" }}>
+                            <td className="px-3 py-2">
                               <input
                                 type="text"
                                 value={m.tid}
@@ -240,12 +234,10 @@ export default function BranchFinanceCode() {
                                   setMachines(prev => prev.map((item, i) => i === idx ? { ...item, tid: val } : item));
                                 }}
                                 placeholder="Enter TID"
-                                style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-                                onFocus={e => e.target.style.borderColor = "#6804a1"}
-                                onBlur={e => e.target.style.borderColor = "#cbd5e1"}
+                                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none text-slate-800 focus:border-indigo-650 transition-colors"
                               />
                             </td>
-                            <td style={{ padding: "8px 12px" }}>
+                            <td className="px-3 py-2">
                               <input
                                 type="text"
                                 value={m.pos_id}
@@ -254,12 +246,10 @@ export default function BranchFinanceCode() {
                                   setMachines(prev => prev.map((item, i) => i === idx ? { ...item, pos_id: val } : item));
                                 }}
                                 placeholder="Enter POS ID"
-                                style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-                                onFocus={e => e.target.style.borderColor = "#6804a1"}
-                                onBlur={e => e.target.style.borderColor = "#cbd5e1"}
+                                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none text-slate-800 focus:border-indigo-650 transition-colors"
                               />
                             </td>
-                            <td style={{ padding: "8px 12px" }}>
+                            <td className="px-3 py-2">
                               <input
                                 type="text"
                                 value={m.serial_no}
@@ -268,9 +258,7 @@ export default function BranchFinanceCode() {
                                   setMachines(prev => prev.map((item, i) => i === idx ? { ...item, serial_no: val } : item));
                                 }}
                                 placeholder="Enter Serial NO"
-                                style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-                                onFocus={e => e.target.style.borderColor = "#6804a1"}
-                                onBlur={e => e.target.style.borderColor = "#cbd5e1"}
+                                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none text-slate-800 focus:border-indigo-650 transition-colors"
                               />
                             </td>
                           </tr>
@@ -283,21 +271,21 @@ export default function BranchFinanceCode() {
             </div>
 
             {/* Section 3. Finance Company Codes */}
-            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "28px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: "#1e293b", marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ width: 4, height: 16, background: "#6804a1", borderRadius: 2 }}></span>
+            <div className="bg-white border border-slate-200 rounded-xl p-7 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-800 mb-5 flex items-center gap-2">
+                <span className="w-1 h-4 bg-indigo-600 rounded-[2px]"></span>
                 3. Finance Company Codes
               </h3>
               {companies.length === 0 ? (
-                <p style={{ fontSize: 13, fontStyle: "italic", color: "#94a3b8" }}>No finance companies defined in Finance Company Master.</p>
+                <p className="text-[13px] italic text-slate-400">No finance companies defined in Finance Company Master.</p>
               ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-5">
                   {companies.map((c, idx) => (
-                    <div key={c.company_id} style={{ display: "flex", alignItems: "center", border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden" }}>
-                      <div style={{ width: "140px", background: "#f8fafc", padding: "12px 16px", borderRight: "1px solid #e2e8f0", fontWeight: 700, fontSize: 12, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>
+                    <div key={c.company_id} className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white">
+                      <div className="w-[140px] bg-slate-50 py-3 px-4 border-r border-slate-200 font-bold text-xs text-slate-650 uppercase tracking-wider text-center flex-shrink-0">
                         {c.company_name}
                       </div>
-                      <div style={{ flex: 1, padding: 8 }}>
+                      <div className="flex-1 p-2">
                         <input
                           type="text"
                           value={c.company_code}
@@ -306,9 +294,7 @@ export default function BranchFinanceCode() {
                             setCompanies(prev => prev.map((item, i) => i === idx ? { ...item, company_code: val } : item));
                           }}
                           placeholder={`Enter ${c.company_name} code`}
-                          style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "8px 12px", fontSize: 14, outline: "none", boxSizing: "border-box" }}
-                          onFocus={e => e.target.style.borderColor = "#6804a1"}
-                          onBlur={e => e.target.style.borderColor = "#cbd5e1"}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none text-slate-800 focus:border-indigo-650 transition-colors"
                         />
                       </div>
                     </div>
@@ -318,36 +304,24 @@ export default function BranchFinanceCode() {
             </div>
 
             {/* Actions Footer */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, padding: "20px 0", borderTop: "1px solid #e2e8f0" }}>
+            <div className="flex justify-end gap-3 py-5 border-t border-slate-200">
               <button
                 type="button"
                 onClick={() => navigate("/admin/branches")}
-                style={{
-                  padding: "10px 22px", borderRadius: 9, border: "1.5px solid #cbd5e1",
-                  color: "#475569", background: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer",
-                  transition: "background 0.15s"
-                }}
-                onMouseEnter={e => e.target.style.background = "#f8fafc"}
-                onMouseLeave={e => e.target.style.background = "#fff"}
+                className="px-5.5 py-2.5 rounded-[9px] border-[1.5px] border-slate-300 text-slate-600 bg-white font-semibold text-sm cursor-pointer hover:bg-slate-50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                style={{
-                  padding: "10px 28px", borderRadius: 9, border: "none",
-                  background: saving ? "#94a3b8" : "linear-gradient(135deg,#6804a1,#52037e)",
-                  color: "#fff", fontWeight: 700, fontSize: 14, cursor: saving ? "not-allowed" : "pointer",
-                  boxShadow: saving ? "none" : "0 2px 8px rgba(104,4,161,0.35)",
-                  transition: "all 0.2s"
-                }}
+                className="px-7 py-2.5 rounded-[9px] border-none text-white font-bold text-sm bg-gradient-to-br from-indigo-600 to-indigo-700 shadow-[0_2px_8px_rgba(104,4,161,0.35)] cursor-pointer disabled:bg-slate-400 disabled:cursor-not-allowed disabled:shadow-none hover:opacity-95 transition-all"
               >
                 {saving ? "Saving..." : "Save Branch Finance Codes"}
               </button>
             </div>
 
-            </form>
+          </form>
         )}
       </main>
     </div>

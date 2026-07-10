@@ -22,18 +22,30 @@ const MASTERS = [
 ];
 const PERMS = ["canRead", "canWrite", "canUpdate", "canDelete"];
 const PERM_LABELS = { canRead: "Read", canWrite: "Write / Approval", canUpdate: "Update", canDelete: "Delete" };
-const PERM_COLORS = {
-  canRead: { bg: "#f3e8ff", border: "#d8b4fe", text: "#6804a1", check: "#6804a1" },
-  canWrite: { bg: "#f0fdf4", border: "#bbf7d0", text: "#15803d", check: "#16a34a" },
-  canUpdate: { bg: "#fffbeb", border: "#fde68a", text: "#b45309", check: "#d97706" },
-  canDelete: { bg: "#fff1f2", border: "#fecdd3", text: "#be123c", check: "#e11d48" },
+
+const PERM_CLASSES = {
+  canRead: "bg-purple-50 text-indigo-650 border-purple-200",
+  canWrite: "bg-green-50 text-green-700 border-green-200",
+  canUpdate: "bg-amber-50 text-amber-800 border-amber-200",
+  canDelete: "bg-rose-50 text-rose-700 border-rose-200"
 };
 
-const defaultPerms = () =>
-  MASTERS.map((m) => ({ masterName: m.key, canRead: false, canWrite: false, canUpdate: false, canDelete: false }));
+const PERM_CHECKBOX_CLASSES = {
+  canRead: "border-indigo-600 bg-indigo-600",
+  canWrite: "border-green-600 bg-green-600",
+  canUpdate: "border-amber-600 bg-amber-600",
+  canDelete: "border-rose-600 bg-rose-600"
+};
+
+const PERM_CHECKBOX_RING_CLASSES = {
+  canRead: "ring-purple-100 border-indigo-600 bg-indigo-600",
+  canWrite: "ring-green-100 border-green-600 bg-green-600",
+  canUpdate: "ring-amber-100 border-amber-600 bg-amber-600",
+  canDelete: "ring-rose-100 border-rose-600 bg-rose-600"
+};
 
 const buildPermsFromApi = (apiPerms) => {
-  if (!apiPerms || apiPerms.length === 0) return defaultPerms();
+  if (!apiPerms || apiPerms.length === 0) return MASTERS.map((m) => ({ masterName: m.key, canRead: false, canWrite: false, canUpdate: false, canDelete: false }));
   return MASTERS.map((m) => {
     const found = apiPerms.find((p) => p.masterName === m.key);
     const isApprovalRow = m.key.endsWith("_approval");
@@ -51,22 +63,14 @@ const buildPermsFromApi = (apiPerms) => {
 };
 
 // ─── Checkbox Cell ───────────────────────────────────────────────────────────
-function CheckCell({ checked, color, onChange }) {
+function CheckCell({ checked, perm, onChange }) {
   return (
     <div
       onClick={onChange}
-      style={{
-        width: 22, height: 22, borderRadius: 6,
-        border: `2px solid ${checked ? color.check : "#cbd5e1"}`,
-        background: checked ? color.check : "#fff",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        cursor: "pointer", transition: "all 0.15s",
-        margin: "0 auto",
-        boxShadow: checked ? `0 0 0 3px ${color.bg}` : "none",
-      }}
+      className={`w-5.5 h-5.5 rounded-md border flex items-center justify-center cursor-pointer transition-all mx-auto ${checked ? `ring-4 ${PERM_CHECKBOX_RING_CLASSES[perm]}` : "border-slate-300 bg-white"}`}
     >
       {checked && (
-        <svg viewBox="0 0 12 10" style={{ width: 11, height: 11 }}>
+        <svg viewBox="0 0 12 10" className="w-[11px] h-[11px]">
           <polyline points="1,5 4.5,8.5 11,1" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       )}
@@ -77,7 +81,7 @@ function CheckCell({ checked, color, onChange }) {
 // ─── Permissions Badge (inline in list) ──────────────────────────────────────
 function PermBadges({ permissions }) {
   if (!permissions || permissions.length === 0)
-    return <span style={{ color: "#94a3b8", fontSize: 12 }}>No permissions set</span>;
+    return <span className="text-slate-400 text-xs">No permissions set</span>;
 
   // Only show masters that have at least one permission granted
   const rows = MASTERS.map((m) => {
@@ -91,30 +95,22 @@ function PermBadges({ permissions }) {
   }).filter(Boolean);
 
   if (rows.length === 0)
-    return <span style={{ color: "#94a3b8", fontSize: 12 }}>No access</span>;
+    return <span className="text-slate-400 text-xs">No access</span>;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+    <div className="flex flex-col gap-1.25">
       {rows.map(({ label, granted, isApprovalRow }) => (
-        <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        <div key={label} className="flex items-center gap-1.5 flex-wrap">
           {/* Master label */}
-          <span style={{
-            fontSize: 11, fontWeight: 700, color: "#475569",
-            background: "#f1f5f9", border: "1px solid #e2e8f0",
-            borderRadius: 5, padding: "2px 7px", whiteSpace: "nowrap"
-          }}>
+          <span className="text-[11px] font-bold text-slate-600 bg-slate-100 border border-slate-200 rounded-[5px] px-1.75 py-0.5 whitespace-nowrap">
             {label}
           </span>
-          <span style={{ color: "#cbd5e1", fontSize: 11 }}>→</span>
+          <span className="text-slate-300 text-[11px]">→</span>
           {/* Permission badges for this master */}
           {granted.map((perm) => {
-            const c = PERM_COLORS[perm];
             const labelText = isApprovalRow && perm === "canWrite" ? "Approval" : PERM_LABELS[perm];
             return (
-              <span key={perm} style={{
-                fontSize: 10, fontWeight: 700, padding: "2px 7px",
-                borderRadius: 5, background: c.bg, color: c.text, border: `1px solid ${c.border}`
-              }}>
+              <span key={perm} className={`text-[10px] font-bold px-1.75 py-0.5 rounded-[5px] border ${PERM_CLASSES[perm]}`}>
                 {labelText}
               </span>
             );
@@ -199,82 +195,69 @@ function EditModal({ row, onClose, onSave, saving }) {
   });
 
   return (
-    <div style={{
-      position: "fixed", inset: 0, zIndex: 1000,
-      background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)",
-      display: "flex", alignItems: "center", justifycontent: "center", padding: 16
-    }}>
-      <div style={{
-        background: "#fff", borderRadius: 18, width: "100%", maxWidth: 1100, margin: "0 auto",
-        maxHeight: "92vh", display: "flex", flexDirection: "column",
-        boxShadow: "0 25px 60px rgba(0,0,0,0.2)", overflow: "hidden"
-      }}>
+    <div className="fixed inset-0 z-[1000] bg-slate-900/55 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-[18px] w-full max-w-[1100px] mx-auto max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Modal Header */}
-        <div style={{ padding: "20px 28px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", justifycontent: "space-between", background: "linear-gradient(135deg,#6804a1,#52037e)" }}>
+        <div className="px-7 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-br from-indigo-600 to-indigo-700">
           <div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#fff" }}>Edit User Type</h2>
-            <p style={{ margin: "4px 0 0", fontSize: 13, color: "#d9e2ec" }}>Update the name and module permissions</p>
+            <h2 className="m-0 text-lg font-bold text-white">Edit User Type</h2>
+            <p className="mt-1 text-[13px] text-indigo-100">Update the name and module permissions</p>
           </div>
-          <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, width: 34, height: 34, cursor: "pointer", display: "flex", alignItems: "center", justifycontent: "center", color: "#fff" }}>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" style={{ width: 18, height: 18 }}>
+          <button onClick={onClose} className="bg-white/15 border-none rounded-lg w-[34px] h-[34px] cursor-pointer flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-[18px] h-[18px]">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         {/* Modal Body */}
-        <div style={{ overflowY: "auto", flex: 1, padding: "24px 28px" }}>
+        <div className="overflow-y-auto flex-1 px-7 py-6">
 
           {/* Name field */}
-          <div style={{ marginBottom: 24 }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-              User Type Name <span style={{ color: "#e11d48" }}>*</span>
+          <div className="mb-6">
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+              User Type Name <span className="text-rose-600">*</span>
             </label>
             <input
               type="text"
               value={typeName}
               onChange={(e) => setTypeName(e.target.value)}
-              style={{ width: "100%", boxSizing: "border-box", border: "1.5px solid #cbd5e1", borderRadius: 9, padding: "11px 14px", fontSize: 15, outline: "none", color: "#1e293b" }}
-              onFocus={e => e.target.style.borderColor = "#6804a1"}
-              onBlur={e => e.target.style.borderColor = "#cbd5e1"}
+              className="w-full border-[1.5px] border-slate-350 rounded-[9px] px-3.5 py-[11px] text-[15px] outline-none text-slate-805 bg-white focus:border-indigo-650 transition-colors"
             />
           </div>
 
           {/* Permissions Grid */}
-          <div style={{ background: "#f8fafc", borderRadius: 12, padding: 20, border: "1px solid #e2e8f0" }}>
-            <div style={{ display: "flex", alignItems: "center", justifycontent: "space-between", marginBottom: 16 }}>
-              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#1e293b" }}>Module Permissions</h3>
+          <div className="bg-slate-50/50 rounded-xl p-5 border border-slate-200">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="m-0 text-sm font-bold text-slate-800">Module Permissions</h3>
               <button
                 type="button"
                 onClick={toggleAll}
-                style={{ fontSize: 11, fontWeight: 700, padding: "5px 12px", borderRadius: 7, cursor: "pointer", border: `1.5px solid #6804a1`, color: isAllAll() ? "#fff" : "#6804a1", background: isAllAll() ? "#6804a1" : "#e6ebf0", transition: "all 0.2s" }}
+                className={`text-[11px] font-bold px-3 py-1.25 rounded-md cursor-pointer border-[1.5px] border-indigo-600 transition-colors ${isAllAll() ? "bg-indigo-600 text-white" : "bg-purple-50 text-indigo-600 hover:bg-purple-100"}`}
               >
                 {isAllAll() ? "Deselect All" : "Select All"}
               </button>
             </div>
 
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
                 <thead>
-                  <tr style={{ background: "#fff" }}>
-                    <th style={{ textAlign: "left", padding: "10px 12px", fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "2px solid #e2e8f0", minWidth: 150 }}>Module</th>
-                    {PERMS.map((perm) => {
-                      const c = PERM_COLORS[perm];
-                      return (
-                        <th key={perm} style={{ textAlign: "center", padding: "10px 8px", borderBottom: "2px solid #e2e8f0", minWidth: 80 }}>
-                          <button type="button" onClick={() => toggleColumn(perm)} title={`Toggle all ${PERM_LABELS[perm]}`}
-                            style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", padding: 4 }}>
-                            <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: c.text, background: c.bg, border: `1px solid ${c.border}`, borderRadius: 5, padding: "2px 7px" }}>
-                              {PERM_LABELS[perm]}
-                            </span>
-                            <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${isColAll(perm) ? c.check : "#cbd5e1"}`, background: isColAll(perm) ? c.check : "#fff", display: "flex", alignItems: "center", justifycontent: "center", transition: "all 0.15s" }}>
-                              {isColAll(perm) && <svg viewBox="0 0 12 10" style={{ width: 9, height: 9 }}><polyline points="1,5 4.5,8.5 11,1" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                            </div>
-                          </button>
-                        </th>
-                      );
-                    })}
-                    <th style={{ textAlign: "center", padding: "10px 8px", borderBottom: "2px solid #e2e8f0", minWidth: 70, fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" }}>All</th>
+                  <tr className="bg-white">
+                    <th className="text-left px-3 py-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 min-w-[150px]">Module</th>
+                    {PERMS.map((perm) => (
+                      <th key={perm} className="text-center px-2 py-2.5 border-b-2 border-slate-200 min-w-[80px]">
+                        <button type="button" onClick={() => toggleColumn(perm)} title={`Toggle all ${PERM_LABELS[perm]}`}
+                          className="inline-flex flex-col items-center gap-1 bg-transparent border-none cursor-pointer p-1">
+                          <span className={`text-[10px] font-bold uppercase tracking-wider rounded-[5px] px-1.75 py-0.5 border ${PERM_CLASSES[perm]}`}>
+                            {PERM_LABELS[perm]}
+                          </span>
+                          <div className={`w-4 h-4 rounded-[4px] border flex items-center justify-center transition-all ${isColAll(perm) ? PERM_CHECKBOX_CLASSES[perm] : "border-slate-300 bg-white"}`}>
+                            {isColAll(perm) && <svg viewBox="0 0 12 10" className="w-2.25 h-2.25"><polyline points="1,5 4.5,8.5 11,1" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                          </div>
+                        </button>
+                      </th>
+                    ))}
+                    <th className="text-center px-2 py-2.5 border-b-2 border-slate-200 min-w-[70px] text-[10px] font-bold text-slate-400 uppercase tracking-wider">All</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -283,32 +266,30 @@ function EditModal({ row, onClose, onSave, saving }) {
                     const rowAll = isRowAll(master.key);
                     const isApprovalRow = master.key.endsWith("_approval");
                     return (
-                      <tr key={master.key} style={{ background: idx % 2 === 0 ? "#fff" : "#f8fafc" }}
-                        onMouseEnter={e => e.currentTarget.style.background = "#f1f5f9"}
-                        onMouseLeave={e => e.currentTarget.style.background = idx % 2 === 0 ? "#fff" : "#f8fafc"}>
-                        <td style={{ padding: "11px 12px", fontSize: 13, fontWeight: 600, color: "#334155", borderBottom: "1px solid #f1f5f9" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                            <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#6804a1" }} />
+                      <tr key={master.key} className={`transition-colors border-b border-slate-100 last:border-b-0 hover:bg-slate-50/80 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
+                        <td className="px-3 py-2.75 text-[13px] font-semibold text-slate-700">
+                          <div className="flex items-center gap-1.75">
+                            <div className="w-1.75 h-1.75 rounded-full bg-indigo-600 flex-shrink-0" />
                             {master.label}
                           </div>
                         </td>
                         {PERMS.map((perm) => {
                           if (isApprovalRow && (perm === "canUpdate" || perm === "canDelete")) {
                             return (
-                              <td key={perm} style={{ textAlign: "center", padding: "11px 8px", borderBottom: "1px solid #f1f5f9", color: "#94a3b8" }}>
+                              <td key={perm} className="text-center px-2 py-2.75 text-slate-400">
                                 —
                               </td>
                             );
                           }
                           return (
-                            <td key={perm} style={{ textAlign: "center", padding: "11px 8px", borderBottom: "1px solid #f1f5f9" }}>
-                              <CheckCell checked={rowData[perm]} color={PERM_COLORS[perm]} onChange={() => togglePerm(master.key, perm)} />
+                            <td key={perm} className="text-center px-2 py-2.75">
+                              <CheckCell checked={rowData[perm]} perm={perm} onChange={() => togglePerm(master.key, perm)} />
                             </td>
                           );
                         })}
-                        <td style={{ textAlign: "center", padding: "11px 8px", borderBottom: "1px solid #f1f5f9" }}>
+                        <td className="text-center px-2 py-2.75">
                           <button type="button" onClick={() => toggleRow(master.key)}
-                            style={{ fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 5, cursor: "pointer", border: `1.5px solid ${rowAll ? "#6804a1" : "#cbd5e1"}`, color: rowAll ? "#fff" : "#64748b", background: rowAll ? "#6804a1" : "#f8fafc", transition: "all 0.15s" }}>
+                            className={`text-[10px] font-bold px-2.25 py-0.75 rounded-[5px] cursor-pointer border-[1.5px] transition-all ${rowAll ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-slate-50 text-slate-500 hover:bg-slate-100"}`}>
                             {rowAll ? "✓" : "All"}
                           </button>
                         </td>
@@ -322,15 +303,15 @@ function EditModal({ row, onClose, onSave, saving }) {
         </div>
 
         {/* Modal Footer */}
-        <div style={{ padding: "16px 28px", borderTop: "1px solid #f1f5f9", display: "flex", justifyContent: "flex-end", gap: 12, background: "#fafafa" }}>
+        <div className="px-7 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
           <button onClick={onClose} disabled={saving}
-            style={{ padding: "9px 20px", borderRadius: 8, border: "1.5px solid #cbd5e1", color: "#475569", background: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+            className="px-5 py-2.25 rounded-lg border-[1.5px] border-slate-300 text-slate-600 bg-white font-semibold text-[13px] cursor-pointer hover:bg-slate-50 transition-colors">
             Cancel
           </button>
           <button
             onClick={() => onSave(row.id, typeName, permissions)}
             disabled={saving || !typeName.trim()}
-            style={{ padding: "9px 24px", borderRadius: 8, border: "none", background: saving ? "#94a3b8" : "linear-gradient(135deg,#6804a1,#52037e)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: saving ? "not-allowed" : "pointer", boxShadow: saving ? "none" : "0 2px 8px rgba(104,4,161,0.35)" }}>
+            className="px-6 py-2.25 rounded-lg border-none text-white font-bold text-[13px] bg-gradient-to-br from-indigo-600 to-indigo-700 shadow-[0_2px_8px_rgba(104,4,161,0.35)] cursor-pointer disabled:bg-slate-400 disabled:cursor-not-allowed disabled:shadow-none hover:opacity-95 transition-all">
             {saving ? "Saving…" : "Save Changes"}
           </button>
         </div>
@@ -402,25 +383,13 @@ export default function UserGroupMaster() {
       { key: "id", label: "ID", minWidth: "60px" },
       {
         key: "type_name", label: "User Type",
-        render: (row) => <span style={{ fontWeight: 700 }}>{row.type_name}</span>
+        render: (row) => <span className="font-bold text-slate-800">{row.type_name}</span>
       },
       {
         key: "permissions", label: "Permissions",
         sortable: false,
         render: (row) => <PermBadges permissions={row.permissions} />
       }
-      // {
-      //   key: "created_at", label: "Added Date",
-      //   render: (row) => new Date(row.created_at).toLocaleDateString()
-      // },
-      // {
-      //   key: "added_by_name", label: "Added By",
-      //   render: (row) => row.added_by_name || "Unknown"
-      // },
-      // {
-      //   key: "device_id", label: "Device ID",
-      //   render: (row) => <span style={{ fontFamily: "monospace", color: "#64748b", fontSize: "12px" }}>{row.device_id || "—"}</span>
-      // }
     ];
 
     const canUpdate = hasPermission("user_type", "update");
@@ -430,14 +399,14 @@ export default function UserGroupMaster() {
       cols.push({
         key: "actions", label: "Actions", sortable: false, minWidth: "120px",
         render: (row) => (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="flex items-center gap-2">
             {canUpdate && (
               <button
                 onClick={() => setEditingRow(row)}
-                style={{ display: "flex", width: 32, height: 32, alignItems: "center", justifyContent: "center", borderRadius: 8, border: "1px solid #d8b4fe", background: "#f3e8ff", color: "#6804a1", cursor: "pointer" }}
+                className="flex w-8 h-8 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-indigo-650 cursor-pointer hover:bg-purple-100 transition-colors"
                 title="Edit"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" style={{ width: 15, height: 15 }}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-[15px] h-[15px]">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931Z" />
                 </svg>
               </button>
@@ -445,10 +414,10 @@ export default function UserGroupMaster() {
             {canDelete && (
               <button
                 onClick={() => handleDelete(row.id)}
-                style={{ display: "flex", width: 32, height: 32, alignItems: "center", justifyContent: "center", borderRadius: 8, border: "1px solid #fecdd3", background: "#fff1f2", color: "#be123c", cursor: "pointer" }}
+                className="flex w-8 h-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 cursor-pointer hover:bg-rose-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Delete"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" style={{ width: 15, height: 15 }}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-[15px] h-[15px]">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5h12m-1.5 0-.563 12.375A2.25 2.25 0 0113.693 21H10.307a2.25 2.25 0 01-2.244-2.125L7.5 7.5m3-3h3A1.5 1.5 0 0115 6v1.5H9V6a1.5 1.5 0 011.5-1.5Z" />
                 </svg>
               </button>
@@ -462,7 +431,7 @@ export default function UserGroupMaster() {
   }, [saving, hasPermission]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "#f8fafc", fontFamily: "'Inter',sans-serif" }}>
+    <div className="flex flex-col flex-1 bg-slate-50 font-sans">
       <Navbar title="ERP Admin" />
 
       {editingRow && (
@@ -474,9 +443,9 @@ export default function UserGroupMaster() {
         />
       )}
 
-      <main style={{ flex: 1, display: "flex", flexDirection: "column", width: "100%", margin: "0 auto", padding: "32px 30px" }}>
+      <main className="flex-1 flex flex-col w-full mx-auto px-[30px] py-8">
         {error && (
-          <div style={{ background: "#fff1f2", border: "1px solid #fecdd3", color: "#be123c", padding: "12px 16px", borderRadius: 10, marginBottom: 20, fontSize: 14, fontWeight: 500 }}>
+          <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-lg mb-5 text-sm font-medium">
             {error}
           </div>
         )}
@@ -491,10 +460,10 @@ export default function UserGroupMaster() {
             hasPermission("user_type", "write") ? (
               <button
                 onClick={() => navigate("/admin/user-types/create")}
-                style={{ display: "flex", width: 40, height: 40, alignItems: "center", justifyContent: "center", borderRadius: 9, background: "linear-gradient(135deg,#6804a1,#52037e)", color: "#fff", border: "none", cursor: "pointer", boxShadow: "0 2px 8px rgba(104,4,161,0.35)" }}
+                className="flex w-10 h-10 items-center justify-center rounded-[9px] bg-gradient-to-br from-indigo-650 to-indigo-755 text-white border-none cursor-pointer shadow-[0_2px_8px_rgba(104,4,161,0.35)] hover:opacity-95 transition-opacity"
                 title="Create User Type"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" style={{ width: 18, height: 18 }}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-[18px] h-[18px]">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
               </button>
@@ -505,4 +474,3 @@ export default function UserGroupMaster() {
     </div>
   );
 }
-
