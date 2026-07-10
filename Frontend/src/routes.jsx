@@ -23,6 +23,7 @@ import ActivityReport from "./pages/admin/ActivityReport";
 import Offers from "./pages/admin/Offers";
 import OfferForm from "./pages/admin/OfferForm";
 import TargetVsAchievement from "./pages/admin/TargetVsAchievement";
+import StockVsCashDepositReport from "./pages/admin/StockVsCashDepositReport";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -90,6 +91,13 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/report"
                     element={<ActivityReport />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" />}>
+                <Route
+                    path="/admin/stock-vs-cash-deposit"
+                    element={<StockVsCashDepositReport />}
                 />
             </Route>
 
