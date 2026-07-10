@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Navbar from "../../components/Navbar";
-import { 
-  getStockCashDepositReport, 
+import {
+  getStockCashDepositReport,
   importStockCashDepositReport,
   importCurrentStockReport,
   importOpeningCashAndCreditReport,
@@ -18,6 +18,14 @@ export default function StockVsCashDepositReport() {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  // Filter States
+  const [selectedBranches, setSelectedBranches] = useState([]);
+  const [selectedAbms, setSelectedAbms] = useState([]);
+  const [branchSearchText, setBranchSearchText] = useState("");
+  const [abmSearchText, setAbmSearchText] = useState("");
+  const [isBranchFilterOpen, setIsBranchFilterOpen] = useState(false);
+  const [isAbmFilterOpen, setIsAbmFilterOpen] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -37,6 +45,36 @@ export default function StockVsCashDepositReport() {
     loadData();
   }, []);
 
+  // Extract unique branches
+  const uniqueBranches = useMemo(() => {
+    const list = data
+      .map(r => ({ id: r.id, name: r.branch_name }))
+      .filter(r => r.name);
+    const seen = new Set();
+    return list.filter(item => {
+      const duplicate = seen.has(item.id);
+      seen.add(item.id);
+      return !duplicate;
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [data]);
+
+  // Extract unique ABMs
+  const uniqueAbms = useMemo(() => {
+    const list = data
+      .map(r => r.abm_name)
+      .filter(name => name && name !== "—");
+    return Array.from(new Set(list)).sort((a, b) => a.localeCompare(b));
+  }, [data]);
+
+  // Filtered dataset
+  const filteredData = useMemo(() => {
+    return data.filter(item => {
+      const branchMatch = selectedBranches.length === 0 || selectedBranches.includes(item.id);
+      const abmMatch = selectedAbms.length === 0 || selectedAbms.includes(item.abm_name);
+      return branchMatch && abmMatch;
+    });
+  }, [data, selectedBranches, selectedAbms]);
+
   // Calculate totals
   const totals = useMemo(() => {
     const t = {
@@ -52,7 +90,7 @@ export default function StockVsCashDepositReport() {
       available_limit: 0
     };
 
-    data.forEach(r => {
+    filteredData.forEach(r => {
       t.stock_deposit += Number(r.stock_deposit || 0);
       t.support += Number(r.support || 0);
       t.paid_support += Number(r.paid_support || 0);
@@ -66,13 +104,13 @@ export default function StockVsCashDepositReport() {
     });
 
     return t;
-  }, [data]);
+  }, [filteredData]);
 
   // Export Template for Stock/Support/Paid Support
   const handleExportTemplate = async () => {
     setExporting(true);
     try {
-      if (data.length === 0) {
+      if (filteredData.length === 0) {
         toast.error("No data available to export template");
         setExporting(false);
         return;
@@ -80,7 +118,7 @@ export default function StockVsCashDepositReport() {
 
       const monthName = new Date().toLocaleString('en-US', { month: 'long' });
 
-      const dataToExport = data.map((row) => ({
+      const dataToExport = filteredData.map((row) => ({
         "Month": monthName,
         "ID": row.id,
         "Branch Name": row.branch_name || "",
@@ -140,7 +178,7 @@ export default function StockVsCashDepositReport() {
   const handleExportCurrentStockTemplate = async () => {
     setExporting(true);
     try {
-      if (data.length === 0) {
+      if (filteredData.length === 0) {
         toast.error("No data available to export template");
         setExporting(false);
         return;
@@ -148,7 +186,7 @@ export default function StockVsCashDepositReport() {
 
       const monthName = new Date().toLocaleString('en-US', { month: 'long' });
 
-      const dataToExport = data.map((row) => ({
+      const dataToExport = filteredData.map((row) => ({
         "Month": monthName,
         "ID": row.id,
         "Branch Name": row.branch_name || "",
@@ -202,7 +240,7 @@ export default function StockVsCashDepositReport() {
   const handleExportOpeningCashAndCreditTemplate = async () => {
     setExporting(true);
     try {
-      if (data.length === 0) {
+      if (filteredData.length === 0) {
         toast.error("No data available to export template");
         setExporting(false);
         return;
@@ -210,7 +248,7 @@ export default function StockVsCashDepositReport() {
 
       const monthName = new Date().toLocaleString('en-US', { month: 'long' });
 
-      const dataToExport = data.map((row) => ({
+      const dataToExport = filteredData.map((row) => ({
         "Month": monthName,
         "ID": row.id,
         "Branch Name": row.branch_name || "",
@@ -265,7 +303,7 @@ export default function StockVsCashDepositReport() {
   const handleExportCashDepositTemplate = async () => {
     setExporting(true);
     try {
-      if (data.length === 0) {
+      if (filteredData.length === 0) {
         toast.error("No data available to export template");
         setExporting(false);
         return;
@@ -274,7 +312,7 @@ export default function StockVsCashDepositReport() {
       const monthName = new Date().toLocaleString('en-US', { month: 'long' });
 
       // Match user screenshot exactly
-      const dataToExport = data.map((row) => ({
+      const dataToExport = filteredData.map((row) => ({
         "Month": monthName,
         "ID": row.id,
         "Branch Name": row.branch_name || "",
@@ -328,13 +366,13 @@ export default function StockVsCashDepositReport() {
   const handleExportFullReport = async () => {
     setExporting(true);
     try {
-      if (data.length === 0) {
+      if (filteredData.length === 0) {
         toast.error("No data available to export");
         setExporting(false);
         return;
       }
 
-      const dataToExport = data.map((row, index) => ({
+      const dataToExport = filteredData.map((row, index) => ({
         "Sr. No": index + 1,
         "Branch Name": row.branch_name || "",
         "State": row.state_name || "",
@@ -461,9 +499,9 @@ export default function StockVsCashDepositReport() {
 
         if (type === 'current_stock') {
           // Find Current Stock column
-          const currentStockKey = keys.find(k => 
-            k.toLowerCase().includes('current. stock') || 
-            k.toLowerCase().includes('current stock') || 
+          const currentStockKey = keys.find(k =>
+            k.toLowerCase().includes('current. stock') ||
+            k.toLowerCase().includes('current stock') ||
             k.toLowerCase().includes('gst dp')
           );
 
@@ -500,12 +538,12 @@ export default function StockVsCashDepositReport() {
           }
         } else if (type === 'opening_credit') {
           // Find columns: "Opening Cash", "Credit/Debit"
-          const openingCashKey = keys.find(k => 
-            k.toLowerCase().includes('opening cash') || 
+          const openingCashKey = keys.find(k =>
+            k.toLowerCase().includes('opening cash') ||
             k.toLowerCase().includes('opening_cash')
           );
-          const creditDebitKey = keys.find(k => 
-            k.toLowerCase().includes('credit/debit') || 
+          const creditDebitKey = keys.find(k =>
+            k.toLowerCase().includes('credit/debit') ||
             k.toLowerCase().includes('credit_debit') ||
             k.toLowerCase().includes('credit')
           );
@@ -544,8 +582,8 @@ export default function StockVsCashDepositReport() {
           }
         } else if (type === 'cash_deposit') {
           // Find columns: "Cash Deposit Pending" or "Cash Deposit"
-          const cashDepositKey = keys.find(k => 
-            k.toLowerCase().includes('cash deposit') || 
+          const cashDepositKey = keys.find(k =>
+            k.toLowerCase().includes('cash deposit') ||
             k.toLowerCase().includes('cash_deposit')
           );
 
@@ -582,9 +620,9 @@ export default function StockVsCashDepositReport() {
           }
         } else {
           // Stock & Support
-          const stockKey = keys.find(k => 
-            k.toLowerCase().includes('stock invest') || 
-            k.toLowerCase().includes('stock deposit') || 
+          const stockKey = keys.find(k =>
+            k.toLowerCase().includes('stock invest') ||
+            k.toLowerCase().includes('stock deposit') ||
             k.toLowerCase().startsWith('stock inve') ||
             k.toLowerCase().startsWith('stock depo')
           );
@@ -644,7 +682,7 @@ export default function StockVsCashDepositReport() {
 
   // Add the "Total" row directly to the formatted data array
   const formattedData = useMemo(() => {
-    const base = data.map((item, index) => ({
+    const base = filteredData.map((item, index) => ({
       ...item,
       sr_no: index + 1
     }));
@@ -673,7 +711,7 @@ export default function StockVsCashDepositReport() {
     };
 
     return [...base, totalRow];
-  }, [data, totals]);
+  }, [filteredData, totals]);
 
   const columns = useMemo(() => [
     {
@@ -713,9 +751,8 @@ export default function StockVsCashDepositReport() {
       render: (row) => {
         if (row.id === "Total") return "";
         return (
-          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
-            row.store_type === 'branch' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-orange-50 text-orange-700 border border-orange-200'
-          }`}>
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${row.store_type === 'branch' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-orange-50 text-orange-700 border border-orange-200'
+            }`}>
             {row.store_type ? row.store_type.toUpperCase() : "—"}
           </span>
         );
@@ -728,9 +765,8 @@ export default function StockVsCashDepositReport() {
       render: (row) => {
         if (row.id === "Total") return "";
         return (
-          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
-            row.status === 'active' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
-          }`}>
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${row.status === 'active' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+            }`}>
             {row.status ? row.status.toUpperCase() : "—"}
           </span>
         );
@@ -744,7 +780,7 @@ export default function StockVsCashDepositReport() {
     },
     {
       key: "support",
-      label: "Support",
+      label: "Support (20%)",
       minWidth: "120px",
       render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900 text-sm" : "font-medium text-slate-700"}>{formatVal(row.support)}</span>
     },
@@ -767,20 +803,20 @@ export default function StockVsCashDepositReport() {
       render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900 text-sm" : "font-medium text-slate-700"}>{formatVal(row.current_stock)}</span>
     },
     {
-      key: "opening_cash_deposit_pending",
-      label: "Opening Cash Deposit Pending",
+      key: `opening_cash_deposit_pending`,
+      label: `(${new Date().toISOString().split('T')[0]}) Opening Cash Deposit Pending`,
       minWidth: "220px",
       render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900 text-sm" : "font-medium text-slate-700"}>{formatVal(row.opening_cash_deposit_pending)}</span>
     },
     {
       key: "cash_deposit",
-      label: "Cash Deposit",
+      label: `(${new Date().toISOString().split('T')[0]}) Cash Deposit`,
       minWidth: "130px",
       render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900 text-sm" : "font-medium text-slate-700"}>{formatVal(row.cash_deposit)}</span>
     },
     {
       key: "pending_cash_deposit",
-      label: "Pending Cash Deposit",
+      label: `(${new Date().toISOString().split('T')[0]}) Pending Cash Deposit`,
       minWidth: "170px",
       render: (row) => <span className={row.id === "Total" ? "font-extrabold text-amber-900 text-sm" : "font-semibold text-amber-700"}>{formatVal(row.pending_cash_deposit)}</span>
     },
@@ -797,6 +833,165 @@ export default function StockVsCashDepositReport() {
       render: (row) => <span className={row.id === "Total" ? "font-extrabold text-emerald-900 text-sm" : "font-bold text-emerald-700"}>{formatVal(row.available_limit)}</span>
     }
   ], [totals]);
+
+  // Filters Component
+  const filtersElement = (
+    <div className="flex flex-wrap items-center gap-3">
+      {/* Branch Multi-select Dropdown */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => {
+            setIsBranchFilterOpen(!isBranchFilterOpen);
+            setIsAbmFilterOpen(false);
+          }}
+          className="flex items-center justify-between gap-2 h-10 px-3 rounded-lg border border-slate-350 bg-white hover:border-slate-400 text-sm font-semibold transition-colors duration-150 cursor-pointer focus:outline-none"
+        >
+          <span className="text-slate-700">
+            {selectedBranches.length === 0
+              ? "All Branches"
+              : `${selectedBranches.length} Branch${selectedBranches.length > 1 ? 'es' : ''}`}
+          </span>
+          <i className="fa-solid fa-chevron-down text-xs text-slate-400"></i>
+        </button>
+
+        {isBranchFilterOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setIsBranchFilterOpen(false)}></div>
+            <div className="absolute left-0 mt-1 w-64 rounded-xl border border-slate-200 bg-white shadow-xl py-2 z-50 flex flex-col">
+              <div className="px-3 py-1.5 border-b border-slate-100 flex items-center gap-1.5">
+                <i className="fa-solid fa-magnifying-glass text-slate-400 text-xs"></i>
+                <input
+                  type="text"
+                  placeholder="Search branches..."
+                  value={branchSearchText}
+                  onChange={(e) => setBranchSearchText(e.target.value)}
+                  className="w-full text-xs border-none outline-none bg-transparent"
+                />
+              </div>
+              <div className="px-2 py-1 border-b border-slate-100 flex items-center justify-between text-[11px] font-bold text-indigo-650">
+                <button
+                  type="button"
+                  onClick={() => setSelectedBranches(uniqueBranches.map(b => b.id))}
+                  className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                >
+                  Select All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedBranches([])}
+                  className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                >
+                  Deselect All
+                </button>
+              </div>
+              <div className="max-h-48 overflow-y-auto px-1 py-1 space-y-0.5">
+                {uniqueBranches
+                  .filter(b => b.name.toLowerCase().includes(branchSearchText.toLowerCase()))
+                  .map(branch => {
+                    const isChecked = selectedBranches.includes(branch.id);
+                    return (
+                      <label key={branch.id} className="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            if (isChecked) {
+                              setSelectedBranches(selectedBranches.filter(id => id !== branch.id));
+                            } else {
+                              setSelectedBranches([...selectedBranches, branch.id]);
+                            }
+                          }}
+                          className="accent-[#6804a1] h-3.5 w-3.5 flex-shrink-0"
+                        />
+                        <span className="truncate">{branch.name}</span>
+                      </label>
+                    );
+                  })}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ABM Multi-select Dropdown */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => {
+            setIsAbmFilterOpen(!isAbmFilterOpen);
+            setIsBranchFilterOpen(false);
+          }}
+          className="flex items-center justify-between gap-2 h-10 px-3 rounded-lg border border-slate-350 bg-white hover:border-slate-400 text-sm font-semibold transition-colors duration-150 cursor-pointer focus:outline-none"
+        >
+          <span className="text-slate-700">
+            {selectedAbms.length === 0
+              ? "All ABMs"
+              : `${selectedAbms.length} ABM${selectedAbms.length > 1 ? 's' : ''}`}
+          </span>
+          <i className="fa-solid fa-chevron-down text-xs text-slate-400"></i>
+        </button>
+
+        {isAbmFilterOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setIsAbmFilterOpen(false)}></div>
+            <div className="absolute left-0 mt-1 w-64 rounded-xl border border-slate-200 bg-white shadow-xl py-2 z-50 flex flex-col">
+              <div className="px-3 py-1.5 border-b border-slate-100 flex items-center gap-1.5">
+                <i className="fa-solid fa-magnifying-glass text-slate-400 text-xs"></i>
+                <input
+                  type="text"
+                  placeholder="Search ABMs..."
+                  value={abmSearchText}
+                  onChange={(e) => setAbmSearchText(e.target.value)}
+                  className="w-full text-xs border-none outline-none bg-transparent"
+                />
+              </div>
+              <div className="px-2 py-1 border-b border-slate-100 flex items-center justify-between text-[11px] font-bold text-indigo-650">
+                <button
+                  type="button"
+                  onClick={() => setSelectedAbms(uniqueAbms)}
+                  className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                >
+                  Select All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedAbms([])}
+                  className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                >
+                  Deselect All
+                </button>
+              </div>
+              <div className="max-h-48 overflow-y-auto px-1 py-1 space-y-0.5">
+                {uniqueAbms
+                  .filter(name => name.toLowerCase().includes(abmSearchText.toLowerCase()))
+                  .map(abmName => {
+                    const isChecked = selectedAbms.includes(abmName);
+                    return (
+                      <label key={abmName} className="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            if (isChecked) {
+                              setSelectedAbms(selectedAbms.filter(name => name !== abmName));
+                            } else {
+                              setSelectedAbms([...selectedAbms, abmName]);
+                            }
+                          }}
+                          className="accent-[#6804a1] h-3.5 w-3.5 flex-shrink-0"
+                        />
+                        <span className="truncate">{abmName}</span>
+                      </label>
+                    );
+                  })}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "#f8fafc", fontFamily: "'Inter',sans-serif" }}>
@@ -815,6 +1010,7 @@ export default function StockVsCashDepositReport() {
           data={formattedData}
           columns={columns}
           loading={loading}
+          toggleActions={filtersElement}
           searchPlaceholder="Search branch, state or city..."
           actionButton={
             <div className="relative inline-block text-left">
@@ -830,8 +1026,8 @@ export default function StockVsCashDepositReport() {
 
               {isDropdownOpen && (
                 <>
-                  <div 
-                    className="fixed inset-0 z-40 cursor-default" 
+                  <div
+                    className="fixed inset-0 z-40 cursor-default"
                     onClick={() => setIsDropdownOpen(false)}
                   ></div>
 
@@ -861,7 +1057,7 @@ export default function StockVsCashDepositReport() {
                         />
                       </label>
                     </div>
-                    
+
                     <div className="border-t border-slate-100 mb-2.5"></div>
                     <div className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Current Stock</div>
                     <div className="grid grid-cols-2 gap-2 px-4 mb-3">
