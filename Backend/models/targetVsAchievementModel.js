@@ -52,7 +52,9 @@ const getAllTargetVsAchievements = async () => {
             COALESCE(u.name, 'Unknown') AS added_by_name
         FROM target_vs_achievements t
         LEFT JOIN users u ON t.added_by = u.id
-        ORDER BY t.timestamp DESC
+        ORDER BY 
+            (t.qty_tgt IS NULL OR t.value_tgt IS NULL) ASC,
+            t.timestamp DESC
     `;
     const [results] = await db.execute(query);
     return results;
