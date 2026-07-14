@@ -136,6 +136,15 @@ export default function Navbar() {
             color: "bg-emerald-50 text-emerald-600 border border-emerald-100/50",
             activeColor: "bg-emerald-100 text-emerald-700",
             desc: "Manage branches & franchise stores"
+        },
+        {
+            name: "ABM Branch Mapping",
+            path: "/admin/abm-branch-mappings",
+            masterKey: "abm_branch_mapping",
+            icon: "fa-solid fa-code-merge",
+            color: "bg-indigo-50 text-indigo-600 border border-indigo-100/50",
+            activeColor: "bg-indigo-100 text-indigo-700",
+            desc: "Map branches to Area Branch Managers"
         }
     ];
 
@@ -263,9 +272,8 @@ export default function Navbar() {
                                 onClick={() => {
                                     navigate("/user/home");
                                 }}
-                                className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-l border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${
-                                    location.pathname === "/user/home" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
-                                }`}
+                                className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-l border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname === "/user/home" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                    }`}
                             >
                                 <span className="flex items-center gap-2.5 truncate mx-auto">
                                     <span className="font-semibold text-white truncate">User Dashboard</span>
@@ -278,9 +286,8 @@ export default function Navbar() {
                             <div className="relative">
                                 <button
                                     onClick={() => setIsOpen(!isOpen)}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${
-                                        isOpen ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
-                                    }`}
+                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isOpen ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                        }`}
                                 >
                                     <span className="flex items-center gap-2.5 truncate mx-auto">
                                         <span className="font-semibold text-white truncate">Masters</span>
@@ -345,9 +352,8 @@ export default function Navbar() {
                                     onClick={() => {
                                         navigate("/admin/offers");
                                     }}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${
-                                        location.pathname.startsWith("/admin/offers") ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
-                                    }`}
+                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname.startsWith("/admin/offers") ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                        }`}
                                 >
                                     <span className="flex items-center gap-2.5 truncate mx-auto">
                                         <span className="font-semibold text-white truncate">Offers</span>
@@ -361,11 +367,10 @@ export default function Navbar() {
                             <div className="relative" id="reports-dropdown">
                                 <button
                                     onClick={() => setIsReportsOpen(!isReportsOpen)}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${
-                                        isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/stock-vs-cash-deposit")
+                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/stock-vs-cash-deposit")
                                             ? "bg-white/15"
                                             : "bg-[#6804a1] hover:bg-white/5"
-                                    }`}
+                                        }`}
                                 >
                                     <span className="flex items-center gap-2.5 truncate mx-auto">
                                         <span className="font-semibold text-white truncate">Reports</span>

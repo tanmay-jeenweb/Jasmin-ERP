@@ -19,6 +19,7 @@ const MASTERS = [
   { key: "item_model_master", label: "Model Master" },
   { key: "model_group_master", label: "Model Group Master" },
   { key: "branch_master", label: "Branch Master" },
+  { key: "abm_branch_mapping", label: "ABM Branch Mapping" },
 ];
 const PERMS = ["canRead", "canWrite", "canUpdate", "canDelete"];
 const PERM_LABELS = { canRead: "Read", canWrite: "Write / Approval", canUpdate: "Update", canDelete: "Delete" };
@@ -124,6 +125,7 @@ function PermBadges({ permissions }) {
 // ─── Edit Modal ──────────────────────────────────────────────────────────────
 function EditModal({ row, onClose, onSave, saving }) {
   const [typeName, setTypeName] = useState(row.type_name || "");
+  const [userRole, setUserRole] = useState(row.user_role || "VIEWER");
   const [permissions, setPermissions] = useState(buildPermsFromApi(row.permissions));
 
   const togglePerm = (masterKey, perm) =>
@@ -213,17 +215,42 @@ function EditModal({ row, onClose, onSave, saving }) {
         {/* Modal Body */}
         <div className="overflow-y-auto flex-1 px-7 py-6">
 
-          {/* Name field */}
-          <div className="mb-6">
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-              User Type Name <span className="text-rose-600">*</span>
-            </label>
-            <input
-              type="text"
-              value={typeName}
-              onChange={(e) => setTypeName(e.target.value)}
-              className="w-full border-[1.5px] border-slate-350 rounded-[9px] px-3.5 py-[11px] text-[15px] outline-none text-slate-805 bg-white focus:border-indigo-650 transition-colors"
-            />
+          {/* Name & Role fields */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                User Type Name <span className="text-rose-600">*</span>
+              </label>
+              <input
+                type="text"
+                value={typeName}
+                onChange={(e) => setTypeName(e.target.value)}
+                className="w-full border-[1.5px] border-slate-350 rounded-[9px] px-3.5 py-[11px] text-[15px] outline-none text-slate-805 bg-white focus:border-indigo-650 transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                User Role <span className="text-rose-600">*</span>
+              </label>
+              <div className="relative">
+                <select
+                  value={userRole}
+                  onChange={(e) => setUserRole(e.target.value)}
+                  required
+                  className="w-full border-[1.5px] border-slate-350 rounded-[9px] px-3.5 py-[11px] text-[15px] outline-none text-slate-805 bg-white focus:border-indigo-650 transition-colors appearance-none cursor-pointer"
+                >
+                  <option value="VIEWER">VIEWER</option>
+                  <option value="ADMIN">ADMIN</option>
+                  <option value="ABM">ABM</option>
+                  <option value="MANAGER">MANAGER</option>
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Permissions Grid */}
@@ -309,7 +336,7 @@ function EditModal({ row, onClose, onSave, saving }) {
             Cancel
           </button>
           <button
-            onClick={() => onSave(row.id, typeName, permissions)}
+            onClick={() => onSave(row.id, typeName, userRole, permissions)}
             disabled={saving || !typeName.trim()}
             className="px-6 py-2.25 rounded-lg border-none text-white font-bold text-[13px] bg-gradient-to-br from-indigo-600 to-indigo-700 shadow-[0_2px_8px_rgba(104,4,161,0.35)] cursor-pointer disabled:bg-slate-400 disabled:cursor-not-allowed disabled:shadow-none hover:opacity-95 transition-all">
             {saving ? "Saving…" : "Save Changes"}
@@ -345,11 +372,11 @@ export default function UserGroupMaster() {
 
   useEffect(() => { loadUserTypes(); }, []);
 
-  const handleSave = async (id, typeName, permissions) => {
+  const handleSave = async (id, typeName, userRole, permissions) => {
     if (!typeName.trim()) { toast.error("Name is required"); return; }
     setSaving(true);
     try {
-      await updateUserType(id, { typeName: typeName.trim(), permissions });
+      await updateUserType(id, { typeName: typeName.trim(), userRole, permissions });
       toast.success("User type updated successfully");
       setEditingRow(null);
       await loadUserTypes();
@@ -384,6 +411,19 @@ export default function UserGroupMaster() {
       {
         key: "type_name", label: "User Type",
         render: (row) => <span className="font-bold text-slate-800">{row.type_name}</span>
+      },
+      {
+        key: "user_role", label: "User Role",
+        render: (row) => (
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+            row.user_role === 'ADMIN' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+            row.user_role === 'ABM' ? 'bg-teal-50 text-teal-700 border-teal-200' :
+            row.user_role === 'MANAGER' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+            'bg-slate-50 text-slate-700 border-slate-200'
+          }`}>
+            {row.user_role || 'VIEWER'}
+          </span>
+        )
       },
       {
         key: "permissions", label: "Permissions",

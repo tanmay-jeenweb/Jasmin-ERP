@@ -17,6 +17,7 @@ import ProductTypeMaster from "./pages/admin/ProductTypeMaster";
 import ItemModelMaster from "./pages/admin/ItemModelMaster";
 import ModelGroupMaster from "./pages/admin/ModelGroupMaster";
 import BranchMaster from "./pages/admin/BranchMaster";
+import ABMBranchMappingMaster from "./pages/admin/ABMBranchMappingMaster";
 import CreateBranch from "./pages/admin/CreateBranch";
 import BranchFinanceCode from "./pages/admin/BranchFinanceCode";
 import ActivityReport from "./pages/admin/ActivityReport";
@@ -175,6 +176,13 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/branches"
                     element={<BranchMaster />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="abm_branch_mapping" requiredAction="read" />}>
+                <Route
+                    path="/admin/abm-branch-mappings"
+                    element={<ABMBranchMappingMaster />}
                 />
             </Route>
 

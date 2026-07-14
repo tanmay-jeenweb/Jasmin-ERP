@@ -28,7 +28,7 @@ const getStockCashDepositReportData = async () => {
             bm.name AS branch_name,
             COALESCE(sm.name, '—') AS state_name,
             COALESCE(bm.city, '—') AS city,
-            COALESCE(bm.abm, '—') AS abm_name,
+            COALESCE(abm_u.name, bm.abm, '—') AS abm_name,
             bm.store_type,
             bm.status,
             COALESCE(sc.stock_deposit, 0.00) AS stock_deposit,
@@ -46,6 +46,8 @@ const getStockCashDepositReportData = async () => {
         FROM branch_master bm
         LEFT JOIN state_master sm ON bm.state_id = sm.id
         LEFT JOIN branch_stock_cash_deposits sc ON bm.id = sc.branch_id
+        LEFT JOIN abm_branch_mappings abm_m ON bm.id = abm_m.branch_id
+        LEFT JOIN users abm_u ON abm_m.abm_user_id = abm_u.id
         ORDER BY bm.name ASC
     `;
     const [results] = await db.execute(query);

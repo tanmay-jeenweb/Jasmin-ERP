@@ -41,6 +41,8 @@ const { createTargetVsAchievementsTable } = require("./models/targetVsAchievemen
 const targetVsAchievementRoutes = require("./routes/targetVsAchievementRoutes.js");
 const { createStockCashDepositTable } = require("./models/stockCashDepositModel.js");
 const stockCashDepositRoutes = require("./routes/stockCashDepositRoutes.js");
+const { createAbmBranchMappingsTable } = require("./models/abmBranchMappingModel.js");
+const abmBranchMappingRoutes = require("./routes/abmBranchMappingRoutes.js");
 
 
 const app = express();
@@ -97,6 +99,7 @@ app.use(["/api/branches/finance-codes", "/branches/finance-codes"], branchFinanc
 app.use(["/api/offers", "/offers"], offerRoutes);
 app.use(["/api/target-vs-achievement", "/target-vs-achievement"], targetVsAchievementRoutes);
 app.use(["/api/stock-cash-deposit", "/stock-cash-deposit"], stockCashDepositRoutes);
+app.use(["/api/abm-branch-mappings", "/abm-branch-mappings"], abmBranchMappingRoutes);
 
 
 // Global 404 handler
@@ -133,6 +136,7 @@ const startServer = async () => {
         await createOffersTable();
         await createTargetVsAchievementsTable();
         await createStockCashDepositTable();
+        await createAbmBranchMappingsTable();
 
         console.log("All database tables are initialized and ready.");
 

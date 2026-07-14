@@ -7,6 +7,7 @@ const {
     upsertBranches
 } = require('../models/branchModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
+const { getEligibleAbms } = require('../models/abmBranchMappingModel.js');
 
 const addBranchController = async (req, res) => {
     try {
@@ -251,10 +252,28 @@ const syncBranchesController = async (req, res) => {
     }
 };
 
+const getEligibleAbmsController = async (req, res) => {
+    try {
+        const abms = await getEligibleAbms();
+        res.status(200).json({
+            success: true,
+            message: 'Eligible ABMs retrieved successfully',
+            data: abms
+        });
+    } catch (error) {
+        console.error('Error retrieving eligible ABMs:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+
 module.exports = {
     addBranchController,
     getAllBranchesController,
     updateBranchController,
     deleteBranchController,
-    syncBranchesController
+    syncBranchesController,
+    getEligibleAbmsController
 };

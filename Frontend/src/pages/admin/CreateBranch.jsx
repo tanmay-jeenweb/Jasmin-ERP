@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import Navbar from "../../components/Navbar";
-import { getBranches, createBranch, updateBranch } from "../../api/branchApi";
+import { getBranches, createBranch, updateBranch, getEligibleAbms } from "../../api/branchApi";
 import { getStates } from "../../api/stateApi";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -11,6 +11,7 @@ export default function CreateBranch() {
   const isEdit = !!id;
 
   const [states, setStates] = useState([]);
+  const [abms, setAbms] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -37,6 +38,16 @@ export default function CreateBranch() {
     } catch (err) {
       console.error("Failed to load states:", err);
       toast.error("Failed to load state options.");
+    }
+  };
+
+  const loadAbms = async () => {
+    try {
+      const res = await getEligibleAbms();
+      setAbms(res.data.data || []);
+    } catch (err) {
+      console.error("Failed to load ABM options:", err);
+      toast.error("Failed to load ABM options.");
     }
   };
 
@@ -85,6 +96,7 @@ export default function CreateBranch() {
 
   useEffect(() => {
     loadStates();
+    loadAbms();
     loadBranchDetails();
   }, [id]);
 
@@ -133,7 +145,7 @@ export default function CreateBranch() {
     { label: "Store Type", name: "store_type", type: "select", required: true, options: [{ value: "branch", label: "Branch" }, { value: "franchise", label: "Franchise" }] },
     { label: "State", name: "state_id", type: "select", required: true, options: states.map(s => ({ value: s.id, label: s.name })), prompt: "Select a State" },
     { label: "City", name: "city", type: "text", required: true, placeholder: "e.g. Mumbai" },
-    { label: "Area Branch Manager (ABM)", name: "abm", type: "text", required: true, placeholder: "e.g. Rajesh Kumar" },
+    { label: "Area Branch Manager (ABM)", name: "abm", type: "select", required: true, options: abms.map(u => ({ value: u.name, label: `${u.name} (${u.username})` })), prompt: "Select an ABM" },
     { label: "Status", name: "status", type: "select", required: true, options: [{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }] },
     { label: "Address", name: "address", type: "textarea", required: true, placeholder: "Full office/store address...", fullWidth: true }
   ];
