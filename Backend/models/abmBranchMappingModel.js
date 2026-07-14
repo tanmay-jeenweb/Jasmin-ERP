@@ -10,7 +10,7 @@ const createAbmBranchMappingsTable = async () => {
             device_id VARCHAR(255),
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY uq_abm_branch (abm_user_id, branch_id),
+            UNIQUE KEY uq_branch_id (branch_id),
             FOREIGN KEY (abm_user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (branch_id) REFERENCES branch_master(id) ON DELETE CASCADE,
             FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE CASCADE
@@ -127,6 +127,26 @@ const deleteAbmMapping = async (abmUserId) => {
     return result;
 };
 
+const checkConflictingBranchMappings = async (abmUserId, branchIds, oldAbmUserId = null) => {
+    if (!branchIds || branchIds.length === 0) return [];
+    
+    const ignoreUserIds = [Number(abmUserId)];
+    if (oldAbmUserId) {
+        ignoreUserIds.push(Number(oldAbmUserId));
+    }
+    
+    const query = `
+        SELECT bm.name AS branch_name, u.name AS abm_name
+        FROM abm_branch_mappings abm_m
+        JOIN branch_master bm ON abm_m.branch_id = bm.id
+        JOIN users u ON abm_m.abm_user_id = u.id
+        WHERE abm_m.branch_id IN (${branchIds.map(() => '?').join(',')}) 
+          AND abm_m.abm_user_id NOT IN (${ignoreUserIds.map(() => '?').join(',')})
+    `;
+    const [rows] = await db.execute(query, [...branchIds, ...ignoreUserIds]);
+    return rows;
+};
+
 module.exports = {
     createAbmBranchMappingsTable,
     getEligibleAbms,
@@ -134,5 +154,6 @@ module.exports = {
     getAllAbmMappings,
     getAbmMappingById,
     saveAbmBranchMapping,
-    deleteAbmMapping
+    deleteAbmMapping,
+    checkConflictingBranchMappings
 };

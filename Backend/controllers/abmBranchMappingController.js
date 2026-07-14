@@ -4,7 +4,8 @@ const {
     getAllAbmMappings,
     getAbmMappingById,
     saveAbmBranchMapping,
-    deleteAbmMapping
+    deleteAbmMapping,
+    checkConflictingBranchMappings
 } = require('../models/abmBranchMappingModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
 const { getUserById } = require('../models/userModel.js');
@@ -97,6 +98,16 @@ const saveAbmBranchMappingController = async (req, res) => {
         }
 
         const beforeBranchIds = await getAbmMappingById(oldAbmUserId || abmUserId);
+
+        // Check if any branches are already mapped to another ABM user
+        const conflicts = await checkConflictingBranchMappings(abmUserId, branchIds, oldAbmUserId);
+        if (conflicts.length > 0) {
+            const conflictMsgs = conflicts.map(c => `Branch '${c.branch_name}' is already mapped to ABM '${c.abm_name}'`);
+            return res.status(400).json({
+                success: false,
+                message: conflictMsgs.join('. ')
+            });
+        }
 
         await saveAbmBranchMapping(abmUserId, branchIds, addedBy, deviceId, oldAbmUserId);
 
