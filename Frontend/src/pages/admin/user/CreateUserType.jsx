@@ -16,6 +16,7 @@ const MASTERS = [
   { key: "item_model_master", label: "Model Master" },
   { key: "model_group_master", label: "Model Group Master" },
   { key: "branch_master", label: "Branch Master" },
+  { key: "abm_branch_mapping", label: "ABM Branch Mapping" },
 ];
 
 const PERMS = ["canRead", "canWrite", "canUpdate", "canDelete"];
@@ -60,6 +61,7 @@ const defaultPerms = () =>
 
 export default function CreateUserType() {
   const [newTypeName, setNewTypeName] = useState("");
+  const [userRole, setUserRole] = useState("VIEWER");
   const [permissions, setPermissions] = useState(defaultPerms());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -158,9 +160,10 @@ export default function CreateUserType() {
     setSaving(true);
     setError("");
     try {
-      await createUserType({ typeName: newTypeName.trim(), permissions });
+      await createUserType({ typeName: newTypeName.trim(), userRole, permissions });
       toast.success(`User type '${newTypeName.trim()}' added successfully.`);
       setNewTypeName("");
+      setUserRole("VIEWER");
       setPermissions(defaultPerms());
       setTimeout(() => navigate("/admin/user-types"), 1200);
     } catch (err) {
@@ -195,19 +198,46 @@ export default function CreateUserType() {
         </div>
 
         <form onSubmit={handleAddType}>
-          {/* Type Name Card */}
+          {/* Form Fields Card */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 mb-5 shadow-sm">
-            <label className="block text-[13px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
-              User Type Name <span className="text-rose-600">*</span>
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Supervisor, Technician, Manager"
-              value={newTypeName}
-              onChange={(e) => setNewTypeName(e.target.value)}
-              required
-              className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-[11px] text-[15px] outline-none text-slate-800 bg-white focus:border-indigo-650 transition-colors"
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-[13px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                  User Type Name <span className="text-rose-600">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Supervisor, Technician, Manager"
+                  value={newTypeName}
+                  onChange={(e) => setNewTypeName(e.target.value)}
+                  required
+                  className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-[11px] text-[15px] outline-none text-slate-800 bg-white focus:border-indigo-650 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-[13px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                  User Role <span className="text-rose-600">*</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={userRole}
+                    onChange={(e) => setUserRole(e.target.value)}
+                    required
+                    className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-[11px] text-[15px] outline-none text-slate-800 bg-white focus:border-indigo-650 transition-colors appearance-none cursor-pointer"
+                  >
+                    <option value="VIEWER">VIEWER</option>
+                    <option value="ADMIN">ADMIN</option>
+                    <option value="ABM">ABM</option>
+                    <option value="MANAGER">MANAGER</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Permissions Card */}

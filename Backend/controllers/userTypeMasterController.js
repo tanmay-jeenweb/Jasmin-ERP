@@ -9,15 +9,18 @@ const { createAuditLog } = require('../models/auditLogModel.js');
 
 const addUserType = async (req, res) => {
     try {
-        const { typeName, permissions } = req.body;
+        const { typeName, userRole, permissions } = req.body;
         const addedBy = req.user.id;
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
 
         if (!typeName) {
             return res.status(400).json({ success: false, message: 'Type name is required' });
         }
+        if (userRole && !['ADMIN', 'ABM', 'MANAGER', 'VIEWER'].includes(userRole)) {
+            return res.status(400).json({ success: false, message: 'Invalid user role' });
+        }
 
-        const userType = await createUserType(typeName, addedBy, deviceId, permissions || []);
+        const userType = await createUserType(typeName, userRole, addedBy, deviceId, permissions || []);
         await createAuditLog(
             addedBy,
             req.user?.name || req.user?.username || 'Unknown',
@@ -28,6 +31,7 @@ const addUserType = async (req, res) => {
             {
                 id: userType.insertId,
                 type_name: typeName,
+                user_role: userRole || 'VIEWER',
                 permissions: permissions || [],
                 added_by: addedBy,
                 device_id: deviceId
@@ -69,10 +73,13 @@ const getAllUserTypesController = async (req, res) => {
 const updateUserTypeController = async (req, res) => {
     try {
         const { id } = req.params;
-        const { typeName, permissions } = req.body;
+        const { typeName, userRole, permissions } = req.body;
 
         if (!typeName) {
             return res.status(400).json({ success: false, message: 'Type name is required' });
+        }
+        if (userRole && !['ADMIN', 'ABM', 'MANAGER', 'VIEWER'].includes(userRole)) {
+            return res.status(400).json({ success: false, message: 'Invalid user role' });
         }
 
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
@@ -81,7 +88,7 @@ const updateUserTypeController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User type not found' });
         }
 
-        await updateUserType(id, typeName, permissions || []);
+        await updateUserType(id, typeName, userRole, permissions || []);
         await createAuditLog(
             req.user?.id,
             req.user?.name || req.user?.username || 'Unknown',
@@ -92,6 +99,7 @@ const updateUserTypeController = async (req, res) => {
             {
                 ...beforeData,
                 type_name: typeName,
+                user_role: userRole || 'VIEWER',
                 permissions: permissions || []
             }
         );

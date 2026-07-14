@@ -15,20 +15,17 @@ export default function CreateUser() {
     
     // Master lists options
     const [statesList, setStatesList] = useState([]);
-    const [branchesList, setBranchesList] = useState([]);
     const [productTypesList, setProductTypesList] = useState([]);
     const [brandsList, setBrandsList] = useState([]);
 
     // Dropdown visibility states
     const [isStateDropdownOpen, setIsStateDropdownOpen] = useState(false);
-    const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false);
     const [isProductTypeDropdownOpen, setIsProductTypeDropdownOpen] = useState(false);
     const [isLandingTypeDropdownOpen, setIsLandingTypeDropdownOpen] = useState(false);
     const [isBrandDropdownOpen, setIsBrandDropdownOpen] = useState(false);
 
     // Selected multiple values
     const [selectedStates, setSelectedStates] = useState([]);
-    const [selectedBranches, setSelectedBranches] = useState([]);
     const [selectedProductTypes, setSelectedProductTypes] = useState([]);
     const [selectedLandingTypes, setSelectedLandingTypes] = useState([]);
     const [selectedBrands, setSelectedBrands] = useState([]);
@@ -36,7 +33,6 @@ export default function CreateUser() {
 
     // Search query states
     const [stateSearch, setStateSearch] = useState("");
-    const [branchSearch, setBranchSearch] = useState("");
     const [productTypeSearch, setProductTypeSearch] = useState("");
     const [landingTypeSearch, setLandingTypeSearch] = useState("");
     const [brandSearch, setBrandSearch] = useState("");
@@ -44,7 +40,6 @@ export default function CreateUser() {
     const landingTypesOptions = ["GST DP", "net LANDING", "MANAGER LANDING", "JASMIN LANDING"];
 
     const filteredStates = statesList.filter(s => s.name.toLowerCase().includes(stateSearch.toLowerCase()));
-    const filteredBranches = branchesList.filter(b => b.name.toLowerCase().includes(branchSearch.toLowerCase()));
     const filteredProductTypes = productTypesList.filter(pt => pt.product_type_name.toLowerCase().includes(productTypeSearch.toLowerCase()));
     const filteredLandingTypes = landingTypesOptions.filter(opt => opt.toLowerCase().includes(landingTypeSearch.toLowerCase()));
     const filteredBrands = brandsList.filter(b => b.mobile_brand.toLowerCase().includes(brandSearch.toLowerCase()));
@@ -64,16 +59,14 @@ export default function CreateUser() {
 
     const loadFormData = async () => {
         try {
-            const [utRes, stateRes, branchRes, ptRes, brandRes] = await Promise.all([
+            const [utRes, stateRes, ptRes, brandRes] = await Promise.all([
                 getUserTypes(),
                 getStates(),
-                getBranches(),
                 getProductTypes(),
                 getMobileBrands()
             ]);
             setUserTypes(utRes.data.data || []);
             setStatesList((stateRes.data.data || []).filter(s => s.live === "Yes"));
-            setBranchesList((branchRes.data.data || []).filter(b => b.status === "active"));
             setProductTypesList(ptRes.data.data || []);
             setBrandsList(brandRes.data.data || []);
         } catch (error) {
@@ -89,12 +82,10 @@ export default function CreateUser() {
         const handleClickOutside = (event) => {
             if (!event.target.closest(".relative")) {
                 setIsStateDropdownOpen(false);
-                setIsBranchDropdownOpen(false);
                 setIsProductTypeDropdownOpen(false);
                 setIsLandingTypeDropdownOpen(false);
                 setIsBrandDropdownOpen(false);
                 setStateSearch("");
-                setBranchSearch("");
                 setProductTypeSearch("");
                 setLandingTypeSearch("");
                 setBrandSearch("");
@@ -132,33 +123,7 @@ export default function CreateUser() {
         setSelectedStates(updated);
     };
 
-    const handleToggleBranch = (name) => {
-        let updated = [...selectedBranches];
-        if (name === "All") {
-            const allFiltered = filteredBranches.map(b => b.name);
-            const isAllFilteredSelected = allFiltered.every(item => updated.includes(item));
-            if (isAllFilteredSelected) {
-                updated = updated.filter(val => !allFiltered.includes(val) && val !== "All");
-            } else {
-                allFiltered.forEach(item => {
-                    if (!updated.includes(item)) updated.push(item);
-                });
-                if (branchesList.every(b => updated.includes(b.name))) {
-                    updated.push("All");
-                }
-            }
-        } else {
-            if (updated.includes(name)) {
-                updated = updated.filter(val => val !== name && val !== "All");
-            } else {
-                updated.push(name);
-                if (branchesList.every(b => updated.includes(b.name))) {
-                    updated.push("All");
-                }
-            }
-        }
-        setSelectedBranches(updated);
-    };
+
 
     const handleToggleProductType = (name) => {
         let updated = [...selectedProductTypes];
@@ -251,12 +216,7 @@ export default function CreateUser() {
         return `${selectedStates.length} States Selected`;
     };
 
-    const getBranchLabel = () => {
-        if (selectedBranches.includes("All")) return "All";
-        if (selectedBranches.length === 0) return "Select Branches";
-        if (selectedBranches.length <= 2) return selectedBranches.join(", ");
-        return `${selectedBranches.length} Branches Selected`;
-    };
+
 
     const getProductTypeLabel = () => {
         if (selectedProductTypes.includes("All")) return "All";
@@ -287,7 +247,7 @@ export default function CreateUser() {
                 ...newUserForm,
                 state: selectedStates,
                 city,
-                branch: selectedBranches,
+                branch: null,
                 productType: selectedProductTypes,
                 landingType: selectedLandingTypes,
                 brand: selectedBrands
@@ -307,7 +267,6 @@ export default function CreateUser() {
             });
             setSelectedStates([]);
             setCity("");
-            setSelectedBranches([]);
             setSelectedProductTypes([]);
             setSelectedLandingTypes([]);
             setSelectedBrands([]);
@@ -507,67 +466,6 @@ export default function CreateUser() {
                                      className="appearance-none block w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                                      placeholder="Enter City"
                                  />
-                             </div>
- 
-                             {/* Branch Multiple Selection Dropdown */}
-                             <div className="relative">
-                                 <label className="block text-sm font-medium text-slate-700 mb-1">Branch</label>
-                                 <div
-                                     className="w-full min-h-[38px] px-3 py-2 border border-slate-300 rounded-lg bg-white sm:text-sm cursor-pointer flex justify-between items-center"
-                                     onClick={() => {
-                                         setIsBranchDropdownOpen(!isBranchDropdownOpen);
-                                         setIsStateDropdownOpen(false);
-                                         setIsProductTypeDropdownOpen(false);
-                                         setIsLandingTypeDropdownOpen(false);
-                                         setStateSearch("");
-                                         setProductTypeSearch("");
-                                         setLandingTypeSearch("");
-                                         if (isBranchDropdownOpen) setBranchSearch("");
-                                     }}
-                                 >
-                                     <span className="truncate text-slate-700">{getBranchLabel()}</span>
-                                     <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                                     </svg>
-                                 </div>
-                                 {isBranchDropdownOpen && (
-                                     <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto p-2 space-y-1">
-                                         <div className="px-1 py-1 sticky top-0 bg-white z-10">
-                                             <input
-                                                 type="text"
-                                                 placeholder="Search Branch..."
-                                                 value={branchSearch}
-                                                 onChange={(e) => setBranchSearch(e.target.value)}
-                                                 className="w-full px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-[#6804a1] focus:border-[#6804a1]"
-                                                 onClick={(e) => e.stopPropagation()}
-                                             />
-                                         </div>
-                                         <label className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer text-sm font-medium text-slate-700">
-                                             <input
-                                                 type="checkbox"
-                                                 checked={filteredBranches.length > 0 && filteredBranches.every(b => selectedBranches.includes(b.name))}
-                                                 onChange={() => handleToggleBranch("All")}
-                                                 className="h-4 w-4 text-[#6804a1] border-slate-300 rounded focus:ring-[#6804a1]"
-                                             />
-                                             All
-                                         </label>
-                                         {filteredBranches.length === 0 ? (
-                                             <div className="text-xs text-slate-400 p-1.5">No branches found</div>
-                                         ) : (
-                                             filteredBranches.map(b => (
-                                                 <label key={b.id} className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer text-sm text-slate-700">
-                                                     <input
-                                                         type="checkbox"
-                                                         checked={selectedBranches.includes(b.name)}
-                                                         onChange={() => handleToggleBranch(b.name)}
-                                                         className="h-4 w-4 text-[#6804a1] border-slate-300 rounded focus:ring-[#6804a1]"
-                                                     />
-                                                     {b.name}
-                                                 </label>
-                                             ))
-                                         )}
-                                     </div>
-                                 )}
                              </div>
  
                              {/* Product Type Multiple Selection Dropdown */}

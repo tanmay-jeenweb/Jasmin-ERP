@@ -83,7 +83,7 @@ const getAllBranches = async () => {
             sm.name AS state_name,
             bm.city,
             bm.address,
-            bm.abm,
+            COALESCE(abm_u.name, bm.abm) AS abm,
             bm.status,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             bm.device_id,
@@ -91,6 +91,8 @@ const getAllBranches = async () => {
         FROM branch_master bm
         LEFT JOIN state_master sm ON bm.state_id = sm.id
         LEFT JOIN users u ON bm.added_by = u.id
+        LEFT JOIN abm_branch_mappings abm_m ON bm.id = abm_m.branch_id
+        LEFT JOIN users abm_u ON abm_m.abm_user_id = abm_u.id
         ORDER BY bm.timestamp DESC
     `;
     const [results] = await db.execute(query);
@@ -156,13 +158,15 @@ const getBranchById = async (id) => {
             sm.name AS state_name,
             bm.city,
             bm.address,
-            bm.abm,
+            COALESCE(abm_u.name, bm.abm) AS abm,
             bm.status,
             bm.added_by,
             bm.device_id,
             bm.timestamp
         FROM branch_master bm
         LEFT JOIN state_master sm ON bm.state_id = sm.id
+        LEFT JOIN abm_branch_mappings abm_m ON bm.id = abm_m.branch_id
+        LEFT JOIN users abm_u ON abm_m.abm_user_id = abm_u.id
         WHERE bm.id = ?
     `;
     const [rows] = await db.execute(query, [id]);

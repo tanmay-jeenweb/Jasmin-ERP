@@ -13,6 +13,7 @@ const MASTERS = [
     { key: 'item_model_master', label: 'Model Master' },
     { key: 'model_group_master', label: 'Model Group Master' },
     { key: 'branch_master', label: 'Branch Master' },
+    { key: 'abm_branch_mapping', label: 'ABM Branch Mapping' },
 ];
 
 // ─── Table creation ──────────────────────────────────────────────────────────
@@ -22,6 +23,7 @@ const createUserTypesTable = async () => {
         CREATE TABLE IF NOT EXISTS user_types (
             id INT AUTO_INCREMENT PRIMARY KEY,
             type_name VARCHAR(100) NOT NULL UNIQUE,
+            user_role VARCHAR(50) DEFAULT 'VIEWER',
             added_by INT NOT NULL,
             device_id VARCHAR(255),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -30,6 +32,17 @@ const createUserTypesTable = async () => {
     `;
 
     await db.execute(query);
+
+    try {
+        const [rows] = await db.execute("SHOW COLUMNS FROM user_types LIKE 'user_role'");
+        if (rows.length === 0) {
+            await db.execute("ALTER TABLE user_types ADD COLUMN user_role VARCHAR(50) DEFAULT 'VIEWER'");
+            console.log("Added user_role column to user_types");
+        }
+    } catch (err) {
+        console.error("Error checking/adding user_role column:", err.message);
+    }
+
     console.log("User types table ready");
 };
 
@@ -106,14 +119,14 @@ const getPermissionsByUserTypeId = async (userTypeId) => {
 
 // ─── User Type CRUD ──────────────────────────────────────────────────────────
 
-const createUserType = async (typeName, addedBy, deviceId, permissions) => {
+const createUserType = async (typeName, userRole, addedBy, deviceId, permissions) => {
     const conn = await db.getConnection();
     try {
         await conn.beginTransaction();
 
         const [result] = await conn.execute(
-            `INSERT INTO user_types (type_name, added_by, device_id) VALUES (?, ?, ?)`,
-            [typeName, addedBy, deviceId]
+            `INSERT INTO user_types (type_name, user_role, added_by, device_id) VALUES (?, ?, ?, ?)`,
+            [typeName, userRole || 'VIEWER', addedBy, deviceId]
         );
 
         const newId = result.insertId;
@@ -150,6 +163,7 @@ const getAllUserTypes = async () => {
         SELECT
             ut.id,
             ut.type_name,
+            ut.user_role,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             ut.device_id,
             ut.created_at
@@ -175,14 +189,14 @@ const getAllUserTypes = async () => {
     return results;
 };
 
-const updateUserType = async (id, typeName, permissions) => {
+const updateUserType = async (id, typeName, userRole, permissions) => {
     const conn = await db.getConnection();
     try {
         await conn.beginTransaction();
 
         await conn.execute(
-            `UPDATE user_types SET type_name = ? WHERE id = ?`,
-            [typeName, id]
+            `UPDATE user_types SET type_name = ?, user_role = ? WHERE id = ?`,
+            [typeName, userRole || 'VIEWER', id]
         );
 
         if (permissions && permissions.length > 0) {
@@ -219,7 +233,7 @@ const deleteUserType = async (id) => {
 
 const getUserTypeById = async (id) => {
     const [rows] = await db.execute(
-        `SELECT id, type_name, added_by, device_id, created_at, updated_at FROM user_types WHERE id = ?`,
+        `SELECT id, type_name, user_role, added_by, device_id, created_at, updated_at FROM user_types WHERE id = ?`,
         [id]
     );
     if (!rows[0]) return null;

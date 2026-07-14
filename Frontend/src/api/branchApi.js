@@ -27,3 +27,7 @@ export const getBranchFinanceCodes = async (branchId) => {
 export const saveBranchFinanceCodes = async (branchId, data) => {
     return apiClient.post(`/branches/finance-codes/${branchId}`, data);
 };
+
+export const getEligibleAbms = async () => {
+    return apiClient.get("/branches/eligible-abms");
+};
