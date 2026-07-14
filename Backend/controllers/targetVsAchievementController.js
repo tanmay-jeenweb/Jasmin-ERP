@@ -1,10 +1,11 @@
-const { 
-    getAllTargetVsAchievements, 
+const {
+    getAllTargetVsAchievements,
     upsertTargetVsAchievements,
     upsertAchievements
 } = require('../models/targetVsAchievementModel.js');
 const { getAllBranches } = require('../models/branchModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
+const db = require('../config/db.js');
 
 const getAllTargetVsAchievementsController = async (req, res) => {
     try {
@@ -48,7 +49,7 @@ const importTargetVsAchievementsController = async (req, res) => {
 
         const now = new Date();
         const totalDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-        const remainingDays = totalDays - now.getDate();
+        const remainingDays = totalDays - now.getDate() + 1;
         const remDays = remainingDays > 0 ? remainingDays : 1;
 
         await upsertTargetVsAchievements(records, addedBy, deviceId, remDays);
@@ -118,14 +119,27 @@ const syncTargetVsAchievementsController = async (req, res) => {
             return `${year}${month}${day}`;
         };
 
-        const startDateStr = formatToYYYYMMDD(firstDayLastMonth);
-        const endDateStr = formatToYYYYMMDD(targetDate);
+        const formatToDbDateStr = (d) => {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
 
-        console.log(`Syncing achievements from external API for date ${req.body.date || 'today'} (${formatToYYYYMMDD(targetDate)})`);
-        console.log(`Fetch range: ${startDateStr} to ${endDateStr}`);
+        // Determine 5 days range ending on targetDate
+        const syncStartDate = new Date(targetDate);
+        syncStartDate.setDate(syncStartDate.getDate() - 4); // target date - 4 days = 5 days total inclusive
 
-        // 2. Fetch invoice details from external API
-        const apiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetExtendedInvoiceDetails?CompanyCode=JITPL&InvoiceStartDate=${startDateStr}&InvoiceEndDate=${endDateStr}&SalespersonCode=0`;
+        const syncStartDateStr = formatToYYYYMMDD(syncStartDate);
+        const syncEndDateStr = formatToYYYYMMDD(targetDate);
+
+        const syncStartDbStr = formatToDbDateStr(syncStartDate);
+        const syncEndDbStr = formatToDbDateStr(targetDate);
+
+        console.log(`Syncing achievements from external API for range (last 5 days): ${syncStartDbStr} to ${syncEndDbStr}`);
+
+        // 2. Fetch invoice details from external API for only the last 5 days
+        const apiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetExtendedInvoiceDetails?CompanyCode=JITPL&InvoiceStartDate=${syncStartDateStr}&InvoiceEndDate=${syncEndDateStr}&SalespersonCode=0`;
         const response = await fetch(apiUrl, {
             method: 'GET',
             headers: {
@@ -143,7 +157,72 @@ const syncTargetVsAchievementsController = async (req, res) => {
         }
 
         const invoices = await response.json();
-        console.log(`Fetched ${invoices.length || 0} invoice records from API.`);
+        console.log(`Fetched ${invoices.length || 0} invoice records from API for range ${syncStartDateStr} to ${syncEndDateStr}.`);
+
+        const allowedProductTypes = ['SMARTPHONE', 'FETURE PHONE', 'FEATURE PHONE', 'TABLET', 'I PAD', 'EOL MODEL'];
+        const insertValues = [];
+
+        for (const invoice of invoices) {
+            const invoiceNo = invoice.invoicePrimaryData?.InvoiceNo;
+            const invoiceDateStr = invoice.invoicePrimaryData?.InvoiceDate; // "DD/MM/YYYY"
+            const branchCode = invoice.invoicePrimaryData?.BranchCode;
+            const branchName = invoice.invoicePrimaryData?.BranchName;
+            if (!invoiceNo || !invoiceDateStr) continue;
+
+            const [id, im, iy] = invoiceDateStr.split('/');
+            const invoiceDbDate = `${iy}-${im.padStart(2, '0')}-${id.padStart(2, '0')}`;
+
+            if (Array.isArray(invoice.invoiceItemData)) {
+                for (const item of invoice.invoiceItemData) {
+                    const itemDesc = item.ItemDescription || '';
+                    const parts = itemDesc.split(':');
+                    const lastPart = parts[parts.length - 1]?.trim().toUpperCase();
+
+                    if (parts.length > 1 && allowedProductTypes.includes(lastPart)) {
+                        insertValues.push([
+                            invoiceNo,
+                            invoiceDbDate,
+                            branchCode || '',
+                            branchName || '',
+                            item.ItemCode || '',
+                            itemDesc,
+                            parseFloat(item.Qty) || 0,
+                            parseFloat(item.NetAmount) || 0,
+                            lastPart
+                        ]);
+                    }
+                }
+            }
+        }
+
+        // DB operations: Transaction to delete & insert cache
+        const connection = await db.getConnection();
+        try {
+            await connection.beginTransaction();
+
+            console.log(`Deleting local cache for range ${syncStartDbStr} to ${syncEndDbStr}`);
+            await connection.execute(
+                `DELETE FROM synced_invoice_items WHERE invoice_date BETWEEN ? AND ?`,
+                [syncStartDbStr, syncEndDbStr]
+            );
+
+            if (insertValues.length > 0) {
+                console.log(`Inserting ${insertValues.length} invoice items into synced_invoice_items`);
+                const insertQuery = `
+                    INSERT INTO synced_invoice_items (
+                        invoice_no, invoice_date, branch_code, branch_name, item_code, item_description, qty, net_amount, product_type
+                    ) VALUES ?
+                `;
+                await connection.query(insertQuery, [insertValues]);
+            }
+
+            await connection.commit();
+        } catch (dbErr) {
+            await connection.rollback();
+            throw dbErr;
+        } finally {
+            connection.release();
+        }
 
         // 3. Load branches to map branch codes to names
         const branches = await getAllBranches();
@@ -179,33 +258,37 @@ const syncTargetVsAchievementsController = async (req, res) => {
             };
         }
 
-        // 4. Aggregate data
+        // 4. Query local cache range: firstDayLastMonth to targetDate
+        const startDateStr = formatToDbDateStr(firstDayLastMonth);
+        const endDateStr = formatToDbDateStr(targetDate);
+        console.log(`Querying local cache range: ${startDateStr} to ${endDateStr}`);
+
+        const [dbRows] = await db.execute(
+            `SELECT branch_code, branch_name, invoice_date, qty, net_amount 
+             FROM synced_invoice_items 
+             WHERE invoice_date BETWEEN ? AND ?`,
+            [startDateStr, endDateStr]
+        );
+        console.log(`Retrieved ${dbRows.length} cached item rows from local database.`);
+
+        // Aggregate data
         const ftdYYYYMMDD = formatToYYYYMMDD(targetDate);
         const lmftdYYYYMMDD = formatToYYYYMMDD(lmTargetDate);
         const mtdStartYYYYMMDD = formatToYYYYMMDD(firstDayCurrentMonth);
         const lmtdStartYYYYMMDD = formatToYYYYMMDD(firstDayLastMonth);
 
-        for (const invoice of invoices) {
-            const invoiceCode = (invoice.invoicePrimaryData?.BranchCode || '').toUpperCase();
-            const invoiceName = (invoice.invoicePrimaryData?.BranchName || '').toUpperCase();
+        for (const row of dbRows) {
+            const invoiceCode = (row.branch_code || '').toUpperCase();
+            const invoiceName = (row.branch_name || '').toUpperCase();
             const branchName = branchNameLookup[invoiceCode] || branchNameLookup[invoiceName];
 
             if (!branchName) continue;
 
-            const invoiceDateStr = invoice.invoicePrimaryData?.InvoiceDate;
-            if (!invoiceDateStr) continue;
-
-            const [id, im, iy] = invoiceDateStr.split('/');
-            const invDate = new Date(parseInt(iy, 10), parseInt(im, 10) - 1, parseInt(id, 10));
+            const invDate = new Date(row.invoice_date);
             const invYYYYMMDD = formatToYYYYMMDD(invDate);
 
-            const value = parseFloat(invoice.invoicePrimaryData?.InvoiceValue) || 0;
-            let qty = 0;
-            if (Array.isArray(invoice.invoiceItemData)) {
-                for (const item of invoice.invoiceItemData) {
-                    qty += parseFloat(item.Qty) || 0;
-                }
-            }
+            const qty = parseFloat(row.qty) || 0;
+            const value = parseFloat(row.net_amount) || 0;
 
             // FTD
             if (invYYYYMMDD === ftdYYYYMMDD) {
@@ -244,7 +327,7 @@ const syncTargetVsAchievementsController = async (req, res) => {
 
         // 6. Calculate percentages, BTD, DDR, and Growth percentages
         const totalDays = new Date(targetYear, targetMonth + 1, 0).getDate();
-        const remainingDays = totalDays - targetDay;
+        const remainingDays = totalDays - targetDay + 1;
         const remDays = remainingDays > 0 ? remainingDays : 1;
 
         for (const name of Object.keys(achievementsMap)) {
@@ -265,9 +348,14 @@ const syncTargetVsAchievementsController = async (req, res) => {
             ach.ddr_qty = ach.btd_qty / remDays;
             ach.ddr_value = ach.btd_value / remDays;
 
-            // Growth % calculations: (MTD / TGT) * 100
-            ach.growth_qty_percentage = qtyTgt > 0 ? (ach.mtd_qty_ach / qtyTgt) * 100 : 0.00;
-            ach.growth_value_percentage = valTgt > 0 ? (ach.mtd_value_ach / valTgt) * 100 : 0.00;
+            // Growth % calculations: ((MTD - LMTD) / MTD) * 100
+            const mtdQty = parseFloat(ach.mtd_qty_ach) || 0;
+            const lmtdQty = parseFloat(ach.lmtd_qty_ach) || 0;
+            ach.growth_qty_percentage = mtdQty !== 0 ? ((mtdQty - lmtdQty) / mtdQty) * 100 : 0.00;
+
+            const mtdVal = parseFloat(ach.mtd_value_ach) || 0;
+            const lmtdVal = parseFloat(ach.lmtd_value_ach) || 0;
+            ach.growth_value_percentage = mtdVal !== 0 ? ((mtdVal - lmtdVal) / mtdVal) * 100 : 0.00;
         }
 
         // 7. Save changes
@@ -294,7 +382,7 @@ const syncTargetVsAchievementsController = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: `Synced achievements for ${recordsArray.length} branches relative to date ${ftdYYYYMMDD}.`
+            message: ` Sync Successfull`
         });
 
     } catch (error) {

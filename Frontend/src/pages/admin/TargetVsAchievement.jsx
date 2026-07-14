@@ -22,6 +22,22 @@ export default function TargetVsAchievement() {
     return `${year}-${month}-${day}`;
   });
   const fileInputRef = useRef(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowDropdown(false);
+      }
+    };
+    if (showDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showDropdown]);
 
   const loadData = async () => {
     setLoading(true);
@@ -165,10 +181,13 @@ export default function TargetVsAchievement() {
       const totalMtdQtyAch = data.reduce((sum, item) => sum + (Number(item.mtd_qty_ach) || 0), 0);
       const totalMtdValueAch = data.reduce((sum, item) => sum + (Number(item.mtd_value_ach) || 0), 0);
 
+      const totalLmtdQtyAch = data.reduce((sum, item) => sum + (Number(item.lmtd_qty_ach) || 0), 0);
+      const totalLmtdValueAch = data.reduce((sum, item) => sum + (Number(item.lmtd_value_ach) || 0), 0);
+
       const totalMtdQtyPct = totalQtyTgt > 0 ? totalMtdQtyAch / totalQtyTgt : null;
       const totalMtdValPct = totalValueTgt > 0 ? totalMtdValueAch / totalValueTgt : null;
-      const totalGrowthQtyPct = totalQtyTgt > 0 ? totalMtdQtyAch / totalQtyTgt : null;
-      const totalGrowthValPct = totalValueTgt > 0 ? totalMtdValueAch / totalValueTgt : null;
+      const totalGrowthQtyPct = totalMtdQtyAch !== 0 ? (totalMtdQtyAch - totalLmtdQtyAch) / totalMtdQtyAch : null;
+      const totalGrowthValPct = totalMtdValueAch !== 0 ? (totalMtdValueAch - totalLmtdValueAch) / totalMtdValueAch : null;
 
       const totalRow = [
         "",
@@ -447,6 +466,11 @@ export default function TargetVsAchievement() {
     return Number(val).toLocaleString('en-IN');
   };
 
+  const formatDdrQty = (val) => {
+    if (val === null || val === undefined) return "—";
+    return Number(val).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  };
+
   const formatVal = (val) => {
     if (val === null || val === undefined) return "—";
     return Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -580,7 +604,7 @@ export default function TargetVsAchievement() {
       key: "ddr_qty",
       label: "DDR Qty.",
       minWidth: "110px",
-      render: (row) => <span className="text-slate-700">{formatQty(row.ddr_qty)}</span>
+      render: (row) => <span className="text-slate-700">{formatDdrQty(row.ddr_qty)}</span>
     },
     {
       key: "ddr_value",
@@ -651,44 +675,69 @@ export default function TargetVsAchievement() {
                 {syncing ? "Syncing..." : "Sync"}
               </button>
 
-              {/* Export Report button */}
-              <button
-                onClick={handleExportReport}
-                disabled={exportingReport || exporting || syncing || importing}
-                className="flex items-center gap-2 h-10 px-4 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold shadow-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none focus:outline-none"
-                title="Export Styled Excel Report"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className={`w-4 h-4 ${exportingReport ? 'animate-bounce' : ''}`}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.03 0 1.9.693 2.166 1.638m-7.377 12.475 3 3 9-9" />
-                </svg>
-                {exportingReport ? "Exporting..." : "E. Report "}
-              </button>
+              {/* Actions Dropdown */}
+              <div className="relative inline-block text-left" ref={dropdownRef}>
+                <button
+                  onClick={() => setShowDropdown(!showDropdown)}
+                  disabled={syncing || exporting || exportingReport || importing}
+                  className="flex items-center gap-2 h-10 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-semibold shadow-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none focus:outline-none"
+                  title="Import/Export Options"
+                >
+                  <span>Export / Import</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3.5 h-3.5 transition-transform duration-200 ${showDropdown ? 'rotate-180' : ''}`}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
 
-              {/* Export Template button */}
-              <button
-                onClick={handleExport}
-                disabled={exporting || exportingReport || syncing || importing}
-                className="flex items-center gap-2 h-10 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none focus:outline-none"
-                title="Export Excel Template for Import"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className={`w-4 h-4 ${exporting ? 'animate-bounce' : ''}`}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                </svg>
-                {exporting ? "Exporting..." : "E. Template"}
-              </button>
+                {showDropdown && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1.5 origin-top-right">
+                    {/* Export Report */}
+                    <button
+                      onClick={() => {
+                        setShowDropdown(false);
+                        handleExportReport();
+                      }}
+                      disabled={exportingReport || exporting || syncing || importing}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 border-none bg-transparent cursor-pointer text-sm font-medium"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-4 h-4 text-teal-600 flex-shrink-0 ${exportingReport ? 'animate-bounce' : ''}`}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.35 16.15l2.25 2.25 3.75-3.75M19.5 8.25v11.25a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V4.5a2.25 2.25 0 0 1 2.25-2.25h9.123m0 0L19.5 8.25m-3.377-6v4.875c0 .621.504 1.125 1.125 1.125h4.875" />
+                      </svg>
+                      <span>E. Report</span>
+                    </button>
 
-              {/* Import button */}
-              <button
-                onClick={() => fileInputRef.current.click()}
-                disabled={importing || exporting || exportingReport || syncing}
-                className="flex items-center gap-2 h-10 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none focus:outline-none"
-                title="Import Filled Excel Template"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className={`w-4 h-4 ${importing ? 'animate-bounce' : ''}`}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-                </svg>
-                {importing ? "Importing..." : "Import"}
-              </button>
+                    {/* Export Template */}
+                    <button
+                      onClick={() => {
+                        setShowDropdown(false);
+                        handleExport();
+                      }}
+                      disabled={exporting || exportingReport || syncing || importing}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 border-none bg-transparent cursor-pointer text-sm font-medium"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className={`w-4 h-4 text-emerald-600 flex-shrink-0 ${exporting ? 'animate-bounce' : ''}`}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                      </svg>
+                      <span>E. Template</span>
+                    </button>
+
+                    {/* Import */}
+                    <button
+                      onClick={() => {
+                        setShowDropdown(false);
+                        fileInputRef.current.click();
+                      }}
+                      disabled={importing || exporting || exportingReport || syncing}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 border-none bg-transparent cursor-pointer text-sm font-medium"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className={`w-4 h-4 text-indigo-600 flex-shrink-0 ${importing ? 'animate-bounce' : ''}`}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                      </svg>
+                      <span>Import</span>
+                    </button>
+                  </div>
+                )}
+              </div>
               <input
                 type="file"
                 ref={fileInputRef}
