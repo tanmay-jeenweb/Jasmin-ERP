@@ -20,7 +20,7 @@ const createTargetVsAchievementsTable = async () => {
             lmtd_value_ach DECIMAL(15, 2) NULL,
             btd_qty INT NULL,
             btd_value DECIMAL(15, 2) NULL,
-            ddr_qty INT NULL,
+            ddr_qty DECIMAL(15, 2) NULL,
             ddr_value DECIMAL(15, 2) NULL,
             growth_qty_percentage DECIMAL(10, 2) NULL,
             growth_value_percentage DECIMAL(10, 2) NULL,
@@ -42,6 +42,14 @@ const createTargetVsAchievementsTable = async () => {
         if (err.code !== 'ER_DUP_KEYNAME') {
             console.error("Error altering target_vs_achievements table:", err);
         }
+    }
+
+    // Modify ddr_qty column to DECIMAL to support fractional quantities
+    try {
+        await db.execute(`ALTER TABLE target_vs_achievements MODIFY COLUMN ddr_qty DECIMAL(15, 2) NULL`);
+        console.log("Altered target_vs_achievements: changed ddr_qty to DECIMAL(15, 2)");
+    } catch (err) {
+        console.error("Error modifying ddr_qty column in target_vs_achievements:", err);
     }
 };
 
@@ -100,11 +108,11 @@ const upsertTargetVsAchievements = async (records, addedBy, deviceId, remainingD
                 ddr_qty = (COALESCE(qty_tgt, 0) - COALESCE(mtd_qty_ach, 0)) / ?,
                 ddr_value = (COALESCE(value_tgt, 0.00) - COALESCE(mtd_value_ach, 0.00)) / ?,
                 growth_qty_percentage = CASE 
-                    WHEN qty_tgt > 0 THEN (COALESCE(mtd_qty_ach, 0) / qty_tgt) * 100
+                    WHEN COALESCE(mtd_qty_ach, 0) != 0 THEN ((COALESCE(mtd_qty_ach, 0) - COALESCE(lmtd_qty_ach, 0)) / COALESCE(mtd_qty_ach, 0)) * 100
                     ELSE 0.00
                 END,
                 growth_value_percentage = CASE 
-                    WHEN value_tgt > 0 THEN (COALESCE(mtd_value_ach, 0.00) / value_tgt) * 100
+                    WHEN COALESCE(mtd_value_ach, 0.00) != 0.00 THEN ((COALESCE(mtd_value_ach, 0.00) - COALESCE(lmtd_value_ach, 0.00)) / COALESCE(mtd_value_ach, 0.00)) * 100
                     ELSE 0.00
                 END
             WHERE branch_name = ?
