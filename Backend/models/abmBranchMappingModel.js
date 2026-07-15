@@ -34,10 +34,11 @@ const getEligibleAbms = async () => {
 
 const getActiveBranches = async () => {
     const query = `
-        SELECT id, name, code, city 
-        FROM branch_master 
-        WHERE status = 'active' 
-        ORDER BY name ASC
+        SELECT bm.id, bm.name, bm.code, bm.city, bm.state_id, COALESCE(sm.name, '—') AS state_name
+        FROM branch_master bm
+        LEFT JOIN state_master sm ON bm.state_id = sm.id
+        WHERE bm.status = 'active' 
+        ORDER BY bm.name ASC
     `;
     const [rows] = await db.execute(query);
     return rows;
