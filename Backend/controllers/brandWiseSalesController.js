@@ -336,19 +336,43 @@ const getBrandWiseSalesController = async (req, res) => {
         };
 
         // 3. Query local cache range: firstDayLastMonth to targetDate, excluding internal stock transfers (ISBS)
-        const [dbRows] = await db.execute(
-            `SELECT invoice_date, item_code, item_description, qty, net_amount 
-             FROM synced_invoice_items 
-             WHERE invoice_date BETWEEN ? AND ? AND invoice_no NOT LIKE 'ISBS%'`,
-            [firstDayLastMonthStr, targetDateStr]
-        );
+        let dbRows, dbSrnRows;
+        if (req.query.state && req.query.state !== 'All') {
+            [dbRows] = await db.execute(
+                `SELECT inv.invoice_date, inv.item_code, inv.item_description, inv.qty, inv.net_amount 
+                 FROM synced_invoice_items inv
+                 INNER JOIN branch_master bm ON inv.branch_code = bm.code
+                 INNER JOIN state_master sm ON bm.state_id = sm.id
+                 WHERE inv.invoice_date BETWEEN ? AND ? 
+                   AND inv.invoice_no NOT LIKE 'ISBS%'
+                   AND sm.name = ?`,
+                [firstDayLastMonthStr, targetDateStr, req.query.state]
+            );
 
-        const [dbSrnRows] = await db.execute(
-            `SELECT sales_return_date, item_code, item_description, qty, net_amount 
-             FROM synced_sales_return_items 
-             WHERE sales_return_date BETWEEN ? AND ?`,
-             [firstDayLastMonthStr, targetDateStr]
-        );
+            [dbSrnRows] = await db.execute(
+                `SELECT srn.sales_return_date, srn.item_code, srn.item_description, srn.qty, srn.net_amount 
+                 FROM synced_sales_return_items srn
+                 INNER JOIN branch_master bm ON srn.branch_code = bm.code
+                 INNER JOIN state_master sm ON bm.state_id = sm.id
+                 WHERE srn.sales_return_date BETWEEN ? AND ?
+                   AND sm.name = ?`,
+                [firstDayLastMonthStr, targetDateStr, req.query.state]
+            );
+        } else {
+            [dbRows] = await db.execute(
+                `SELECT invoice_date, item_code, item_description, qty, net_amount 
+                 FROM synced_invoice_items 
+                 WHERE invoice_date BETWEEN ? AND ? AND invoice_no NOT LIKE 'ISBS%'`,
+                [firstDayLastMonthStr, targetDateStr]
+            );
+
+            [dbSrnRows] = await db.execute(
+                `SELECT sales_return_date, item_code, item_description, qty, net_amount 
+                 FROM synced_sales_return_items 
+                 WHERE sales_return_date BETWEEN ? AND ?`,
+                [firstDayLastMonthStr, targetDateStr]
+            );
+        }
 
         // Initialize brand aggregation map with standard brands
         const brandMap = {};

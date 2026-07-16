@@ -4,6 +4,7 @@ import { getTargetVsAchievements, importTargetVsAchievements, syncTargetVsAchiev
 import { getBranches } from "../../api/branchApi";
 import DataTable from "../../components/DataTable";
 import * as XLSX from "xlsx-js-style";
+import ExcelJS from "exceljs";
 import toast from "react-hot-toast";
 
 export default function TargetVsAchievement() {
@@ -69,45 +70,120 @@ export default function TargetVsAchievement() {
       const qtyTgtHeader = `${monthName} QTY TGT`;
       const qtyValHeader = `${monthName} QTY Val`;
 
-      const dataToExport = branches.map((branch) => ({
-        "Month": monthYear,
-        "ID": "",
-        "Branch Name": branch.name || "",
-        "Updated ABM name": "",
-        [qtyTgtHeader]: "",
-        [qtyValHeader]: ""
-      }));
+      // Create new ExcelJS Workbook
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Template", {
+        views: [{ showGridLines: true }]
+      });
 
-      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+      // Define columns
+      worksheet.columns = [
+        { header: "Month", key: "month" },
+        { header: "ID", key: "id" },
+        { header: "Branch Name", key: "branch_name" },
+        { header: "Updated ABM name", key: "abm_name" },
+        { header: qtyTgtHeader, key: "qty_tgt" },
+        { header: qtyValHeader, key: "qty_val" }
+      ];
 
-      // Auto-fit columns
-      const maxLens = {};
-      dataToExport.forEach(row => {
-        Object.keys(row).forEach(key => {
-          const val = String(row[key]);
-          maxLens[key] = Math.max(maxLens[key] || key.length, val.length);
+      // Add data rows
+      branches.forEach((branch) => {
+        worksheet.addRow({
+          month: monthYear,
+          id: "",
+          branch_name: branch.name || "",
+          abm_name: "",
+          qty_tgt: "",
+          qty_val: ""
         });
       });
-      worksheet["!cols"] = Object.keys(maxLens).map(key => ({
-        wch: maxLens[key] + 3
-      }));
 
-      // Make header row bold
-      if (worksheet["!ref"]) {
-        const range = XLSX.utils.decode_range(worksheet["!ref"]);
-        for (let col = range.s.c; col <= range.e.c; col++) {
-          const address = XLSX.utils.encode_cell({ r: 0, c: col });
-          if (worksheet[address]) {
-            worksheet[address].s = {
-              font: { bold: true }
-            };
+      // Dynamic Auto-fit columns
+      worksheet.columns.forEach(column => {
+        let maxLen = column.header ? String(column.header).length : 10;
+        column.eachCell({ includeEmpty: true }, cell => {
+          const val = cell.value ? String(cell.value) : "";
+          if (val.length > maxLen) {
+            maxLen = val.length;
           }
-        }
-      }
+        });
+        column.width = Math.max(maxLen + 4, 12);
+      });
 
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Template");
-      XLSX.writeFile(workbook, "Target_vs_Achievement_Template.xlsx");
+      // Style header row (Row 1)
+      const headerRow = worksheet.getRow(1);
+      headerRow.height = 26;
+      headerRow.eachCell((cell) => {
+        cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FF6804A1" } // Purple background
+        };
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.border = {
+          top: { style: "medium", color: { argb: "FF4A0266" } },
+          bottom: { style: "medium", color: { argb: "FF4A0266" } },
+          left: { style: "thin", color: { argb: "FFE2E8F0" } },
+          right: { style: "thin", color: { argb: "FFE2E8F0" } }
+        };
+      });
+
+      // Style data rows & set locked columns (1 to 3: Month, ID, Branch Name)
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return; // Skip headers
+        row.height = 20;
+
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          // Font style
+          cell.font = { name: "Segoe UI", size: 10 };
+
+          // Alignments
+          if (colNumber <= 3) {
+            cell.alignment = { horizontal: "center", vertical: "middle" };
+          } else if (colNumber === 4) {
+            cell.alignment = { horizontal: "left", vertical: "middle" };
+          } else {
+            cell.alignment = { horizontal: "right", vertical: "middle" };
+          }
+
+          // Zebra striping fill
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: rowNumber % 2 === 0 ? "FFF8FAFC" : "FFFFFFFF" }
+          };
+
+          // Borders
+          cell.border = {
+            top: { style: "thin", color: { argb: "FFE2E8F0" } },
+            bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+            left: { style: "thin", color: { argb: "FFE2E8F0" } },
+            right: { style: "thin", color: { argb: "FFE2E8F0" } }
+          };
+
+          // Lock Month, ID, and Branch Name (columns 1, 2, 3), unlock others
+          cell.protection = {
+            locked: colNumber <= 3
+          };
+        });
+      });
+
+      // Protect sheet with empty password to activate locks
+      await worksheet.protect("", {
+        selectLockedCells: true,
+        selectUnlockedCells: true
+      });
+
+      // Export file
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "Target_vs_Achievement_Template.xlsx";
+      anchor.click();
+      window.URL.revokeObjectURL(url);
 
       toast.success("Excel template exported successfully!");
     } catch (err) {
@@ -553,7 +629,7 @@ export default function TargetVsAchievement() {
     {
       key: "mtd_value_ach",
       label: "MTD Value ACH",
-      minWidth: "140px",
+      minWidth: "170px",
       render: (row) => <span className="text-blue-700 font-semibold">{formatVal(row.mtd_value_ach)}</span>
     },
     {
@@ -585,7 +661,7 @@ export default function TargetVsAchievement() {
     {
       key: "lmtd_value_ach",
       label: "LMTD Value ACH",
-      minWidth: "150px",
+      minWidth: "170px",
       render: (row) => <span className="text-slate-600">{formatVal(row.lmtd_value_ach)}</span>
     },
     {
