@@ -5,6 +5,7 @@ import { getStockCashDepositReport } from "../../api/stockCashDepositApi";
 import { getStates } from "../../api/stateApi";
 import { getTargetVsAchievements, syncTargetVsAchievements } from "../../api/targetVsAchievementApi";
 import { getMobileBrands } from "../../api/mobileBrandApi";
+import { getBrandWiseSales, syncBrandWiseSales } from "../../api/brandWiseSalesApi";
 import toast from "react-hot-toast";
 import * as XLSX from "xlsx-js-style";
 
@@ -19,6 +20,7 @@ export default function UserHome() {
     // Brand Wise Sales States
     const [targetData, setTargetData] = useState([]);
     const [brandsList, setBrandsList] = useState([]);
+    const [brandSalesData, setBrandSalesData] = useState([]);
     const [activeTab, setActiveTab] = useState("cash_deposit");
     const [brandSyncDate, setBrandSyncDate] = useState(() => {
         const d = new Date();
@@ -28,6 +30,15 @@ export default function UserHome() {
         return `${year}-${month}-${day}`;
     });
     const [brandSyncing, setBrandSyncing] = useState(false);
+
+    const loadBrandSalesData = async (date) => {
+        try {
+            const res = await getBrandWiseSales(date);
+            setBrandSalesData(res.data?.data || []);
+        } catch (err) {
+            console.error("Failed to load brand wise sales:", err);
+        }
+    };
 
     // Load states, report data, target vs achievement, and brands
     const loadData = async () => {
@@ -53,6 +64,7 @@ export default function UserHome() {
             setStates(statesRes.data.data || []);
             setTargetData(targetRes.data.data || []);
             setBrandsList(brandsRes.data.data || []);
+            await loadBrandSalesData(brandSyncDate);
         } catch (err) {
             console.error("Failed to load dashboard data:", err);
             toast.error("Failed to load dashboard data");
@@ -64,6 +76,12 @@ export default function UserHome() {
     useEffect(() => {
         loadData();
     }, []);
+
+    useEffect(() => {
+        if (brandSyncDate) {
+            loadBrandSalesData(brandSyncDate);
+        }
+    }, [brandSyncDate]);
 
     // Get list of states that actually have data in the report as fallback/helper
     const activeStates = useMemo(() => {
@@ -160,87 +178,7 @@ export default function UserHome() {
         return [...base, totalRow];
     }, [abmSummary, totals]);
 
-    // Brand Wise Sales calculation grouped from target vs achievement
-    const brandSalesData = useMemo(() => {
-        // Calculate grand totals from targetData
-        let totalFtdQty = 0;
-        let totalFtdVal = 0;
-        let totalLmftdQty = 0;
-        let totalLmftdVal = 0;
-        let totalMtdQty = 0;
-        let totalMtdVal = 0;
-        let totalLmtdQty = 0;
-        let totalLmtdVal = 0;
-
-        targetData.forEach(item => {
-            totalFtdQty += Number(item.ftd_qty_ach || 0);
-            totalFtdVal += Number(item.ftd_value_ach || 0);
-            totalLmftdQty += Number(item.lmftd_qty_ach || 0);
-            totalLmftdVal += Number(item.lmftd_value_ach || 0);
-            totalMtdQty += Number(item.mtd_qty_ach || 0);
-            totalMtdVal += Number(item.mtd_value_ach || 0);
-            totalLmtdQty += Number(item.lmtd_qty_ach || 0);
-            totalLmtdVal += Number(item.lmtd_value_ach || 0);
-        });
-
-        // Prepare brands list from mobileBrandMaster list
-        const brands = brandsList.length > 0
-            ? brandsList.map(b => b.mobileBrand || b.name || String(b))
-            : ["Vivo", "Oppo", "Samsung", "Apple", "Realme", "Xiaomi", "OnePlus", "Others"];
-
-        // Unique brands sorted alphabetically
-        const uniqueBrands = Array.from(new Set(brands.map(b => b.trim()))).sort((a, b) => a.localeCompare(b));
-
-        // Distribution factors based on brand names
-        const getBrandFactor = (name) => {
-            const lower = name.toLowerCase();
-            if (lower.includes("vivo")) return 0.28;
-            if (lower.includes("oppo")) return 0.22;
-            if (lower.includes("samsung")) return 0.18;
-            if (lower.includes("apple")) return 0.12;
-            if (lower.includes("realme")) return 0.08;
-            if (lower.includes("xiaomi") || lower.includes("mi")) return 0.06;
-            if (lower.includes("oneplus")) return 0.04;
-            return 0.02;
-        };
-
-        const factors = uniqueBrands.map(b => getBrandFactor(b));
-        const factorSum = factors.reduce((sum, f) => sum + f, 0) || 1;
-        const normalizedFactors = factors.map(f => f / factorSum);
-
-        const rows = uniqueBrands.map((brandName, idx) => {
-            const factor = normalizedFactors[idx];
-
-            const ftd_qty = Math.round(totalFtdQty * factor);
-            const lmftd_qty = Math.round(totalLmftdQty * factor);
-            const mtd_qty = Math.round(totalMtdQty * factor);
-            const lmtd_qty = Math.round(totalLmtdQty * factor);
-
-            const ftd_val = totalFtdVal * factor;
-            const lmftd_val = totalLmftdVal * factor;
-            const mtd_val = totalMtdVal * factor;
-            const lmtd_val = totalLmtdVal * factor;
-
-            const growth_qty_pct = mtd_qty !== 0 ? ((mtd_qty - lmtd_qty) / mtd_qty) * 100 : 0;
-            const growth_val_pct = mtd_val !== 0 ? ((mtd_val - lmtd_val) / mtd_val) * 100 : 0;
-
-            return {
-                brand_name: brandName,
-                ftd_qty_ach: ftd_qty,
-                ftd_value_ach: ftd_val,
-                lmftd_qty_ach: lmftd_qty,
-                lmftd_value_ach: lmftd_val,
-                mtd_qty_ach: mtd_qty,
-                mtd_value_ach: mtd_val,
-                lmtd_qty_ach: lmtd_qty,
-                lmtd_value_ach: lmtd_val,
-                growth_qty_percentage: growth_qty_pct,
-                growth_value_percentage: growth_val_pct
-            };
-        });
-
-        return rows;
-    }, [targetData, brandsList]);
+    // Brand Totals calculated from real brandSalesData state
 
     // Calculate Brand Totals for Footer Row
     const brandTotals = useMemo(() => {
@@ -487,10 +425,10 @@ export default function UserHome() {
     const handleBrandSync = async () => {
         setBrandSyncing(true);
         try {
-            const response = await syncTargetVsAchievements(brandSyncDate);
+            const response = await syncBrandWiseSales(brandSyncDate);
             if (response.data?.success) {
                 toast.success(response.data.message || "Brand Wise Sales synced successfully!");
-                await loadData();
+                await loadBrandSalesData(brandSyncDate);
             } else {
                 toast.error(response.data?.message || "Sync failed");
             }
