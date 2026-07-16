@@ -1,6 +1,48 @@
 const db = require('../config/db.js');
 
 const createTargetVsAchievementsTable = async () => {
+    // Create synced_invoice_items table if it doesn't exist
+    const createInvoicesQuery = `
+        CREATE TABLE IF NOT EXISTS synced_invoice_items (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            invoice_no VARCHAR(100) NOT NULL,
+            invoice_date DATE NOT NULL,
+            branch_code VARCHAR(50) NOT NULL,
+            branch_name VARCHAR(255) NOT NULL,
+            item_code VARCHAR(100) NOT NULL,
+            item_description VARCHAR(255) NULL,
+            qty DECIMAL(15, 2) NOT NULL,
+            net_amount DECIMAL(15, 2) NOT NULL,
+            product_type VARCHAR(100) NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_invoice_date (invoice_date),
+            INDEX idx_invoice_no (invoice_no)
+        )
+    `;
+    await db.execute(createInvoicesQuery);
+    console.log("Synced Invoice Items table ready");
+
+    // Create synced_sales_return_items table if it doesn't exist
+    const createReturnsQuery = `
+        CREATE TABLE IF NOT EXISTS synced_sales_return_items (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            sales_return_no VARCHAR(100) NOT NULL,
+            sales_return_date DATE NOT NULL,
+            branch_code VARCHAR(50) NOT NULL,
+            branch_name VARCHAR(255) NOT NULL,
+            item_code VARCHAR(100) NOT NULL,
+            item_description VARCHAR(255) NULL,
+            qty DECIMAL(15, 2) NOT NULL,
+            net_amount DECIMAL(15, 2) NOT NULL,
+            product_type VARCHAR(100) NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_sales_return_date (sales_return_date),
+            INDEX idx_sales_return_no (sales_return_no)
+        )
+    `;
+    await db.execute(createReturnsQuery);
+    console.log("Synced Sales Return Items table ready");
+
     const query = `
         CREATE TABLE IF NOT EXISTS target_vs_achievements (
             id INT AUTO_INCREMENT PRIMARY KEY,

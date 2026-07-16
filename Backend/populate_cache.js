@@ -64,8 +64,27 @@ async function populate() {
             const invoices = await response.json();
             console.log(`Fetched ${invoices.length || 0} invoices from external API.`);
 
+            const srnApiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetExtendedSalesReturnDetails?CompanyCode=JITPL&SRNStartDate=${startStr}&SRNEndDate=${endStr}&BranchCode=0&SalespersonCode=0`;
+            const srnResponse = await fetch(srnApiUrl, {
+                method: 'GET',
+                headers: {
+                    'userid': process.env.MODEL_API_USERID || 'WebSite',
+                    'Securitycode': process.env.MODEL_API_SECURITYCODE || '1151-8111-6444-4166',
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!srnResponse.ok) {
+                console.error(`Failed to fetch sales returns chunk ${startStr} to ${endStr}: ${srnResponse.statusText}`);
+                currentStart.setDate(currentStart.getDate() + 10);
+                continue;
+            }
+
+            const salesReturns = await srnResponse.json();
+            console.log(`Fetched ${salesReturns.length || 0} sales returns from external API.`);
+
+            const insertValues = [];
             if (invoices && invoices.length > 0) {
-                const insertValues = [];
                 for (const invoice of invoices) {
                     const invoiceNo = invoice.invoicePrimaryData?.InvoiceNo;
                     const invoiceDateStr = invoice.invoicePrimaryData?.InvoiceDate; // "DD/MM/YYYY"
@@ -98,46 +117,85 @@ async function populate() {
                         }
                     }
                 }
+            }
 
-                const connection = await db.getConnection();
-                try {
-                    await connection.beginTransaction();
+            const srnInsertValues = [];
+            if (salesReturns && salesReturns.length > 0) {
+                for (const srn of salesReturns) {
+                    const srnNo = srn.SRNPrimaryData?.SalesReturnNo;
+                    const srnDateStr = srn.SRNPrimaryData?.SalesReturnDate; // "DD/MM/YYYY"
+                    const branchCode = srn.SRNPrimaryData?.BranchCode;
+                    const branchName = srn.SRNPrimaryData?.BranchName;
+                    if (!srnNo || !srnDateStr) continue;
 
-                    console.log(`Deleting local database entries for range ${startDbStr} to ${endDbStr}...`);
-                    await connection.execute(
-                        `DELETE FROM synced_invoice_items WHERE invoice_date BETWEEN ? AND ?`,
-                        [startDbStr, endDbStr]
-                    );
+                    const [sd, sm, sy] = srnDateStr.split('/');
+                    const srnDbDate = `${sy}-${sm.padStart(2, '0')}-${sd.padStart(2, '0')}`;
 
-                    if (insertValues.length > 0) {
-                        console.log(`Inserting ${insertValues.length} invoice items into synced_invoice_items...`);
-                        const insertQuery = `
-                            INSERT INTO synced_invoice_items (
-                                invoice_no, invoice_date, branch_code, branch_name, item_code, item_description, qty, net_amount, product_type
-                            ) VALUES ?
-                        `;
-                        await connection.query(insertQuery, [insertValues]);
+                    if (Array.isArray(srn.SRNItemData)) {
+                        for (const item of srn.SRNItemData) {
+                            const itemDesc = item.ItemDescription || '';
+                            const parts = itemDesc.split(':');
+                            const lastPart = parts[parts.length - 1]?.trim().toUpperCase();
+
+                            if (parts.length > 1 && allowedProductTypes.includes(lastPart)) {
+                                srnInsertValues.push([
+                                    srnNo,
+                                    srnDbDate,
+                                    branchCode || '',
+                                    branchName || '',
+                                    item.ItemCode || '',
+                                    itemDesc,
+                                    parseFloat(item.Qty) || 0,
+                                    parseFloat(item.NetAmount) || 0,
+                                    lastPart
+                                ]);
+                            }
+                        }
                     }
+                }
+            }
 
-                    await connection.commit();
-                    console.log(`Completed database updates for range ${startDbStr} to ${endDbStr}.`);
-                } catch (dbErr) {
-                    await connection.rollback();
-                    console.error("Database transaction error for chunk:", dbErr.message);
-                } finally {
-                    connection.release();
+            const connection = await db.getConnection();
+            try {
+                await connection.beginTransaction();
+
+                console.log(`Deleting local database entries for range ${startDbStr} to ${endDbStr}...`);
+                await connection.execute(
+                    `DELETE FROM synced_invoice_items WHERE invoice_date BETWEEN ? AND ?`,
+                    [startDbStr, endDbStr]
+                );
+                await connection.execute(
+                    `DELETE FROM synced_sales_return_items WHERE sales_return_date BETWEEN ? AND ?`,
+                    [startDbStr, endDbStr]
+                );
+
+                if (insertValues.length > 0) {
+                    console.log(`Inserting ${insertValues.length} invoice items into synced_invoice_items...`);
+                    const insertQuery = `
+                        INSERT INTO synced_invoice_items (
+                            invoice_no, invoice_date, branch_code, branch_name, item_code, item_description, qty, net_amount, product_type
+                        ) VALUES ?
+                    `;
+                    await connection.query(insertQuery, [insertValues]);
                 }
-            } else {
-                const connection = await db.getConnection();
-                try {
-                    console.log(`No invoices found. Clearing database range ${startDbStr} to ${endDbStr}...`);
-                    await connection.execute(
-                        `DELETE FROM synced_invoice_items WHERE invoice_date BETWEEN ? AND ?`,
-                        [startDbStr, endDbStr]
-                    );
-                } finally {
-                    connection.release();
+
+                if (srnInsertValues.length > 0) {
+                    console.log(`Inserting ${srnInsertValues.length} return items into synced_sales_return_items...`);
+                    const insertQuery = `
+                        INSERT INTO synced_sales_return_items (
+                            sales_return_no, sales_return_date, branch_code, branch_name, item_code, item_description, qty, net_amount, product_type
+                        ) VALUES ?
+                    `;
+                    await connection.query(insertQuery, [srnInsertValues]);
                 }
+
+                await connection.commit();
+                console.log(`Completed database updates for range ${startDbStr} to ${endDbStr}.`);
+            } catch (dbErr) {
+                await connection.rollback();
+                console.error("Database transaction error for chunk:", dbErr.message);
+            } finally {
+                connection.release();
             }
 
         } catch (fetchErr) {
