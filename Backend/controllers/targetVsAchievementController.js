@@ -159,8 +159,30 @@ const syncTargetVsAchievementsController = async (req, res) => {
         const invoices = await response.json();
         console.log(`Fetched ${invoices.length || 0} invoice records from API for range ${syncStartDateStr} to ${syncEndDateStr}.`);
 
+        // 2b. Fetch sales return details from external API for only the last 5 days
+        const srnApiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetExtendedSalesReturnDetails?CompanyCode=JITPL&SRNStartDate=${syncStartDateStr}&SRNEndDate=${syncEndDateStr}&BranchCode=0&SalespersonCode=0`;
+        const srnResponse = await fetch(srnApiUrl, {
+            method: 'GET',
+            headers: {
+                'userid': process.env.MODEL_API_USERID || 'WebSite',
+                'Securitycode': process.env.MODEL_API_SECURITYCODE || '1151-8111-6444-4166',
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!srnResponse.ok) {
+            return res.status(srnResponse.status).json({
+                success: false,
+                message: `External Sales Return API returned status: ${srnResponse.statusText}`
+            });
+        }
+
+        const salesReturns = await srnResponse.json();
+        console.log(`Fetched ${salesReturns.length || 0} sales return records from API for range ${syncStartDateStr} to ${syncEndDateStr}.`);
+
         const allowedProductTypes = ['SMARTPHONE', 'FETURE PHONE', 'FEATURE PHONE', 'TABLET', 'I PAD', 'EOL MODEL'];
         const insertValues = [];
+        const srnInsertValues = [];
 
         for (const invoice of invoices) {
             const invoiceNo = invoice.invoicePrimaryData?.InvoiceNo;
@@ -195,6 +217,39 @@ const syncTargetVsAchievementsController = async (req, res) => {
             }
         }
 
+        for (const srn of salesReturns) {
+            const srnNo = srn.SRNPrimaryData?.SalesReturnNo;
+            const srnDateStr = srn.SRNPrimaryData?.SalesReturnDate; // "DD/MM/YYYY"
+            const branchCode = srn.SRNPrimaryData?.BranchCode;
+            const branchName = srn.SRNPrimaryData?.BranchName;
+            if (!srnNo || !srnDateStr) continue;
+
+            const [sd, sm, sy] = srnDateStr.split('/');
+            const srnDbDate = `${sy}-${sm.padStart(2, '0')}-${sd.padStart(2, '0')}`;
+
+            if (Array.isArray(srn.SRNItemData)) {
+                for (const item of srn.SRNItemData) {
+                    const itemDesc = item.ItemDescription || '';
+                    const parts = itemDesc.split(':');
+                    const lastPart = parts[parts.length - 1]?.trim().toUpperCase();
+
+                    if (parts.length > 1 && allowedProductTypes.includes(lastPart)) {
+                        srnInsertValues.push([
+                            srnNo,
+                            srnDbDate,
+                            branchCode || '',
+                            branchName || '',
+                            item.ItemCode || '',
+                            itemDesc,
+                            parseFloat(item.Qty) || 0,
+                            parseFloat(item.NetAmount) || 0,
+                            lastPart
+                        ]);
+                    }
+                }
+            }
+        }
+
         // DB operations: Transaction to delete & insert cache
         const connection = await db.getConnection();
         try {
@@ -203,6 +258,10 @@ const syncTargetVsAchievementsController = async (req, res) => {
             console.log(`Deleting local cache for range ${syncStartDbStr} to ${syncEndDbStr}`);
             await connection.execute(
                 `DELETE FROM synced_invoice_items WHERE invoice_date BETWEEN ? AND ?`,
+                [syncStartDbStr, syncEndDbStr]
+            );
+            await connection.execute(
+                `DELETE FROM synced_sales_return_items WHERE sales_return_date BETWEEN ? AND ?`,
                 [syncStartDbStr, syncEndDbStr]
             );
 
@@ -214,6 +273,16 @@ const syncTargetVsAchievementsController = async (req, res) => {
                     ) VALUES ?
                 `;
                 await connection.query(insertQuery, [insertValues]);
+            }
+
+            if (srnInsertValues.length > 0) {
+                console.log(`Inserting ${srnInsertValues.length} return items into synced_sales_return_items`);
+                const insertQuery = `
+                    INSERT INTO synced_sales_return_items (
+                        sales_return_no, sales_return_date, branch_code, branch_name, item_code, item_description, qty, net_amount, product_type
+                    ) VALUES ?
+                `;
+                await connection.query(insertQuery, [srnInsertValues]);
             }
 
             await connection.commit();
@@ -271,6 +340,14 @@ const syncTargetVsAchievementsController = async (req, res) => {
         );
         console.log(`Retrieved ${dbRows.length} cached item rows from local database.`);
 
+        const [dbSrnRows] = await db.execute(
+            `SELECT branch_code, branch_name, sales_return_date, qty, net_amount 
+             FROM synced_sales_return_items 
+             WHERE sales_return_date BETWEEN ? AND ?`,
+            [startDateStr, endDateStr]
+        );
+        console.log(`Retrieved ${dbSrnRows.length} cached sales return rows from local database.`);
+
         // Aggregate data
         const ftdYYYYMMDD = formatToYYYYMMDD(targetDate);
         const lmftdYYYYMMDD = formatToYYYYMMDD(lmTargetDate);
@@ -313,6 +390,58 @@ const syncTargetVsAchievementsController = async (req, res) => {
                 achievementsMap[branchName].lmtd_qty_ach += qty;
                 achievementsMap[branchName].lmtd_value_ach += value;
             }
+        }
+
+        // Subtract return details
+        for (const row of dbSrnRows) {
+            const srnCode = (row.branch_code || '').toUpperCase();
+            const srnName = (row.branch_name || '').toUpperCase();
+            const branchName = branchNameLookup[srnCode] || branchNameLookup[srnName];
+
+            if (!branchName) continue;
+
+            const srnDate = new Date(row.sales_return_date);
+            const srnYYYYMMDD = formatToYYYYMMDD(srnDate);
+
+            const qty = parseFloat(row.qty) || 0;
+            const value = parseFloat(row.net_amount) || 0;
+
+            // FTD
+            if (srnYYYYMMDD === ftdYYYYMMDD) {
+                achievementsMap[branchName].ftd_qty_ach -= qty;
+                achievementsMap[branchName].ftd_value_ach -= value;
+            }
+
+            // LMFTD
+            if (srnYYYYMMDD === lmftdYYYYMMDD) {
+                achievementsMap[branchName].lmftd_qty_ach -= qty;
+                achievementsMap[branchName].lmftd_value_ach -= value;
+            }
+
+            // MTD
+            if (srnYYYYMMDD >= mtdStartYYYYMMDD && srnYYYYMMDD <= ftdYYYYMMDD) {
+                achievementsMap[branchName].mtd_qty_ach -= qty;
+                achievementsMap[branchName].mtd_value_ach -= value;
+            }
+
+            // LMTD
+            if (srnYYYYMMDD >= lmtdStartYYYYMMDD && srnYYYYMMDD <= lmftdYYYYMMDD) {
+                achievementsMap[branchName].lmtd_qty_ach -= qty;
+                achievementsMap[branchName].lmtd_value_ach -= value;
+            }
+        }
+
+        // Clamp negative achievements to 0
+        for (const branchName of Object.keys(achievementsMap)) {
+            const ach = achievementsMap[branchName];
+            if (ach.ftd_qty_ach < 0) ach.ftd_qty_ach = 0;
+            if (ach.ftd_value_ach < 0) ach.ftd_value_ach = 0;
+            if (ach.lmftd_qty_ach < 0) ach.lmftd_qty_ach = 0;
+            if (ach.lmftd_value_ach < 0) ach.lmftd_value_ach = 0;
+            if (ach.mtd_qty_ach < 0) ach.mtd_qty_ach = 0;
+            if (ach.mtd_value_ach < 0) ach.mtd_value_ach = 0;
+            if (ach.lmtd_qty_ach < 0) ach.lmtd_qty_ach = 0;
+            if (ach.lmtd_value_ach < 0) ach.lmtd_value_ach = 0;
         }
 
         // 5. Query current target values to calculate MTD percentages
