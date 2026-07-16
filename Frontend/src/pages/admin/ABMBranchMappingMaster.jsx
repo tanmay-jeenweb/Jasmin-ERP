@@ -19,7 +19,11 @@ function AbmBranchMappingModal({ isOpen, mapping, onClose, onSave, saving }) {
     const [selectedAbmId, setSelectedAbmId] = useState("");
     const [selectedBranchIds, setSelectedBranchIds] = useState([]);
     const [branchSearch, setBranchSearch] = useState("");
+    const [selectedStates, setSelectedStates] = useState([]);
+    const [selectedCities, setSelectedCities] = useState([]);
     const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false);
+    const [isStateFilterOpen, setIsStateFilterOpen] = useState(false);
+    const [isCityFilterOpen, setIsCityFilterOpen] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -57,38 +61,61 @@ function AbmBranchMappingModal({ isOpen, mapping, onClose, onSave, saving }) {
                 setSelectedBranchIds([]);
             }
             setBranchSearch("");
+            setSelectedStates([]);
+            setSelectedCities([]);
             setIsBranchDropdownOpen(false);
+            setIsStateFilterOpen(false);
+            setIsCityFilterOpen(false);
         }
     }, [isOpen, mapping]);
+
+    // Extract unique states from branches
+    const uniqueStates = useMemo(() => {
+        const states = branches.map(b => b.state_name).filter(Boolean);
+        return Array.from(new Set(states)).sort();
+    }, [branches]);
+
+    // Extract unique cities filtered by states if states are selected
+    const uniqueCities = useMemo(() => {
+        const filtered = selectedStates.length > 0
+            ? branches.filter(b => selectedStates.includes(b.state_name))
+            : branches;
+        const cities = filtered.map(b => b.city).filter(Boolean);
+        return Array.from(new Set(cities)).sort();
+    }, [branches, selectedStates]);
+
+    // Filter branches by search query, states and cities
+    const filteredBranches = useMemo(() => {
+        return branches.filter(b => {
+            const matchSearch = !branchSearch ||
+                b.name.toLowerCase().includes(branchSearch.toLowerCase()) ||
+                b.code.toLowerCase().includes(branchSearch.toLowerCase());
+            const matchState = selectedStates.length === 0 || selectedStates.includes(b.state_name);
+            const matchCity = selectedCities.length === 0 || selectedCities.includes(b.city);
+            return matchSearch && matchState && matchCity;
+        });
+    }, [branches, branchSearch, selectedStates, selectedCities]);
 
     if (!isOpen) return null;
 
     const isEdit = !!mapping;
 
-    // Filter branches by search query
-    const filteredBranches = branches.filter(b =>
-        b.name.toLowerCase().includes(branchSearch.toLowerCase()) ||
-        b.code.toLowerCase().includes(branchSearch.toLowerCase())
-    );
-
     const handleToggleBranch = (branchId) => {
-        if (branchId === "All") {
-            const allFilteredIds = filteredBranches.map(b => b.id);
-            const allSelected = allFilteredIds.every(id => selectedBranchIds.includes(id));
-            if (allSelected) {
-                // Deselect all filtered
-                setSelectedBranchIds(prev => prev.filter(id => !allFilteredIds.includes(id)));
-            } else {
-                // Select all filtered (without duplicating)
-                setSelectedBranchIds(prev => [...new Set([...prev, ...allFilteredIds])]);
-            }
-        } else {
-            setSelectedBranchIds(prev =>
-                prev.includes(branchId)
-                    ? prev.filter(id => id !== branchId)
-                    : [...prev, branchId]
-            );
-        }
+        setSelectedBranchIds(prev =>
+            prev.includes(branchId)
+                ? prev.filter(id => id !== branchId)
+                : [...prev, branchId]
+        );
+    };
+
+    const handleSelectAllFiltered = () => {
+        const filteredIds = filteredBranches.map(b => b.id);
+        setSelectedBranchIds(prev => [...new Set([...prev, ...filteredIds])]);
+    };
+
+    const handleDeselectAllFiltered = () => {
+        const filteredIds = filteredBranches.map(b => b.id);
+        setSelectedBranchIds(prev => prev.filter(id => !filteredIds.includes(id)));
     };
 
     const getBranchLabel = () => {
@@ -112,7 +139,7 @@ function AbmBranchMappingModal({ isOpen, mapping, onClose, onSave, saving }) {
 
     return (
         <div className="fixed inset-0 z-[1000] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-            <div className="bg-white rounded-2xl w-full max-w-[550px] mx-auto shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-2xl w-full max-w-[900px] mx-auto shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
                 {/* Modal Header */}
                 <div className="px-6 py-5 flex items-center justify-between bg-gradient-to-r from-[#6804a1] to-[#8a0cd2] text-white rounded-t-2xl">
                     <div>
@@ -128,116 +155,243 @@ function AbmBranchMappingModal({ isOpen, mapping, onClose, onSave, saving }) {
 
                 {/* Modal Body */}
                 <form onSubmit={handleSubmit} className="divide-y divide-slate-100">
-                    <div className="px-6 py-6 space-y-6">
-                        {/* ABM Select */}
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                                Select ABM <span className="text-rose-500">*</span>
-                            </label>
-                            <select
-                                value={selectedAbmId}
-                                onChange={(e) => setSelectedAbmId(e.target.value)}
-                                required
-                                className="w-full border border-slate-350 rounded-lg px-3.5 py-2.5 text-sm outline-none text-slate-800 focus:border-[#6804a1] transition-all bg-white cursor-pointer"
-                            >
-                                <option value="">-- Select ABM --</option>
-                                {abms.map((abm) => (
-                                    <option key={abm.id} value={abm.id}>
-                                        {abm.name} ({abm.username})
-                                    </option>
-                                ))}
-                            </select>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
+                        {/* Left Column: Branch Dropdown Selector and Filters */}
+                        <div className="flex flex-col space-y-4">
+                            <div className="relative">
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                                    Map Branches <span className="text-rose-500">*</span>
+                                </label>
+                                <div
+                                    className="w-full min-h-[42px] px-3.5 py-2.5 border border-slate-350 rounded-lg bg-white text-sm cursor-pointer flex justify-between items-center hover:border-slate-400 transition-colors"
+                                    onClick={() => {
+                                        setIsBranchDropdownOpen(!isBranchDropdownOpen);
+                                        setIsStateFilterOpen(false);
+                                        setIsCityFilterOpen(false);
+                                    }}
+                                >
+                                    <span className={`truncate ${selectedBranchIds.length > 0 ? "text-slate-800 font-medium" : "text-slate-400"}`}>
+                                        {getBranchLabel()}
+                                    </span>
+                                    <svg className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${isBranchDropdownOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </div>
+
+                                {isBranchDropdownOpen && (
+                                    <div className="absolute z-50 mt-1.5 w-full bg-white border border-slate-200 rounded-xl shadow-xl p-4 space-y-3 animate-in fade-in slide-in-from-top-1 duration-150">
+                                        {/* Search Input */}
+                                        <div className="px-0 py-0" onClick={(e) => {
+                                            e.stopPropagation();
+                                            setIsStateFilterOpen(false);
+                                            setIsCityFilterOpen(false);
+                                        }}>
+                                            <input
+                                                type="text"
+                                                placeholder="Search by name or code..."
+                                                value={branchSearch}
+                                                onChange={(e) => setBranchSearch(e.target.value)}
+                                                className="w-full px-3 py-1.5 text-sm border border-slate-250 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#6804a1] focus:border-[#6804a1]"
+                                            />
+                                        </div>
+
+                                        {/* State and City Filters */}
+                                        <div className="grid grid-cols-2 gap-2" onClick={(e) => e.stopPropagation()}>
+                                            {/* Multi-select State */}
+                                            <div className="relative">
+                                                <label className="block text-[10px] font-bold text-slate-450 uppercase mb-1">State</label>
+                                                <div
+                                                    className="w-full min-h-[32px] px-2.5 py-1.5 border border-slate-250 rounded-lg bg-white text-xs cursor-pointer flex justify-between items-center hover:border-slate-350 transition-colors"
+                                                    onClick={() => {
+                                                        setIsStateFilterOpen(!isStateFilterOpen);
+                                                        setIsCityFilterOpen(false);
+                                                    }}
+                                                >
+                                                    <span className="truncate text-slate-700">
+                                                        {selectedStates.length === 0 ? "All States" : `${selectedStates.length} selected`}
+                                                    </span>
+                                                    <svg className="w-3.5 h-3.5 text-slate-555" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                                    </svg>
+                                                </div>
+                                                {isStateFilterOpen && (
+                                                    <div className="absolute z-[60] mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg p-2 max-h-40 overflow-y-auto space-y-1">
+                                                        {uniqueStates.length === 0 ? (
+                                                            <div className="text-[11px] text-slate-400 text-center py-2">No states</div>
+                                                        ) : (
+                                                            uniqueStates.map(state => (
+                                                                <label key={state} className="flex items-center gap-2 p-1 hover:bg-slate-55 rounded cursor-pointer text-xs">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={selectedStates.includes(state)}
+                                                                        onChange={() => {
+                                                                            setSelectedStates(prev =>
+                                                                                prev.includes(state)
+                                                                                    ? prev.filter(s => s !== state)
+                                                                                    : [...prev, state]
+                                                                            );
+                                                                            setSelectedCities([]); // reset city selection when states change
+                                                                        }}
+                                                                        className="h-3.5 w-3.5 text-[#6804a1] rounded border-slate-300 focus:ring-[#6804a1]"
+                                                                    />
+                                                                    <span className="text-slate-700 truncate">{state}</span>
+                                                                </label>
+                                                            ))
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Multi-select City */}
+                                            <div className="relative">
+                                                <label className="block text-[10px] font-bold text-slate-450 uppercase mb-1">City</label>
+                                                <div
+                                                    className="w-full min-h-[32px] px-2.5 py-1.5 border border-slate-250 rounded-lg bg-white text-xs cursor-pointer flex justify-between items-center hover:border-slate-350 transition-colors"
+                                                    onClick={() => {
+                                                        setIsCityFilterOpen(!isCityFilterOpen);
+                                                        setIsStateFilterOpen(false);
+                                                    }}
+                                                >
+                                                    <span className="truncate text-slate-700">
+                                                        {selectedCities.length === 0 ? "All Cities" : `${selectedCities.length} selected`}
+                                                    </span>
+                                                    <svg className="w-3.5 h-3.5 text-slate-555" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                                    </svg>
+                                                </div>
+                                                {isCityFilterOpen && (
+                                                    <div className="absolute z-[60] mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg p-2 max-h-40 overflow-y-auto space-y-1">
+                                                        {uniqueCities.length === 0 ? (
+                                                            <div className="text-[11px] text-slate-400 text-center py-2">No cities</div>
+                                                        ) : (
+                                                            uniqueCities.map(city => (
+                                                                <label key={city} className="flex items-center gap-2 p-1 hover:bg-slate-55 rounded cursor-pointer text-xs">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={selectedCities.includes(city)}
+                                                                        onChange={() => {
+                                                                            setSelectedCities(prev =>
+                                                                                prev.includes(city)
+                                                                                    ? prev.filter(c => c !== city)
+                                                                                    : [...prev, city]
+                                                                            );
+                                                                        }}
+                                                                        className="h-3.5 w-3.5 text-[#6804a1] rounded border-slate-300 focus:ring-[#6804a1]"
+                                                                    />
+                                                                    <span className="text-slate-700 truncate">{city}</span>
+                                                                </label>
+                                                            ))
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Select / Deselect Filtered Buttons */}
+                                        <div className="flex justify-between items-center py-1.5 border-t border-b border-slate-100" onClick={(e) => {
+                                            e.stopPropagation();
+                                            setIsStateFilterOpen(false);
+                                            setIsCityFilterOpen(false);
+                                        }}>
+                                            <button
+                                                type="button"
+                                                onClick={handleSelectAllFiltered}
+                                                className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 border-none bg-transparent cursor-pointer"
+                                            >
+                                                Select All Filtered
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleDeselectAllFiltered}
+                                                className="text-[11px] font-bold text-rose-600 hover:text-rose-800 border-none bg-transparent cursor-pointer"
+                                            >
+                                                Deselect All Filtered
+                                            </button>
+                                        </div>
+
+                                        {/* Branch Checklist */}
+                                        <div className="max-h-48 overflow-y-auto space-y-1 pr-1" onClick={(e) => {
+                                            e.stopPropagation();
+                                            setIsStateFilterOpen(false);
+                                            setIsCityFilterOpen(false);
+                                        }}>
+                                            {filteredBranches.length === 0 ? (
+                                                <div className="text-xs text-slate-400 p-2 text-center">No active branches match filters</div>
+                                            ) : (
+                                                filteredBranches.map(b => (
+                                                    <label key={b.id} className="flex items-center gap-2.5 p-2 hover:bg-slate-50 rounded-lg cursor-pointer text-sm text-slate-650 transition-colors">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedBranchIds.includes(b.id)}
+                                                            onChange={() => handleToggleBranch(b.id)}
+                                                            className="h-4 w-4 text-[#6804a1] border-slate-350 rounded focus:ring-[#6804a1]"
+                                                        />
+                                                        <div className="flex flex-col">
+                                                            <span className="font-medium text-slate-800">{b.name}</span>
+                                                            <span className="text-[11px] text-slate-400">{b.code} {b.city ? `- ${b.city}` : ""} {b.state_name ? `(${b.state_name})` : ""}</span>
+                                                        </div>
+                                                    </label>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
-                        {/* Branches Multi-select */}
-                        <div className="relative">
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                                Map Branches <span className="text-rose-500">*</span>
-                            </label>
-                            <div
-                                className="w-full min-h-[42px] px-3.5 py-2.5 border border-slate-350 rounded-lg bg-white text-sm cursor-pointer flex justify-between items-center hover:border-slate-400 transition-colors"
-                                onClick={() => setIsBranchDropdownOpen(!isBranchDropdownOpen)}
-                            >
-                                <span className={`truncate ${selectedBranchIds.length > 0 ? "text-slate-800 font-medium" : "text-slate-400"}`}>
-                                    {getBranchLabel()}
-                                </span>
-                                <svg className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${isBranchDropdownOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                                </svg>
+                        {/* Right Column: ABM Selection and Tag Previews */}
+                        <div className="flex flex-col space-y-6">
+                            {/* ABM Selector */}
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                                    Select ABM <span className="text-rose-500">*</span>
+                                </label>
+                                <select
+                                    value={selectedAbmId}
+                                    onChange={(e) => setSelectedAbmId(e.target.value)}
+                                    required
+                                    className="w-full border border-slate-350 rounded-lg px-3.5 py-2.5 text-sm outline-none text-slate-800 focus:border-[#6804a1] transition-all bg-white cursor-pointer"
+                                >
+                                    <option value="">-- Select ABM --</option>
+                                    {abms.map((abm) => (
+                                        <option key={abm.id} value={abm.id}>
+                                            {abm.name} ({abm.username})
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
 
-                            {isBranchDropdownOpen && (
-                                <div className="absolute z-1 mt-1.5 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-44 overflow-y-auto p-2 space-y-1 animate-in fade-in slide-in-from-top-1 duration-150">
-                                    {/* Search input */}
-                                    <div className="px-1 py-1 sticky top-0 bg-white z-10">
-                                        <input
-                                            type="text"
-                                            placeholder="Search Branch by name or code..."
-                                            value={branchSearch}
-                                            onChange={(e) => setBranchSearch(e.target.value)}
-                                            className="w-full px-3 py-1.5 text-sm border border-slate-250 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#6804a1] focus:border-[#6804a1]"
-                                            onClick={(e) => e.stopPropagation()}
-                                        />
-                                    </div>
-
-                                    {/* Select All */}
-                                    <label className="flex items-center gap-2.5 p-2 hover:bg-slate-50 rounded-lg cursor-pointer text-sm font-semibold text-slate-700 transition-colors">
-                                        <input
-                                            type="checkbox"
-                                            checked={filteredBranches.length > 0 && filteredBranches.every(b => selectedBranchIds.includes(b.id))}
-                                            onChange={() => handleToggleBranch("All")}
-                                            className="h-4 w-4 text-[#6804a1] border-slate-300 rounded focus:ring-[#6804a1]"
-                                        />
-                                        Select All (Filtered)
-                                    </label>
-
-                                    {/* Branch List */}
-                                    {filteredBranches.length === 0 ? (
-                                        <div className="text-xs text-slate-400 p-2 text-center">No active branches found</div>
+                            {/* Selection Preview tags */}
+                            <div className="flex-1 flex flex-col min-h-[180px]">
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                                    Selected Branches ({selectedBranchIds.length})
+                                </label>
+                                <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3.5 max-h-[220px] overflow-y-auto">
+                                    {selectedBranchIds.length === 0 ? (
+                                        <p className="text-sm text-slate-400 italic text-center py-8">No branches selected yet.</p>
                                     ) : (
-                                        filteredBranches.map(b => (
-                                            <label key={b.id} className="flex items-center gap-2.5 p-2 hover:bg-slate-50 rounded-lg cursor-pointer text-sm text-slate-650 transition-colors">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedBranchIds.includes(b.id)}
-                                                    onChange={() => handleToggleBranch(b.id)}
-                                                    className="h-4 w-4 text-[#6804a1] border-slate-350 rounded focus:ring-[#6804a1]"
-                                                />
-                                                <div className="flex flex-col">
-                                                    <span className="font-medium text-slate-800">{b.name}</span>
-                                                    <span className="text-xs text-slate-400">{b.code} {b.city ? `- ${b.city}` : ""}</span>
-                                                </div>
-                                            </label>
-                                        ))
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {selectedBranchIds.map(id => {
+                                                const b = branches.find(item => item.id === id);
+                                                if (!b) return null;
+                                                return (
+                                                    <span key={id} className="inline-flex items-center gap-1.5 bg-white border border-slate-200 text-slate-700 text-xs px-2.5 py-1.5 rounded-lg shadow-sm font-medium">
+                                                        {b.name}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleToggleBranch(id)}
+                                                            className="text-slate-400 hover:text-red-500 font-bold border-none bg-transparent cursor-pointer p-0 leading-none text-sm"
+                                                        >
+                                                            &times;
+                                                        </button>
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
                                     )}
                                 </div>
-                            )}
-                        </div>
-
-                        {/* Selected branches preview tags */}
-                        {selectedBranchIds.length > 0 && (
-                            <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 max-h-32 overflow-y-auto">
-                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Selected Branches Preview ({selectedBranchIds.length}):</p>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {selectedBranchIds.map(id => {
-                                        const b = branches.find(item => item.id === id);
-                                        if (!b) return null;
-                                        return (
-                                            <span key={id} className="inline-flex items-center gap-1 bg-white border border-slate-200 text-slate-700 text-xs px-2 py-0.5 rounded-md shadow-sm">
-                                                {b.name}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleToggleBranch(id)}
-                                                    className="text-slate-400 hover:text-red-500 font-bold border-none bg-transparent cursor-pointer p-0 leading-none text-xs"
-                                                >
-                                                    &times;
-                                                </button>
-                                            </span>
-                                        );
-                                    })}
-                                </div>
                             </div>
-                        )}
+                        </div>
                     </div>
 
                     {/* Modal Footer */}
