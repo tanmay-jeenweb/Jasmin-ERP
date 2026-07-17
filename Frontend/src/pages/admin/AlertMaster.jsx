@@ -370,7 +370,7 @@ export default function AlertMaster() {
         <div className="flex-1 flex flex-col">
           <DataTable
             tableId="alerts_management_dashboard"
-            title="Alert Notifications Master"
+            title="Alert"
             data={alerts}
             columns={columns}
             loading={loading}
