@@ -567,7 +567,7 @@ export default function ABMBranchMappingMaster() {
                 saving={saving}
             />
 
-            <main className="flex-1 flex flex-col w-full mx-auto px-6 sm:px-8 py-8 max-w-7xl">
+            <main className="flex-1 flex flex-col w-full mx-auto px-6 sm:px-8 py-8">
                 {error && (
                     <div className="bg-rose-50 border border-rose-200 text-rose-750 px-4 py-3 rounded-lg mb-6 text-sm font-semibold">
                         {error}

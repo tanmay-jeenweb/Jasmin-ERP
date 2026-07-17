@@ -273,7 +273,7 @@ export default function Navbar() {
                             }
                         `}</style>
                         {(() => {
-                            const singleUnit = `${marqueeText}   :: :: :: OFFERS 📢──★`;
+                            const singleUnit = ` :: :: :: OFFERS 📢──★    ${marqueeText}`;
                             return (
                                 <div className="marquee-container text-[12px] font-bold text-indigo-800">
                                     <span className="marquee-item">{singleUnit}</span>

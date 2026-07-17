@@ -671,7 +671,7 @@ export default function UserHome() {
         <div className="flex flex-col min-h-screen bg-slate-50 font-sans text-slate-900">
             <Navbar title="ERP Dashboard" />
 
-            <main className="flex-grow w-full max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+            <main className="flex-grow w-full mx-auto py-8 px-4 sm:px-6 lg:px-8">
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold text-slate-900">Dashboard Overview</h1>
                     <p className="text-sm text-slate-500 mt-1">
