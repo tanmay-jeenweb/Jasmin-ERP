@@ -102,6 +102,15 @@ export default function Navbar() {
             desc: "Manage geographic states"
         },
         {
+            name: "Support Master",
+            path: "/admin/support",
+            masterKey: "support_master",
+            icon: "fa-solid fa-headset",
+            color: "bg-indigo-50 text-indigo-600 border border-indigo-100/50",
+            activeColor: "bg-indigo-100 text-indigo-700",
+            desc: "Manage support staff details"
+        },
+        {
             name: "Product Type Master",
             path: "/admin/product-types",
             masterKey: "product_type_master",
@@ -155,6 +164,7 @@ export default function Navbar() {
         if (m.module) return isAdmin || userModules.includes(m.module);
         return true;
     });
+
 
     const allReports = [
         {

@@ -20,6 +20,7 @@ const MASTERS = [
   { key: "model_group_master", label: "Model Group Master" },
   { key: "branch_master", label: "Branch Master" },
   { key: "abm_branch_mapping", label: "ABM Branch Mapping" },
+  { key: "support_master", label: "Support Master" },
 ];
 const PERMS = ["canRead", "canWrite", "canUpdate", "canDelete"];
 const PERM_LABELS = { canRead: "Read", canWrite: "Write / Approval", canUpdate: "Update", canDelete: "Delete" };

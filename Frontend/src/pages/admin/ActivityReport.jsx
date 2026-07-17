@@ -41,6 +41,7 @@ function DetailModal({ isOpen, row, onClose }) {
         product_type_master: "Product Type Master",
         item_model_master: "Model Master",
         model_group_master: "Model Group Master",
+        support_master: "Support Master",
       };
 
       const PERM_LABELS = { canRead: "Read", canWrite: "Write / Approval", canUpdate: "Update", canDelete: "Delete" };
