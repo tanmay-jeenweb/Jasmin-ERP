@@ -2,6 +2,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { logoutUser } from "../api/authApi";
 import { usePermission } from "../context/PermissionContext";
+import { getOffers } from "../api/offerApi";
 
 const logo = "/Jasmin-Logo.png";
 
@@ -14,6 +15,27 @@ export default function Navbar() {
     const [isReportsOpen, setIsReportsOpen] = useState(false);
     const [isOffersOpen, setIsOffersOpen] = useState(false);
     const { hasPermission } = usePermission();
+    const [runningOffers, setRunningOffers] = useState([]);
+
+    useEffect(() => {
+        const fetchRunningOffers = async () => {
+            try {
+                const res = await getOffers();
+                if (res.data?.success && Array.isArray(res.data.data)) {
+                    const todayStr = new Date().toISOString().split("T")[0];
+                    const active = res.data.data.filter(o => {
+                        const from = o.from_date ? o.from_date.split("T")[0] : "";
+                        const to = o.to_date ? o.to_date.split("T")[0] : "";
+                        return from && to && from <= todayStr && todayStr <= to;
+                    });
+                    setRunningOffers(active);
+                }
+            } catch (err) {
+                console.error("Failed to fetch running offers:", err);
+            }
+        };
+        fetchRunningOffers();
+    }, []);
 
     useEffect(() => {
         const handleOutsideClick = (e) => {
@@ -205,17 +227,54 @@ export default function Navbar() {
 
     const availableReports = allReports.filter(r => isAdmin);
 
+    let marqueeText = runningOffers.length > 0
+        ? runningOffers.map(o => `🔥 [${o.brand_name}] ${o.offer_type} (Valid: ${new Date(o.from_date).toLocaleDateString()} to ${new Date(o.to_date).toLocaleDateString()})`).join("   |   ")
+        : "";
+
+    // Repeat the text to ensure it's wide enough for a seamless circular loop
+    if (marqueeText) {
+        const base = marqueeText;
+        while (marqueeText.length < 200) {
+            marqueeText += "   |   " + base;
+        }
+    }
+
 
 
     return (
         <nav className="bg-white shadow-sm border-b border-slate-200 flex flex-col relative z-50">
             {/* First Row */}
-            <div className="px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between relative z-40">
-                <div className="flex items-center gap-3">
+            <div className="px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between relative z-40 gap-4">
+                <div className="flex items-center gap-3 shrink-0">
                     <img src={logo} alt="Jasmin Logo" className="h-12 w-auto" />
                 </div>
 
-                <div className="flex items-center gap-6">
+                {/* Continuous Horizontal Scrolling Banner */}
+                <div className="flex-1 max-w-xs md:max-w-lg lg:max-w-2xl xl:max-w-3xl overflow-hidden relative py-1.5 px-4  rounded-full flex items-center ">
+                    <style>{`
+                        @keyframes marquee-scroll {
+                            0% { transform: translate3d(0, 0, 0); }
+                            100% { transform: translate3d(-50%, 0, 0); }
+                        }
+                        .marquee-container {
+                            display: flex;
+                            white-space: nowrap;
+                            width: max-content;
+                            animation: marquee-scroll 35s linear infinite;
+                            will-change: transform;
+                        }
+                        .marquee-container:hover {
+                            animation-play-state: paused;
+                        }
+                    `}</style>
+                    <div className="marquee-container flex gap-16 text-[12px] font-bold text-indigo-800">
+                        <span>{marqueeText}</span>
+                        <span> :: :: :: OFFERS 📢──★ </span>
+                        <span>{marqueeText}</span>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-6 shrink-0">
 
 
                     {/* Profile Dropdown */}
@@ -473,8 +532,8 @@ export default function Navbar() {
                                 <button
                                     onClick={() => setIsReportsOpen(!isReportsOpen)}
                                     className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/abm-wise-tva") || location.pathname.startsWith("/admin/stock-vs-cash-deposit") || location.pathname.startsWith("/admin/finance-brand-mapping") || location.pathname.startsWith("/admin/finance-brand-report")
-                                            ? "bg-white/15"
-                                            : "bg-[#6804a1] hover:bg-white/5"
+                                        ? "bg-white/15"
+                                        : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
                                 >
                                     <span className="flex items-center gap-2.5 truncate mx-auto">
