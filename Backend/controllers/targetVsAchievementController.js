@@ -1,5 +1,6 @@
 const {
     getAllTargetVsAchievements,
+    getABMWiseTargetVsAchievements,
     upsertTargetVsAchievements,
     upsertAchievements
 } = require('../models/targetVsAchievementModel.js');
@@ -17,6 +18,23 @@ const getAllTargetVsAchievementsController = async (req, res) => {
         });
     } catch (error) {
         console.error('Error retrieving target vs achievement records:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+
+const getABMWiseTargetVsAchievementsController = async (req, res) => {
+    try {
+        const records = await getABMWiseTargetVsAchievements();
+        res.status(200).json({
+            success: true,
+            message: 'ABM Wise Target vs Achievement records retrieved successfully',
+            data: records
+        });
+    } catch (error) {
+        console.error('Error retrieving ABM wise target vs achievement records:', error);
         res.status(500).json({
             success: false,
             message: 'Internal server error'
@@ -525,6 +543,7 @@ const syncTargetVsAchievementsController = async (req, res) => {
 
 module.exports = {
     getAllTargetVsAchievementsController,
+    getABMWiseTargetVsAchievementsController,
     importTargetVsAchievementsController,
     syncTargetVsAchievementsController
 };

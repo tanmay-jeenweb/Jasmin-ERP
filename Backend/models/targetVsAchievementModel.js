@@ -115,6 +115,28 @@ const getAllTargetVsAchievements = async () => {
     return results;
 };
 
+const getABMWiseTargetVsAchievements = async () => {
+    const query = `
+        SELECT 
+            t.*,
+            COALESCE(u.name, 'Unknown') AS added_by_name,
+            COALESCE(abm_u.name, bm.abm, t.updated_abm_name, '—') AS abm_name,
+            bm.id AS branch_id,
+            COALESCE(sm.name, '—') AS state_name
+        FROM target_vs_achievements t
+        LEFT JOIN branch_master bm ON t.branch_name = bm.name
+        LEFT JOIN state_master sm ON bm.state_id = sm.id
+        LEFT JOIN abm_branch_mappings abm_m ON bm.id = abm_m.branch_id
+        LEFT JOIN users abm_u ON abm_m.abm_user_id = abm_u.id
+        LEFT JOIN users u ON t.added_by = u.id
+        ORDER BY 
+            (t.qty_tgt IS NULL OR t.value_tgt IS NULL) ASC,
+            t.timestamp DESC
+    `;
+    const [results] = await db.execute(query);
+    return results;
+};
+
 const upsertTargetVsAchievements = async (records, addedBy, deviceId, remainingDays) => {
     if (!records || records.length === 0) return;
 
@@ -255,6 +277,7 @@ const upsertAchievements = async (records, addedBy, deviceId) => {
 module.exports = {
     createTargetVsAchievementsTable,
     getAllTargetVsAchievements,
+    getABMWiseTargetVsAchievements,
     upsertTargetVsAchievements,
     upsertAchievements
 };
