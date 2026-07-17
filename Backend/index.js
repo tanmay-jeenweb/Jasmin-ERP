@@ -46,6 +46,9 @@ const stockCashDepositRoutes = require("./routes/stockCashDepositRoutes.js");
 const { createAbmBranchMappingsTable } = require("./models/abmBranchMappingModel.js");
 const abmBranchMappingRoutes = require("./routes/abmBranchMappingRoutes.js");
 const brandWiseSalesRoutes = require("./routes/brandWiseSalesRoutes.js");
+const { createBranchBrandFinanceMappingTable } = require("./models/branchBrandFinanceMappingModel.js");
+const branchBrandFinanceMappingRoutes = require("./routes/branchBrandFinanceMappingRoutes.js");
+const branchBrandFinanceReportRoutes = require("./routes/branchBrandFinanceReportRoutes.js");
 
 
 const app = express();
@@ -105,6 +108,8 @@ app.use(["/api/target-vs-achievement", "/target-vs-achievement"], targetVsAchiev
 app.use(["/api/stock-cash-deposit", "/stock-cash-deposit"], stockCashDepositRoutes);
 app.use(["/api/abm-branch-mappings", "/abm-branch-mappings"], abmBranchMappingRoutes);
 app.use(["/api/brand-wise-sales", "/brand-wise-sales"], brandWiseSalesRoutes);
+app.use(["/api/branch-brand-finance-mapping", "/branch-brand-finance-mapping"], branchBrandFinanceMappingRoutes);
+app.use(["/api/reports", "/reports"], branchBrandFinanceReportRoutes);
 
 
 // Global 404 handler
@@ -143,6 +148,7 @@ const startServer = async () => {
         await createTargetVsAchievementsTable();
         await createStockCashDepositTable();
         await createAbmBranchMappingsTable();
+        await createBranchBrandFinanceMappingTable();
 
         console.log("All database tables are initialized and ready.");
 

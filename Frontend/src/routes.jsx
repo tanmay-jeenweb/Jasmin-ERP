@@ -26,7 +26,11 @@ import Offers from "./pages/admin/Offers";
 import Home from "./pages/admin/Home";
 import OfferForm from "./pages/admin/OfferForm";
 import TargetVsAchievement from "./pages/admin/TargetVsAchievement";
+import ABMWiseTvAReport from "./pages/admin/ABMWiseTvAReport";
 import StockVsCashDepositReport from "./pages/admin/StockVsCashDepositReport";
+import FinanceBrandMappingList from "./pages/admin/FinanceBrandMappingList";
+import FinanceBrandMappingDetail from "./pages/admin/FinanceBrandMappingDetail";
+import FinanceBrandReport from "./pages/admin/FinanceBrandReport";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -109,6 +113,31 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/stock-vs-cash-deposit"
                     element={<StockVsCashDepositReport />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" />}>
+                <Route
+                    path="/admin/abm-wise-tva"
+                    element={<ABMWiseTvAReport />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" />}>
+                <Route
+                    path="/admin/finance-brand-mapping"
+                    element={<FinanceBrandMappingList />}
+                />
+                <Route
+                    path="/admin/finance-brand-mapping/:branchId"
+                    element={<FinanceBrandMappingDetail />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" />}>
+                <Route
+                    path="/admin/finance-brand-report"
+                    element={<FinanceBrandReport />}
                 />
             </Route>
 

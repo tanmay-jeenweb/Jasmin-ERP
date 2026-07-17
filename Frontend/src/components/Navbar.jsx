@@ -182,9 +182,24 @@ export default function Navbar() {
             icon: "fa-solid fa-bullseye",
         },
         {
+            name: "ABM wise TvA Report",
+            path: "/admin/abm-wise-tva",
+            icon: "fa-solid fa-ranking-star",
+        },
+        {
             name: "Stock vs Cash Deposit",
             path: "/admin/stock-vs-cash-deposit",
             icon: "fa-solid fa-money-bill-transfer",
+        },
+        {
+            name: "Finance Brand Mapping",
+            path: "/admin/finance-brand-mapping",
+            icon: "fa-solid fa-code-branch",
+        },
+        {
+            name: "Finance & Brand Report",
+            path: "/admin/finance-brand-report",
+            icon: "fa-solid fa-file-invoice",
         }
     ];
 
@@ -457,9 +472,9 @@ export default function Navbar() {
                             <div className="relative" id="reports-dropdown">
                                 <button
                                     onClick={() => setIsReportsOpen(!isReportsOpen)}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/stock-vs-cash-deposit")
-                                        ? "bg-white/15"
-                                        : "bg-[#6804a1] hover:bg-white/5"
+                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/abm-wise-tva") || location.pathname.startsWith("/admin/stock-vs-cash-deposit") || location.pathname.startsWith("/admin/finance-brand-mapping") || location.pathname.startsWith("/admin/finance-brand-report")
+                                            ? "bg-white/15"
+                                            : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
                                 >
                                     <span className="flex items-center gap-2.5 truncate mx-auto">
