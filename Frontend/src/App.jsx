@@ -3,11 +3,39 @@ import Footer from "./components/Footer";
 import { useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { getDeviceId } from "./utils/device";
+import LoginAlertModal from "./components/LoginAlertModal";
+import { getActiveAlerts } from "./api/alertApi";
 // New branch push
 function App() {
     const location = useLocation();
     const hideFooterOnPaths = ["/"];
     const shouldHideFooter = hideFooterOnPaths.includes(location.pathname);
+
+    const [activeAlerts, setActiveAlerts] = useState([]);
+    const [showAlertModal, setShowAlertModal] = useState(false);
+
+    useEffect(() => {
+        const checkAlerts = async () => {
+            const hasSeen = sessionStorage.getItem("alertShown");
+            const isLoggedIn = localStorage.getItem("token") && localStorage.getItem("user");
+
+            if (isLoggedIn && hasSeen !== "true") {
+                try {
+                    const response = await getActiveAlerts();
+                    const alerts = response.data?.data || [];
+                    if (alerts.length > 0) {
+                        setActiveAlerts(alerts);
+                        setShowAlertModal(true);
+                    } else {
+                        sessionStorage.setItem("alertShown", "true");
+                    }
+                } catch (error) {
+                    console.error("Failed to fetch active alerts:", error);
+                }
+            }
+        };
+        checkAlerts();
+    }, [location.pathname]);
 
     const [watermarkText, setWatermarkText] = useState("");
 
@@ -75,6 +103,15 @@ function App() {
                 <AppRoutes />
             </div>
             {!shouldHideFooter && <Footer />}
+            {showAlertModal && (
+                <LoginAlertModal
+                    alerts={activeAlerts}
+                    onClose={() => {
+                        setShowAlertModal(false);
+                        sessionStorage.setItem("alertShown", "true");
+                    }}
+                />
+            )}
         </div>
     );
 }

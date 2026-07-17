@@ -33,6 +33,7 @@ import FinanceBrandMappingDetail from "./pages/admin/FinanceBrandMappingDetail";
 import FinanceBrandReport from "./pages/admin/FinanceBrandReport";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AlertMaster from "./pages/admin/AlertMaster";
 
 export default function AppRoutes() {
 
@@ -92,6 +93,10 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/offers/edit/:id"
                     element={<OfferForm />}
+                />
+                <Route
+                    path="/admin/alerts"
+                    element={<AlertMaster />}
                 />
             </Route>
 

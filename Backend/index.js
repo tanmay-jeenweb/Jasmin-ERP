@@ -46,6 +46,8 @@ const stockCashDepositRoutes = require("./routes/stockCashDepositRoutes.js");
 const { createAbmBranchMappingsTable } = require("./models/abmBranchMappingModel.js");
 const abmBranchMappingRoutes = require("./routes/abmBranchMappingRoutes.js");
 const brandWiseSalesRoutes = require("./routes/brandWiseSalesRoutes.js");
+const { createAlertsTable } = require("./models/alertModel.js");
+const alertRoutes = require("./routes/alertRoutes.js");
 const { createBranchBrandFinanceMappingTable } = require("./models/branchBrandFinanceMappingModel.js");
 const branchBrandFinanceMappingRoutes = require("./routes/branchBrandFinanceMappingRoutes.js");
 const branchBrandFinanceReportRoutes = require("./routes/branchBrandFinanceReportRoutes.js");
@@ -108,6 +110,7 @@ app.use(["/api/target-vs-achievement", "/target-vs-achievement"], targetVsAchiev
 app.use(["/api/stock-cash-deposit", "/stock-cash-deposit"], stockCashDepositRoutes);
 app.use(["/api/abm-branch-mappings", "/abm-branch-mappings"], abmBranchMappingRoutes);
 app.use(["/api/brand-wise-sales", "/brand-wise-sales"], brandWiseSalesRoutes);
+app.use(["/api/alerts", "/alerts"], alertRoutes);
 app.use(["/api/branch-brand-finance-mapping", "/branch-brand-finance-mapping"], branchBrandFinanceMappingRoutes);
 app.use(["/api/reports", "/reports"], branchBrandFinanceReportRoutes);
 
@@ -148,6 +151,7 @@ const startServer = async () => {
         await createTargetVsAchievementsTable();
         await createStockCashDepositTable();
         await createAbmBranchMappingsTable();
+        await createAlertsTable();
         await createBranchBrandFinanceMappingTable();
 
         console.log("All database tables are initialized and ready.");
