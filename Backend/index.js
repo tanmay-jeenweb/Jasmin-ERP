@@ -46,6 +46,8 @@ const stockCashDepositRoutes = require("./routes/stockCashDepositRoutes.js");
 const { createAbmBranchMappingsTable } = require("./models/abmBranchMappingModel.js");
 const abmBranchMappingRoutes = require("./routes/abmBranchMappingRoutes.js");
 const brandWiseSalesRoutes = require("./routes/brandWiseSalesRoutes.js");
+const { createAlertsTable } = require("./models/alertModel.js");
+const alertRoutes = require("./routes/alertRoutes.js");
 
 
 const app = express();
@@ -105,6 +107,7 @@ app.use(["/api/target-vs-achievement", "/target-vs-achievement"], targetVsAchiev
 app.use(["/api/stock-cash-deposit", "/stock-cash-deposit"], stockCashDepositRoutes);
 app.use(["/api/abm-branch-mappings", "/abm-branch-mappings"], abmBranchMappingRoutes);
 app.use(["/api/brand-wise-sales", "/brand-wise-sales"], brandWiseSalesRoutes);
+app.use(["/api/alerts", "/alerts"], alertRoutes);
 
 
 // Global 404 handler
@@ -143,6 +146,7 @@ const startServer = async () => {
         await createTargetVsAchievementsTable();
         await createStockCashDepositTable();
         await createAbmBranchMappingsTable();
+        await createAlertsTable();
 
         console.log("All database tables are initialized and ready.");
 

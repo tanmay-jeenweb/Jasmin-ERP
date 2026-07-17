@@ -43,6 +43,7 @@ export default function Navbar() {
         localStorage.removeItem("user");
         localStorage.removeItem("token");
         sessionStorage.removeItem("loginTime");
+        sessionStorage.removeItem("alertShown");
         window.dispatchEvent(new Event("auth-change"));
         navigate("/");
     };
@@ -373,6 +374,23 @@ export default function Navbar() {
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                        )}
+
+                        {/* Alert Master Tab */}
+                        {isAdmin && (
+                            <div className="relative">
+                                <button
+                                    onClick={() => {
+                                        navigate("/admin/alerts");
+                                    }}
+                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname === "/admin/alerts" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                        }`}
+                                >
+                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                        <span className="font-semibold text-white truncate">Alert Master</span>
+                                    </span>
+                                </button>
                             </div>
                         )}
 
