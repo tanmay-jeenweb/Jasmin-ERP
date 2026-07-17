@@ -26,6 +26,14 @@ export default function TargetVsAchievement() {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
 
+  // Filter States
+  const [selectedBranches, setSelectedBranches] = useState([]);
+  const [selectedAbms, setSelectedAbms] = useState([]);
+  const [branchSearchText, setBranchSearchText] = useState("");
+  const [abmSearchText, setAbmSearchText] = useState("");
+  const [isBranchFilterOpen, setIsBranchFilterOpen] = useState(false);
+  const [isAbmFilterOpen, setIsAbmFilterOpen] = useState(false);
+
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -195,7 +203,7 @@ export default function TargetVsAchievement() {
   };
 
   const handleExportReport = async () => {
-    if (data.length === 0) {
+    if (filteredData.length === 0) {
       toast.error("No data available to export.");
       return;
     }
@@ -206,7 +214,7 @@ export default function TargetVsAchievement() {
       const headers = [
         "Sr. No",
         "Branch Name",
-        "Updated ABM Name",
+        "ABM Name",
         "QTY TGT",
         "Value TGT",
         "FTD QTY ACH",
@@ -227,10 +235,10 @@ export default function TargetVsAchievement() {
         "Growth Value %"
       ];
 
-      const rows = data.map((item, index) => [
+      const rows = filteredData.map((item, index) => [
         index + 1,
         item.branch_name || "",
-        item.updated_abm_name || "",
+        item.abm_name || "",
         item.qty_tgt !== null && item.qty_tgt !== undefined ? Number(item.qty_tgt) : null,
         item.value_tgt !== null && item.value_tgt !== undefined ? Number(item.value_tgt) : null,
         item.ftd_qty_ach !== null && item.ftd_qty_ach !== undefined ? Number(item.ftd_qty_ach) : null,
@@ -252,13 +260,13 @@ export default function TargetVsAchievement() {
       ]);
 
       // Calculate totals
-      const totalQtyTgt = data.reduce((sum, item) => sum + (Number(item.qty_tgt) || 0), 0);
-      const totalValueTgt = data.reduce((sum, item) => sum + (Number(item.value_tgt) || 0), 0);
-      const totalMtdQtyAch = data.reduce((sum, item) => sum + (Number(item.mtd_qty_ach) || 0), 0);
-      const totalMtdValueAch = data.reduce((sum, item) => sum + (Number(item.mtd_value_ach) || 0), 0);
+      const totalQtyTgt = filteredData.reduce((sum, item) => sum + (Number(item.qty_tgt) || 0), 0);
+      const totalValueTgt = filteredData.reduce((sum, item) => sum + (Number(item.value_tgt) || 0), 0);
+      const totalMtdQtyAch = filteredData.reduce((sum, item) => sum + (Number(item.mtd_qty_ach) || 0), 0);
+      const totalMtdValueAch = filteredData.reduce((sum, item) => sum + (Number(item.mtd_value_ach) || 0), 0);
 
-      const totalLmtdQtyAch = data.reduce((sum, item) => sum + (Number(item.lmtd_qty_ach) || 0), 0);
-      const totalLmtdValueAch = data.reduce((sum, item) => sum + (Number(item.lmtd_value_ach) || 0), 0);
+      const totalLmtdQtyAch = filteredData.reduce((sum, item) => sum + (Number(item.lmtd_qty_ach) || 0), 0);
+      const totalLmtdValueAch = filteredData.reduce((sum, item) => sum + (Number(item.lmtd_value_ach) || 0), 0);
 
       const totalMtdQtyPct = totalQtyTgt > 0 ? totalMtdQtyAch / totalQtyTgt : null;
       const totalMtdValPct = totalValueTgt > 0 ? totalMtdValueAch / totalValueTgt : null;
@@ -271,20 +279,20 @@ export default function TargetVsAchievement() {
         "",
         totalQtyTgt,
         totalValueTgt,
-        data.reduce((sum, item) => sum + (Number(item.ftd_qty_ach) || 0), 0),
-        data.reduce((sum, item) => sum + (Number(item.ftd_value_ach) || 0), 0),
-        data.reduce((sum, item) => sum + (Number(item.lmftd_qty_ach) || 0), 0),
-        data.reduce((sum, item) => sum + (Number(item.lmftd_value_ach) || 0), 0),
+        filteredData.reduce((sum, item) => sum + (Number(item.ftd_qty_ach) || 0), 0),
+        filteredData.reduce((sum, item) => sum + (Number(item.ftd_value_ach) || 0), 0),
+        filteredData.reduce((sum, item) => sum + (Number(item.lmftd_qty_ach) || 0), 0),
+        filteredData.reduce((sum, item) => sum + (Number(item.lmftd_value_ach) || 0), 0),
         totalMtdQtyAch,
         totalMtdValueAch,
         totalMtdQtyPct,
         totalMtdValPct,
-        data.reduce((sum, item) => sum + (Number(item.lmtd_qty_ach) || 0), 0),
-        data.reduce((sum, item) => sum + (Number(item.lmtd_value_ach) || 0), 0),
-        data.reduce((sum, item) => sum + (Number(item.btd_qty) || 0), 0),
-        data.reduce((sum, item) => sum + (Number(item.btd_value) || 0), 0),
-        data.reduce((sum, item) => sum + (Number(item.ddr_qty) || 0), 0),
-        data.reduce((sum, item) => sum + (Number(item.ddr_value) || 0), 0),
+        filteredData.reduce((sum, item) => sum + (Number(item.lmtd_qty_ach) || 0), 0),
+        filteredData.reduce((sum, item) => sum + (Number(item.lmtd_value_ach) || 0), 0),
+        filteredData.reduce((sum, item) => sum + (Number(item.btd_qty) || 0), 0),
+        filteredData.reduce((sum, item) => sum + (Number(item.btd_value) || 0), 0),
+        filteredData.reduce((sum, item) => sum + (Number(item.ddr_qty) || 0), 0),
+        filteredData.reduce((sum, item) => sum + (Number(item.ddr_value) || 0), 0),
         totalGrowthQtyPct,
         totalGrowthValPct
       ];
@@ -383,10 +391,10 @@ export default function TargetVsAchievement() {
       // Set row heights
       worksheet["!rows"] = [];
       worksheet["!rows"][0] = { hpt: 26 };
-      for (let r = 1; r <= data.length; r++) {
+      for (let r = 1; r <= filteredData.length; r++) {
         worksheet["!rows"][r] = { hpt: 20 };
       }
-      worksheet["!rows"][data.length + 1] = { hpt: 22 };
+      worksheet["!rows"][filteredData.length + 1] = { hpt: 22 };
 
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Report");
@@ -557,13 +565,43 @@ export default function TargetVsAchievement() {
     return `${Number(val).toFixed(2)}%`;
   };
 
+  // Extract unique branches
+  const uniqueBranches = useMemo(() => {
+    const list = data
+      .map(r => ({ id: r.branch_id || r.id, name: r.branch_name }))
+      .filter(r => r.name);
+    const seen = new Set();
+    return list.filter(item => {
+      const duplicate = seen.has(item.name);
+      seen.add(item.name);
+      return !duplicate;
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [data]);
+
+  // Extract unique ABMs
+  const uniqueAbms = useMemo(() => {
+    const list = data
+      .map(r => r.abm_name)
+      .filter(name => name && name !== "—");
+    return Array.from(new Set(list)).sort((a, b) => a.localeCompare(b));
+  }, [data]);
+
+  // Filtered dataset
+  const filteredData = useMemo(() => {
+    return data.filter(item => {
+      const branchMatch = selectedBranches.length === 0 || selectedBranches.includes(item.branch_name);
+      const abmMatch = selectedAbms.length === 0 || selectedAbms.includes(item.abm_name);
+      return branchMatch && abmMatch;
+    });
+  }, [data, selectedBranches, selectedAbms]);
+
   // Add serial number (Sr. No) sequentially based on row index
   const formattedData = useMemo(() => {
-    return data.map((item, index) => ({
+    return filteredData.map((item, index) => ({
       ...item,
       sr_no: index + 1
     }));
-  }, [data]);
+  }, [filteredData]);
 
   const columns = useMemo(() => [
     {
@@ -579,10 +617,10 @@ export default function TargetVsAchievement() {
       render: (row) => <span className="font-bold text-slate-800">{row.branch_name || "—"}</span>
     },
     {
-      key: "updated_abm_name",
-      label: "UPDATED ABM NAME",
+      key: "abm_name",
+      label: "ABM NAME",
       minWidth: "180px",
-      render: (row) => <span className="font-semibold text-indigo-700">{row.updated_abm_name || "—"}</span>
+      render: (row) => <span className="font-semibold text-indigo-700">{row.abm_name || "—"}</span>
     },
     {
       key: "qty_tgt",
@@ -710,6 +748,173 @@ export default function TargetVsAchievement() {
     }
   ], []);
 
+  // Filters Component
+  const filtersElement = (
+    <div className="flex flex-wrap items-center gap-3">
+      {/* Branch Multi-select Dropdown */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => {
+            setIsBranchFilterOpen(!isBranchFilterOpen);
+            setIsAbmFilterOpen(false);
+          }}
+          className="flex items-center justify-between gap-2 h-10 px-3 rounded-lg border border-slate-300 bg-white hover:border-slate-400 text-sm font-semibold transition-colors duration-150 cursor-pointer focus:outline-none"
+        >
+          <span className="text-slate-700">
+            {selectedBranches.length === 0
+              ? "All Branches"
+              : `${selectedBranches.length} Branch${selectedBranches.length > 1 ? 'es' : ''}`}
+          </span>
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 text-slate-400">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+          </svg>
+        </button>
+
+        {isBranchFilterOpen && (
+          <>
+            <div className="fixed inset-0 z-45" onClick={() => setIsBranchFilterOpen(false)}></div>
+            <div className="absolute left-0 mt-1 w-64 rounded-xl border border-slate-200 bg-white shadow-xl py-2 z-50 flex flex-col">
+              <div className="px-3 py-1.5 border-b border-slate-100 flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.602 10.602Z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search branches..."
+                  value={branchSearchText}
+                  onChange={(e) => setBranchSearchText(e.target.value)}
+                  className="w-full text-xs border-none outline-none bg-transparent"
+                />
+              </div>
+              <div className="px-2 py-1 border-b border-slate-100 flex items-center justify-between text-[11px] font-bold text-indigo-650">
+                <button
+                  type="button"
+                  onClick={() => setSelectedBranches(uniqueBranches.map(b => b.name))}
+                  className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                >
+                  Select All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedBranches([])}
+                  className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                >
+                  Deselect All
+                </button>
+              </div>
+              <div className="max-h-48 overflow-y-auto px-1 py-1 space-y-0.5">
+                {uniqueBranches
+                  .filter(b => b.name.toLowerCase().includes(branchSearchText.toLowerCase()))
+                  .map(branch => {
+                    const isChecked = selectedBranches.includes(branch.name);
+                    return (
+                      <label key={branch.name} className="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            if (isChecked) {
+                              setSelectedBranches(selectedBranches.filter(name => name !== branch.name));
+                            } else {
+                              setSelectedBranches([...selectedBranches, branch.name]);
+                            }
+                          }}
+                          className="accent-[#6804a1] h-3.5 w-3.5 flex-shrink-0"
+                        />
+                        <span className="truncate">{branch.name}</span>
+                      </label>
+                    );
+                  })}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ABM Multi-select Dropdown */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => {
+            setIsAbmFilterOpen(!isAbmFilterOpen);
+            setIsBranchFilterOpen(false);
+          }}
+          className="flex items-center justify-between gap-2 h-10 px-3 rounded-lg border border-slate-300 bg-white hover:border-slate-400 text-sm font-semibold transition-colors duration-150 cursor-pointer focus:outline-none"
+        >
+          <span className="text-slate-700">
+            {selectedAbms.length === 0
+              ? "All ABMs"
+              : `${selectedAbms.length} ABM${selectedAbms.length > 1 ? 's' : ''}`}
+          </span>
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 text-slate-400">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+          </svg>
+        </button>
+
+        {isAbmFilterOpen && (
+          <>
+            <div className="fixed inset-0 z-45" onClick={() => setIsAbmFilterOpen(false)}></div>
+            <div className="absolute left-0 mt-1 w-64 rounded-xl border border-slate-200 bg-white shadow-xl py-2 z-50 flex flex-col">
+              <div className="px-3 py-1.5 border-b border-slate-100 flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.602 10.602Z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search ABMs..."
+                  value={abmSearchText}
+                  onChange={(e) => setAbmSearchText(e.target.value)}
+                  className="w-full text-xs border-none outline-none bg-transparent"
+                />
+              </div>
+              <div className="px-2 py-1 border-b border-slate-100 flex items-center justify-between text-[11px] font-bold text-indigo-650">
+                <button
+                  type="button"
+                  onClick={() => setSelectedAbms(uniqueAbms)}
+                  className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                >
+                  Select All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedAbms([])}
+                  className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                >
+                  Deselect All
+                </button>
+              </div>
+              <div className="max-h-48 overflow-y-auto px-1 py-1 space-y-0.5">
+                {uniqueAbms
+                  .filter(name => name.toLowerCase().includes(abmSearchText.toLowerCase()))
+                  .map(abmName => {
+                    const isChecked = selectedAbms.includes(abmName);
+                    return (
+                      <label key={abmName} className="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            if (isChecked) {
+                              setSelectedAbms(selectedAbms.filter(name => name !== abmName));
+                            } else {
+                              setSelectedAbms([...selectedAbms, abmName]);
+                            }
+                          }}
+                          className="accent-[#6804a1] h-3.5 w-3.5 flex-shrink-0"
+                        />
+                        <span className="truncate">{abmName}</span>
+                      </label>
+                    );
+                  })}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex flex-col flex-1 bg-slate-50 font-sans">
       <Navbar title="ERP Admin" />
@@ -726,17 +931,20 @@ export default function TargetVsAchievement() {
           data={formattedData}
           columns={columns}
           loading={loading}
+          toggleActions={filtersElement}
           searchPlaceholder="Search ..."
           actionButton={
             <div className="contents">
               {/* Date selector for manual sync override */}
               <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-lg px-2 h-10">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Sync</span>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+                </svg>
                 <input
                   type="date"
                   value={syncDate}
                   onChange={(e) => setSyncDate(e.target.value)}
-                  className="bg-transparent border-none text-sm text-slate-700 font-medium focus:outline-none cursor-pointer"
+                  className="bg-transparent border-none text-xs text-slate-700 font-semibold focus:outline-none cursor-pointer w-[110px] p-0"
                 />
               </div>
 
@@ -744,10 +952,9 @@ export default function TargetVsAchievement() {
               <button
                 onClick={handleSync}
                 disabled={syncing || exporting || exportingReport || importing}
-                className="flex items-center gap-2 h-10 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none focus:outline-none"
+                className="flex items-center justify-center h-10 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none focus:outline-none"
                 title="Sync Achievements from External API"
               >
-                
                 {syncing ? "Syncing..." : "Sync"}
               </button>
 
