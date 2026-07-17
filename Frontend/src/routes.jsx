@@ -26,6 +26,8 @@ import OfferForm from "./pages/admin/OfferForm";
 import TargetVsAchievement from "./pages/admin/TargetVsAchievement";
 import ABMWiseTvAReport from "./pages/admin/ABMWiseTvAReport";
 import StockVsCashDepositReport from "./pages/admin/StockVsCashDepositReport";
+import FinanceBrandMappingList from "./pages/admin/FinanceBrandMappingList";
+import FinanceBrandMappingDetail from "./pages/admin/FinanceBrandMappingDetail";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -107,6 +109,17 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/abm-wise-tva"
                     element={<ABMWiseTvAReport />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" />}>
+                <Route
+                    path="/admin/finance-brand-mapping"
+                    element={<FinanceBrandMappingList />}
+                />
+                <Route
+                    path="/admin/finance-brand-mapping/:branchId"
+                    element={<FinanceBrandMappingDetail />}
                 />
             </Route>
 
