@@ -13,6 +13,7 @@ import MobileBrandMaster from "./pages/admin/MobileBrandMaster";
 import BankMaster from "./pages/admin/BankMaster";
 import FinanceMachineMaster from "./pages/admin/FinanceMachineMaster";
 import StateMaster from "./pages/admin/StateMaster";
+import SupportMaster from "./pages/admin/SupportMaster";
 import ProductTypeMaster from "./pages/admin/ProductTypeMaster";
 import ItemModelMaster from "./pages/admin/ItemModelMaster";
 import ModelGroupMaster from "./pages/admin/ModelGroupMaster";
@@ -22,6 +23,7 @@ import CreateBranch from "./pages/admin/CreateBranch";
 import BranchFinanceCode from "./pages/admin/BranchFinanceCode";
 import ActivityReport from "./pages/admin/ActivityReport";
 import Offers from "./pages/admin/Offers";
+import Home from "./pages/admin/Home";
 import OfferForm from "./pages/admin/OfferForm";
 import TargetVsAchievement from "./pages/admin/TargetVsAchievement";
 import ABMWiseTvAReport from "./pages/admin/ABMWiseTvAReport";
@@ -72,8 +74,16 @@ export default function AppRoutes() {
 
             <Route element={<ProtectedRoute allowedRole="admin" />}>
                 <Route
+                    path="/admin/home"
+                    element={<Home />}
+                />
+                <Route
                     path="/admin/offers"
-                    element={<Offers />}
+                    element={<Offers showExpired={false} />}
+                />
+                <Route
+                    path="/admin/offers/expired"
+                    element={<Offers showExpired={true} />}
                 />
                 <Route
                     path="/admin/offers/create"
@@ -177,6 +187,13 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/states"
                     element={<StateMaster />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="support_master" requiredAction="read" />}>
+                <Route
+                    path="/admin/support"
+                    element={<SupportMaster />}
                 />
             </Route>
 

@@ -169,7 +169,7 @@ const getOfferById = async (id) => {
         WHERE offer_id = ?
     `;
     const [txRows] = await db.execute(txQuery, [id]);
-    
+
     return {
         ...offerRows[0],
         model_groups,
