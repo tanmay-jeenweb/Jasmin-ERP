@@ -214,80 +214,100 @@ export default function FinanceBrandReport() {
               <div className="overflow-x-auto max-h-[70vh] no-scrollbar">
                 <table className="min-w-full border-separate border-spacing-0">
                   <thead className="sticky top-0 z-20">
-                    <tr className="bg-blue-900 text-white">
-                      <th className="px-4 py-3 border-b border-r border-blue-800 text-left text-xs font-bold uppercase tracking-wider sticky left-0 z-30 bg-blue-900" rowSpan={2}>
+                    <tr className="bg-blue-900 text-white h-9">
+                      <th className="px-4 border-b border-r border-slate-800 text-left text-xs font-semibold uppercase tracking-wider sticky left-0 z-30 bg-blue-900 align-middle" rowSpan={2}>
                         Sr.No.
                       </th>
-                      <th className="px-4 py-3 border-b border-r border-blue-800 text-left text-xs font-bold uppercase tracking-wider sticky left-[55px] z-30 bg-blue-900 min-w-[200px]" rowSpan={2}>
+                      <th className="px-4 border-b border-r border-slate-800 text-left text-xs font-semibold uppercase tracking-wider sticky left-[55px] z-30 bg-blue-900 min-w-[200px] align-middle" rowSpan={2}>
                         Branch Name
                       </th>
-                      <th className="px-4 py-2 border-b border-r border-blue-800 text-center text-xs font-bold uppercase tracking-wider" colSpan={brands.length}>
+                      <th className="px-4 border-b border-r border-slate-800 text-center text-xs font-semibold uppercase tracking-wider align-middle" colSpan={brands.length}>
                         Brand Code
                       </th>
-                      <th className="px-4 py-3 border-b border-r border-blue-800 text-center text-xs font-bold uppercase tracking-wider min-w-[220px]" rowSpan={2}>
+                      <th className="px-4 border-b border-r border-slate-800 text-center text-xs font-semibold uppercase tracking-wider min-w-[220px] align-middle" rowSpan={2}>
                         QR CODE ID & PASSWORD
                       </th>
                       {machines.map(m => (
-                        <th key={m.id} className="px-4 py-2 border-b border-r border-blue-800 text-center text-xs font-bold uppercase tracking-wider" colSpan={3}>
+                        <th key={m.id} className="px-4 border-b border-r border-slate-800 text-center text-xs font-semibold uppercase tracking-wider align-middle" colSpan={3}>
                           {m.machine_name}
                         </th>
                       ))}
-                      <th className="px-4 py-2 border-b border-r border-blue-800 text-center text-xs font-bold uppercase tracking-wider" colSpan={companies.length}>
+                      <th className="px-4 border-b border-r border-slate-800 text-center text-xs font-semibold uppercase tracking-wider align-middle" colSpan={companies.length}>
                         Finance Code
                       </th>
-                      <th className="px-4 py-3 border-b border-blue-800 text-center text-xs font-bold uppercase tracking-wider min-w-[250px]" rowSpan={2}>
+                      <th className="px-4 border-b border-blue-700 text-center text-xs font-semibold uppercase tracking-wider min-w-[250px] align-middle" rowSpan={2}>
                         Remarks
                       </th>
                     </tr>
-                    <tr className="bg-blue-850 text-white text-[11px]">
+                    <tr className="bg-blue-700 text-white text-[11px] h-8">
                       {/* Brand names */}
-                      {brands.map(brand => (
-                        <th key={brand.id} className="px-3 py-2 border-b border-r border-blue-850 text-center font-bold min-w-[120px] bg-blue-950">
-                          {brand.mobile_brand}
-                        </th>
-                      ))}
+                      {brands.map((brand, bIdx) => {
+                        const isLastBrand = bIdx === brands.length - 1;
+                        return (
+                          <th
+                            key={brand.id}
+                            className={`px-3 border-b text-center font-semibold min-w-[120px] bg-blue-700 align-middle ${
+                              isLastBrand ? 'border-r border-slate-800' : 'border-r border-blue-700'
+                            }`}
+                          >
+                            {brand.mobile_brand}
+                          </th>
+                        );
+                      })}
                       {/* Machine columns */}
                       {machines.map(m => (
                         <Fragment key={m.id}>
-                          <th className="px-3 py-2 border-b border-r border-blue-850 text-center font-bold min-w-[90px] bg-blue-950">TID</th>
-                          <th className="px-3 py-2 border-b border-r border-blue-850 text-center font-bold min-w-[90px] bg-blue-950">POS ID</th>
-                          <th className="px-3 py-2 border-b border-r border-blue-850 text-center font-bold min-w-[90px] bg-blue-950">Serial NO</th>
+                          <th className="px-3 border-b border-r border-blue-700 text-center font-semibold min-w-[90px] bg-blue-700 align-middle">TID</th>
+                          <th className="px-3 border-b border-r border-blue-700 text-center font-semibold min-w-[90px] bg-blue-700 align-middle">POS ID</th>
+                          <th className="px-3 border-b border-r border-slate-800 text-center font-semibold min-w-[90px] bg-blue-700 align-middle">Serial NO</th>
                         </Fragment>
                       ))}
                       {/* Finance Company names */}
-                      {companies.map(company => (
-                        <th key={company.id} className="px-3 py-2 border-b border-r border-blue-850 text-center font-bold min-w-[130px] bg-blue-950">
-                          {company.bank_card_name}
-                        </th>
-                      ))}
+                      {companies.map((company, cIdx) => {
+                        const isLastCompany = cIdx === companies.length - 1;
+                        return (
+                          <th
+                            key={company.id}
+                            className={`px-3 border-b text-center font-semibold min-w-[130px] bg-blue-700 align-middle ${
+                              isLastCompany ? 'border-r border-slate-800' : 'border-r border-blue-700'
+                            }`}
+                          >
+                            {company.bank_card_name}
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredRows.map((row, idx) => (
                       <tr key={row.branch_id} className="hover:bg-slate-50/50 transition-colors duration-100">
-                        <td className="px-4 py-3 border-r border-slate-200 text-slate-500 font-semibold text-center sticky left-0 z-10 bg-white">
+                        <td className="px-4 py-3 border-r border-slate-400 text-slate-500 font-semibold text-center sticky left-0 z-10 bg-white">
                           {idx + 1}
                         </td>
-                        <td className="px-4 py-3 border-r border-slate-200 font-semibold text-slate-800 sticky left-[55px] z-10 bg-white min-w-[200px]">
+                        <td className="px-4 py-3 border-r border-slate-400 font-semibold text-slate-800 sticky left-[55px] z-10 bg-white min-w-[200px]">
                           {row.branch_name}
                         </td>
                         {/* Brand Code values */}
-                        {brands.map(brand => {
+                        {brands.map((brand, bIdx) => {
                           const code = row.brand_codes[brand.id];
                           const isMapped = row.mapped_brands.includes(brand.id);
+                          const isLastBrand = bIdx === brands.length - 1;
                           return (
                             <td
                               key={brand.id}
                               style={isMapped ? { backgroundColor: '#008000', color: '#ffffff' } : {}}
-                              className={`px-3 py-3 border-r border-slate-100 text-center align-middle font-semibold text-xs ${isMapped ? "" : "text-slate-600 bg-white"
-                                }`}
+                              className={`px-3 py-3 text-center align-middle font-semibold text-xs ${
+                                isMapped ? "" : "text-slate-600 bg-white"
+                              } ${
+                                isLastBrand ? 'border-r border-slate-400' : 'border-r border-slate-100'
+                              }`}
                             >
                               {code || "—"}
                             </td>
                           );
                         })}
                         {/* QR Code */}
-                        <td className="px-4 py-3 border-r border-slate-100 text-center text-slate-700 font-mono text-xs bg-white min-w-[220px]">
+                        <td className="px-4 py-3 border-r border-slate-400 text-center text-slate-700 font-mono text-xs bg-white min-w-[220px]">
                           {row.qr_code_id_password || "—"}
                         </td>
                         {/* Machine Details values */}
@@ -297,20 +317,24 @@ export default function FinanceBrandReport() {
                             <Fragment key={m.id}>
                               <td className="px-3 py-3 border-r border-slate-100 text-center text-slate-650 text-xs bg-white">{mDet.tid || "—"}</td>
                               <td className="px-3 py-3 border-r border-slate-100 text-center text-slate-650 text-xs bg-white">{mDet.pos_id || "—"}</td>
-                              <td className="px-3 py-3 border-r border-slate-100 text-center text-slate-650 text-xs bg-white">{mDet.serial_no || "—"}</td>
+                              <td className="px-3 py-3 border-r border-slate-400 text-center text-slate-650 text-xs bg-white">{mDet.serial_no || "—"}</td>
                             </Fragment>
                           );
                         })}
                         {/* Finance Code values */}
-                        {companies.map(company => {
+                        {companies.map((company, cIdx) => {
                           const code = row.company_codes[company.id];
                           const isMapped = row.mapped_companies.includes(company.id);
+                          const isLastCompany = cIdx === companies.length - 1;
                           return (
                             <td
                               key={company.id}
                               style={isMapped ? { backgroundColor: '#008000', color: '#ffffff' } : {}}
-                              className={`px-3 py-3 border-r border-slate-100 text-center align-middle font-semibold text-xs ${isMapped ? "" : "text-slate-600 bg-white"
-                                }`}
+                              className={`px-3 py-3 text-center align-middle font-semibold text-xs ${
+                                isMapped ? "" : "text-slate-600 bg-white"
+                              } ${
+                                isLastCompany ? 'border-r border-slate-400' : 'border-r border-slate-100'
+                              }`}
                             >
                               {code || "—"}
                             </td>
