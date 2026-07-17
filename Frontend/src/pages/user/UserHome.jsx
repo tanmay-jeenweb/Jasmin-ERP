@@ -31,9 +31,9 @@ export default function UserHome() {
     });
     const [brandSyncing, setBrandSyncing] = useState(false);
 
-    const loadBrandSalesData = async (date) => {
+    const loadBrandSalesData = async (date, state = "All") => {
         try {
-            const res = await getBrandWiseSales(date);
+            const res = await getBrandWiseSales(date, state);
             setBrandSalesData(res.data?.data || []);
         } catch (err) {
             console.error("Failed to load brand wise sales:", err);
@@ -64,7 +64,7 @@ export default function UserHome() {
             setStates(statesRes.data.data || []);
             setTargetData(targetRes.data.data || []);
             setBrandsList(brandsRes.data.data || []);
-            await loadBrandSalesData(brandSyncDate);
+            await loadBrandSalesData(brandSyncDate, selectedState);
         } catch (err) {
             console.error("Failed to load dashboard data:", err);
             toast.error("Failed to load dashboard data");
@@ -79,9 +79,9 @@ export default function UserHome() {
 
     useEffect(() => {
         if (brandSyncDate) {
-            loadBrandSalesData(brandSyncDate);
+            loadBrandSalesData(brandSyncDate, selectedState);
         }
-    }, [brandSyncDate]);
+    }, [brandSyncDate, selectedState]);
 
     // Get list of states that actually have data in the report as fallback/helper
     const activeStates = useMemo(() => {
@@ -89,7 +89,7 @@ export default function UserHome() {
             .map(r => r.state_name)
             .filter(name => name && name !== "—");
         const uniqueReportStates = Array.from(new Set(reportStates));
-        
+
         // Merge with all states from database to be comprehensive
         const dbStates = states.map(s => s.name);
         const combined = Array.from(new Set([...uniqueReportStates, ...dbStates]));
@@ -99,7 +99,7 @@ export default function UserHome() {
     // Group data by ABM Wise Cash Deposit
     const abmSummary = useMemo(() => {
         const summary = {};
-        
+
         data.forEach(item => {
             // Apply State Filter
             if (selectedState !== "All" && item.state_name !== selectedState) {
@@ -540,7 +540,7 @@ export default function UserHome() {
         {
             key: "mtd_value_ach",
             label: "MTD Value",
-            minWidth: "130px",
+            minWidth: "170px",
             render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "font-semibold text-blue-700"}>{formatValueVal(row.mtd_value_ach)}</span>
         },
         {
@@ -552,7 +552,7 @@ export default function UserHome() {
         {
             key: "lmtd_value_ach",
             label: "LMTD Value",
-            minWidth: "130px",
+            minWidth: "170px",
             render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "font-medium text-slate-600"}>{formatValueVal(row.lmtd_value_ach)}</span>
         },
         {
@@ -591,11 +591,7 @@ export default function UserHome() {
     const filtersElement = (
         <div className="flex flex-wrap items-center gap-3">
             <label className="text-sm font-semibold text-slate-600 flex items-center gap-1.5 whitespace-nowrap">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-[#6804a1]">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581a1.44 1.44 0 0 0 2.037 0l4.318-4.317a1.44 1.44 0 0 0 0-2.037L10.06 3.66a2.25 2.25 0 0 0-1.591-.659Z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12.75 7.5h.008v.008h-.008V7.5Z" />
-                </svg>
-                Filter by State:
+                State:
             </label>
             <select
                 value={selectedState}
@@ -624,14 +620,29 @@ export default function UserHome() {
 
     // Filters/sync elements for Brand Wise Sales tab
     const brandSyncElement = (
-        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-lg px-2 h-10">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Sync Date</span>
-            <input
-                type="date"
-                value={brandSyncDate}
-                onChange={(e) => setBrandSyncDate(e.target.value)}
-                className="bg-transparent border-none text-sm text-slate-700 font-medium focus:outline-none cursor-pointer"
-            />
+        <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-lg px-2 h-10">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Sync Date</span>
+                <input
+                    type="date"
+                    value={brandSyncDate}
+                    onChange={(e) => setBrandSyncDate(e.target.value)}
+                    className="bg-transparent border-none text-sm text-slate-700 font-medium focus:outline-none cursor-pointer"
+                />
+            </div>
+            <label className="text-sm font-semibold text-slate-600 flex items-center gap-1.5 whitespace-nowrap">
+                State:
+            </label>
+            <select
+                value={selectedState}
+                onChange={(e) => setSelectedState(e.target.value)}
+                className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-700 outline-none focus:border-[#6804a1] focus:ring-1 focus:ring-[#6804a1] shadow-sm transition-all duration-150 cursor-pointer min-w-[150px]"
+            >
+                <option value="All">All States</option>
+                {activeStates.map(state => (
+                    <option key={state} value={state}>{state}</option>
+                ))}
+            </select>
         </div>
     );
 
