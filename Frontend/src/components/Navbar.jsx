@@ -251,29 +251,38 @@ export default function Navbar() {
                 </div>
 
                 {/* Continuous Horizontal Scrolling Banner */}
-                <div className="flex-1 max-w-xs md:max-w-lg lg:max-w-2xl xl:max-w-3xl overflow-hidden relative py-1.5 px-4  rounded-full flex items-center ">
-                    <style>{`
-                        @keyframes marquee-scroll {
-                            0% { transform: translate3d(0, 0, 0); }
-                            100% { transform: translate3d(-50%, 0, 0); }
-                        }
-                        .marquee-container {
-                            display: flex;
-                            white-space: nowrap;
-                            width: max-content;
-                            animation: marquee-scroll 35s linear infinite;
-                            will-change: transform;
-                        }
-                        .marquee-container:hover {
-                            animation-play-state: paused;
-                        }
-                    `}</style>
-                    <div className="marquee-container flex gap-16 text-[12px] font-bold text-indigo-800">
-                        <span>{marqueeText}</span>
-                        <span> :: :: :: OFFERS 📢──★ </span>
-                        <span>{marqueeText}</span>
+                {runningOffers.length > 0 && (
+                    <div className="flex-1 max-w-xs md:max-w-lg lg:max-w-2xl xl:max-w-3xl overflow-hidden relative py-1.5 px-4 rounded-full flex items-center">
+                        <style>{`
+                            @keyframes marquee-scroll {
+                                0% { transform: translate3d(0, 0, 0); }
+                                100% { transform: translate3d(-50%, 0, 0); }
+                            }
+                            .marquee-container {
+                                display: flex;
+                                white-space: nowrap;
+                                width: max-content;
+                                animation: marquee-scroll 35s linear infinite;
+                                will-change: transform;
+                            }
+                            .marquee-container:hover {
+                                animation-play-state: paused;
+                            }
+                            .marquee-item {
+                                padding-right: 4rem;
+                            }
+                        `}</style>
+                        {(() => {
+                            const singleUnit = `${marqueeText}   :: :: :: OFFERS 📢──★`;
+                            return (
+                                <div className="marquee-container text-[12px] font-bold text-indigo-800">
+                                    <span className="marquee-item">{singleUnit}</span>
+                                    <span className="marquee-item">{singleUnit}</span>
+                                </div>
+                            );
+                        })()}
                     </div>
-                </div>
+                )}
 
                 <div className="flex items-center gap-6 shrink-0">
 
