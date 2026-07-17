@@ -8,9 +8,11 @@
   --color-indigo-200: #bcccdc;
   --color-indigo-300: #9fb3c8;
   --color-indigo-400: #829ab1;
-  --color-indigo-50: #e6ebf0; /* Map light shade if needed */
+  --color-indigo-50: #e6ebf0;
+  /* Map light shade if needed */
   --color-indigo-500: #7a05bd;
-  --color-indigo-600: #6804a1; /* Target primary brand color */
+  --color-indigo-600: #6804a1;
+  /* Target primary brand color */
   --color-indigo-650: #6804a1;
   --color-indigo-655: #6804a1;
   --color-indigo-700: #52037e;
@@ -28,10 +30,15 @@
   --color-blue-600: #6804a1;
   --color-blue-700: #52037e;
   --color-blue-800: #3c025d;
-  --color-blue-900: #6804a1; /* Target header/pagination color */
+  --color-blue-900: #6804a1;
+  /* Target header/pagination color */
 }
 
 /* Login page: white placeholder text for glass inputs */
 .login-input::placeholder {
-    color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
 }

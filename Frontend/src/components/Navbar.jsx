@@ -12,6 +12,7 @@ export default function Navbar() {
     const [isOpen, setIsOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [isReportsOpen, setIsReportsOpen] = useState(false);
+    const [isOffersOpen, setIsOffersOpen] = useState(false);
     const { hasPermission } = usePermission();
 
     useEffect(() => {
@@ -25,10 +26,13 @@ export default function Navbar() {
             if (isReportsOpen && !e.target.closest("#reports-dropdown")) {
                 setIsReportsOpen(false);
             }
+            if (isOffersOpen && !e.target.closest("#offers-dropdown")) {
+                setIsOffersOpen(false);
+            }
         };
         document.addEventListener("click", handleOutsideClick);
         return () => document.removeEventListener("click", handleOutsideClick);
-    }, [isOpen, isProfileOpen, isReportsOpen]);
+    }, [isOpen, isProfileOpen, isReportsOpen, isOffersOpen]);
 
     const handleLogout = async () => {
         try {
@@ -291,6 +295,23 @@ export default function Navbar() {
                             </button>
                         </div>
 
+                        {/* Admin Home Tab */}
+                        {isAdmin && (
+                            <div className="relative">
+                                <button
+                                    onClick={() => {
+                                        navigate("/admin/home");
+                                    }}
+                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname === "/admin/home" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                        }`}
+                                >
+                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                        <span className="font-semibold text-white truncate">Home</span>
+                                    </span>
+                                </button>
+                            </div>
+                        )}
+
                         {/* Masters Dropdown */}
                         {availableMasters.length > 0 && (
                             <div className="relative">
@@ -355,31 +376,90 @@ export default function Navbar() {
                             </div>
                         )}
 
-                        {/* Offers Tab */}
+                        {/* Offers Dropdown */}
                         {isAdmin && (
-                            <div className="relative">
+                            <div className="relative" id="offers-dropdown">
                                 <button
-                                    onClick={() => {
-                                        navigate("/admin/offers");
-                                    }}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname.startsWith("/admin/offers") ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                    onClick={() => setIsOffersOpen(!isOffersOpen)}
+                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isOffersOpen || location.pathname.startsWith("/admin/offers")
+                                        ? "bg-white/15"
+                                        : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
                                 >
                                     <span className="flex items-center gap-2.5 truncate mx-auto">
                                         <span className="font-semibold text-white truncate">Offers</span>
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            strokeWidth={2.5}
+                                            stroke="currentColor"
+                                            className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-200 ${isOffersOpen ? "rotate-180 text-white" : ""}`}
+                                        >
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                                        </svg>
                                     </span>
                                 </button>
+
+                                {isOffersOpen && (
+                                    <div className="absolute left-0 top-full mt-1.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <div className="flex flex-col gap-1">
+                                            {[
+                                                {
+                                                    name: "Offers",
+                                                    path: "/admin/offers",
+                                                    icon: "fa-solid fa-gift",
+                                                },
+                                                {
+                                                    name: "Expired Offers",
+                                                    path: "/admin/offers/expired",
+                                                    icon: "fa-solid fa-calendar-xmark",
+                                                }
+                                            ].map((o, idx) => {
+                                                const isActive = location.pathname === o.path;
+                                                return (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => {
+                                                            navigate(o.path);
+                                                            setIsOffersOpen(false);
+                                                        }}
+                                                        className={`relative group flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border border-transparent ${isActive
+                                                            ? "bg-indigo-50/70 text-indigo-700 font-semibold border-indigo-100/50"
+                                                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
+                                                            }`}
+                                                    >
+                                                        {/* Side Highlight Bar */}
+                                                        <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${isActive ? "bg-indigo-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"
+                                                            }`} />
+
+                                                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${isActive ? "bg-indigo-100/80 text-indigo-700" : "bg-slate-100/80 text-slate-500 group-hover:scale-105"
+                                                            }`}>
+                                                            <i className={`${o.icon} text-xs`}></i>
+                                                        </div>
+
+                                                        <div className="flex-1">
+                                                            <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-indigo-900 font-bold" : "text-slate-800 group-hover:text-slate-950"
+                                                                }`}>
+                                                                {o.name}
+                                                            </p>
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
-
                         {/* Reports Dropdown */}
                         {isAdmin && (
                             <div className="relative" id="reports-dropdown">
                                 <button
                                     onClick={() => setIsReportsOpen(!isReportsOpen)}
                                     className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/stock-vs-cash-deposit")
-                                            ? "bg-white/15"
-                                            : "bg-[#6804a1] hover:bg-white/5"
+                                        ? "bg-white/15"
+                                        : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
                                 >
                                     <span className="flex items-center gap-2.5 truncate mx-auto">

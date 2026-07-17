@@ -12,7 +12,7 @@ const formatDate = (dateStr) => {
   return `${day}/${month}/${year}`;
 };
 
-export default function Offers({ showExpired = false }) {
+export default function Home() {
   const navigate = useNavigate();
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -30,10 +30,9 @@ export default function Offers({ showExpired = false }) {
       const todayStr = new Date().toLocaleDateString('en-CA');
       
       const filtered = allOffers.filter(o => {
-        if (!o.to_date) return !showExpired;
+        if (!o.to_date) return false; // expired must have an end date in the past
         const offerDateStr = o.to_date.substring(0, 10);
-        const isExpired = offerDateStr < todayStr;
-        return showExpired ? isExpired : !isExpired;
+        return offerDateStr < todayStr;
       });
       
       setOffers(filtered);
@@ -47,7 +46,7 @@ export default function Offers({ showExpired = false }) {
 
   useEffect(() => {
     loadOffers();
-  }, [showExpired]);
+  }, []);
 
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this offer? This will delete all its transaction rules as well.")) return;
@@ -151,25 +150,12 @@ export default function Offers({ showExpired = false }) {
           </div>
         )}
         <DataTable
-          tableId={showExpired ? "expired_offers_master" : "offers_master"}
-          title={showExpired ? "Expired Offers" : "Offers"}
+          tableId="expired_offers_dashboard"
+          title="Expired Offers"
           data={offers}
           columns={columns}
           loading={loading}
-          searchPlaceholder={showExpired ? "Search expired offers..." : "Search offers..."}
-          actionButton={
-            !showExpired && (
-              <button
-                onClick={() => navigate("/admin/offers/create")}
-                className="flex w-10 h-10 items-center justify-center rounded-[9px] bg-gradient-to-br from-indigo-650 to-indigo-755 text-white border-none cursor-pointer shadow-[0_2px_8px_rgba(104,4,161,0.35)] hover:opacity-95 transition-opacity"
-                title="Create Offer"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-[18px] h-[18px]">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-              </button>
-            )
-          }
+          searchPlaceholder="Search expired offers..."
         />
       </main>
     </div>

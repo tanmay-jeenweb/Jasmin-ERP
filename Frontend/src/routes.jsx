@@ -23,6 +23,7 @@ import CreateBranch from "./pages/admin/CreateBranch";
 import BranchFinanceCode from "./pages/admin/BranchFinanceCode";
 import ActivityReport from "./pages/admin/ActivityReport";
 import Offers from "./pages/admin/Offers";
+import Home from "./pages/admin/Home";
 import OfferForm from "./pages/admin/OfferForm";
 import TargetVsAchievement from "./pages/admin/TargetVsAchievement";
 import StockVsCashDepositReport from "./pages/admin/StockVsCashDepositReport";
@@ -69,8 +70,16 @@ export default function AppRoutes() {
 
             <Route element={<ProtectedRoute allowedRole="admin" />}>
                 <Route
+                    path="/admin/home"
+                    element={<Home />}
+                />
+                <Route
                     path="/admin/offers"
-                    element={<Offers />}
+                    element={<Offers showExpired={false} />}
+                />
+                <Route
+                    path="/admin/offers/expired"
+                    element={<Offers showExpired={true} />}
                 />
                 <Route
                     path="/admin/offers/create"
