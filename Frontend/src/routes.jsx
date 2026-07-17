@@ -94,6 +94,9 @@ export default function AppRoutes() {
                     path="/admin/offers/edit/:id"
                     element={<OfferForm />}
                 />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="alert_master" requiredAction="read" />}>
                 <Route
                     path="/admin/alerts"
                     element={<AlertMaster />}
