@@ -46,6 +46,7 @@ const abmBranchMappingRoutes = require("./routes/abmBranchMappingRoutes.js");
 const brandWiseSalesRoutes = require("./routes/brandWiseSalesRoutes.js");
 const { createBranchBrandFinanceMappingTable } = require("./models/branchBrandFinanceMappingModel.js");
 const branchBrandFinanceMappingRoutes = require("./routes/branchBrandFinanceMappingRoutes.js");
+const branchBrandFinanceReportRoutes = require("./routes/branchBrandFinanceReportRoutes.js");
 
 
 const app = express();
@@ -105,6 +106,7 @@ app.use(["/api/stock-cash-deposit", "/stock-cash-deposit"], stockCashDepositRout
 app.use(["/api/abm-branch-mappings", "/abm-branch-mappings"], abmBranchMappingRoutes);
 app.use(["/api/brand-wise-sales", "/brand-wise-sales"], brandWiseSalesRoutes);
 app.use(["/api/branch-brand-finance-mapping", "/branch-brand-finance-mapping"], branchBrandFinanceMappingRoutes);
+app.use(["/api/reports", "/reports"], branchBrandFinanceReportRoutes);
 
 
 // Global 404 handler
