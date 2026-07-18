@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import { getVariations, deleteVariation } from "../../api/variationApi";
 import { getBranches } from "../../api/branchApi";
+import { getDistinctBrands, getItemModels } from "../../api/itemModelApi";
 import DataTable from "../../components/DataTable";
 import toast from "react-hot-toast";
 import { usePermission } from "../../context/PermissionContext";
@@ -33,6 +34,8 @@ const mapFormulaForRow = (formula, targetRow) => {
 export default function VariationMasterList() {
   const [variations, setVariations] = useState([]);
   const [branches, setBranches] = useState([]);
+  const [modelBrands, setModelBrands] = useState([]);
+  const [itemModels, setItemModels] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
@@ -66,9 +69,29 @@ export default function VariationMasterList() {
     }
   };
 
+  const loadModelBrands = async () => {
+    try {
+      const response = await getDistinctBrands();
+      setModelBrands(response.data?.data || []);
+    } catch (err) {
+      console.error("Failed to load brands from model master for export", err);
+    }
+  };
+
+  const loadItemModels = async () => {
+    try {
+      const response = await getItemModels();
+      setItemModels(response.data?.data || []);
+    } catch (err) {
+      console.error("Failed to load item models for export", err);
+    }
+  };
+
   useEffect(() => {
     loadVariations();
     loadBranches();
+    loadModelBrands();
+    loadItemModels();
   }, []);
 
   const handleExport = async (row) => {
@@ -76,11 +99,27 @@ export default function VariationMasterList() {
     try {
       toastId = toast.loading("Generating Excel file...");
 
-      const brandList = Array.isArray(row.brands)
-        ? row.brands
-        : typeof row.brands === "string"
-        ? JSON.parse(row.brands)
-        : [];
+      let currentItemModels = itemModels;
+      if (currentItemModels.length === 0) {
+        try {
+          const response = await getItemModels();
+          currentItemModels = response.data?.data || [];
+          setItemModels(currentItemModels);
+        } catch (err) {
+          console.error("Failed to fetch item models in export fallback", err);
+        }
+      }
+
+      // Filter active models (or all if active status is not present)
+      const activeModels = currentItemModels.filter(
+        (m) => !m.item_status || String(m.item_status).toLowerCase() === "active"
+      );
+
+      if (activeModels.length === 0) {
+        toast.dismiss(toastId);
+        toast.error("No active item models found to export. Please sync Model Master.");
+        return;
+      }
 
       const columnsList = Array.isArray(row.columns)
         ? row.columns
@@ -88,29 +127,24 @@ export default function VariationMasterList() {
         ? JSON.parse(row.columns)
         : [];
 
-      // Filter branches by state matching the variation rule state
-      const filteredBranches = branches.filter(
-        (b) => b.state_id === row.state_id && b.status === "active"
-      );
-
-      if (filteredBranches.length === 0) {
-        toast.dismiss(toastId);
-        toast.error("No active branches found for this state.");
-        return;
-      }
+      const brandConfigsList = Array.isArray(row.brand_configs)
+        ? row.brand_configs
+        : typeof row.brand_configs === "string"
+        ? JSON.parse(row.brand_configs)
+        : [];
 
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Variation Sheet", {
         views: [{ showGridLines: true }]
       });
 
-      // 5 Fixed Columns
+      // 5 Fixed Columns: Product Code, Brand, ICAT Name, Model Group Name, Model
       const excelColumns = [
-        { header: "Month", key: "month", width: 15 },
-        { header: "Branch Code", key: "branch_code", width: 15 },
-        { header: "Branch Name", key: "branch_name", width: 25 },
-        { header: "State", key: "state", width: 15 },
-        { header: "Brand", key: "brand", width: 15 }
+        { header: "Product Code", key: "product_code", width: 18 },
+        { header: "Brand", key: "brand", width: 18 },
+        { header: "ICAT Name", key: "icat_name", width: 25 },
+        { header: "Model Group Name", key: "model_group_name", width: 25 },
+        { header: "Model", key: "model", width: 25 }
       ];
 
       // Variable Columns
@@ -124,31 +158,38 @@ export default function VariationMasterList() {
 
       worksheet.columns = excelColumns;
 
-      const monthYear = new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
-
       let currentRowNum = 2; // Data starts on row 2 (row 1 is header)
-      filteredBranches.forEach((branch) => {
-        brandList.forEach((brand) => {
-          const rowData = {
-            month: monthYear,
-            branch_code: branch.code || "",
-            branch_name: branch.name || "",
-            state: branch.state_name || row.state_name || "",
-            brand: brand
-          };
+      activeModels.forEach((modelItem) => {
+        const brand = modelItem.brand_name || "";
+        const rowData = {
+          product_code: modelItem.item_code || "",
+          brand: brand,
+          icat_name: modelItem.icat_name || "",
+          model_group_name: modelItem.model_group_name || "",
+          model: modelItem.model_name || ""
+        };
 
-          columnsList.forEach((col) => {
-            if (col.type === "formulation" && col.formula) {
-              const mappedFormula = mapFormulaForRow(col.formula, currentRowNum);
+        columnsList.forEach((col) => {
+          const isFormulation = col.type === "formulation" || col.type === "default formulation";
+          if (isFormulation) {
+            // Find brand-specific formula override if it exists
+            const override = brandConfigsList.find((cfg) => Array.isArray(cfg.brands) && cfg.brands.includes(brand));
+            const overrideCol = override?.columns?.find((c) => c.column_id === col.column_id);
+            const formulaToUse = (overrideCol && overrideCol.formula) ? overrideCol.formula : col.formula;
+
+            if (formulaToUse) {
+              const mappedFormula = mapFormulaForRow(formulaToUse, currentRowNum);
               rowData[col.column_id] = { formula: mappedFormula };
             } else {
               rowData[col.column_id] = "";
             }
-          });
-
-          worksheet.addRow(rowData);
-          currentRowNum++;
+          } else {
+            rowData[col.column_id] = "";
+          }
         });
+
+        worksheet.addRow(rowData);
+        currentRowNum++;
       });
 
       // Style Header
@@ -238,23 +279,47 @@ export default function VariationMasterList() {
         render: (row) => <span className="font-bold text-slate-800">{row.state_name || "N/A"}</span>
       },
       {
-        key: "brands",
-        label: "Brands",
-        minWidth: "220px",
+        key: "format_name",
+        label: "Format Name",
         render: (row) => {
+          if (row.format_name) {
+            return <span className="font-bold text-slate-800">{row.format_name}</span>;
+          }
+          // Support old style rules displaying brands
           const brandList = Array.isArray(row.brands)
             ? row.brands
             : typeof row.brands === "string"
             ? JSON.parse(row.brands)
             : [];
           return (
-            <div className="flex flex-wrap gap-1 max-w-[300px]">
-              {brandList.map((brand, idx) => (
+            <span className="text-slate-500 italic text-xs">
+              Old Style ({brandList.join(", ")})
+            </span>
+          );
+        }
+      },
+      {
+        key: "brand_configs",
+        label: "Brand-wise Overrides",
+        minWidth: "200px",
+        render: (row) => {
+          const configs = Array.isArray(row.brand_configs)
+            ? row.brand_configs
+            : typeof row.brand_configs === "string"
+            ? JSON.parse(row.brand_configs)
+            : [];
+          if (configs.length === 0) {
+            return <span className="text-slate-400 text-xs font-semibold">None (Uses Default)</span>;
+          }
+          const overriddenBrands = configs.flatMap((cfg) => cfg.brands || []);
+          return (
+            <div className="flex flex-wrap gap-1 max-w-[250px]">
+              {overriddenBrands.map((b, idx) => (
                 <span
                   key={idx}
-                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-150"
+                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-150"
                 >
-                  {brand}
+                  {b}
                 </span>
               ))}
             </div>
@@ -372,7 +437,7 @@ export default function VariationMasterList() {
     });
 
     return cols;
-  }, [hasPermission, navigate, branches, handleExport]);
+  }, [hasPermission, navigate, itemModels, handleExport]);
 
   return (
     <div className="flex flex-col flex-1 bg-slate-50 font-sans">

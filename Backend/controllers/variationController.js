@@ -9,15 +9,15 @@ const { createAuditLog } = require('../models/auditLogModel.js');
 
 const addVariationController = async (req, res) => {
     try {
-        const { stateId, brands, columns } = req.body;
+        const { stateId, formatName, columns, brandConfigs } = req.body;
         const addedBy = req.user.id;
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
 
         if (!stateId) {
             return res.status(400).json({ success: false, message: 'State is required' });
         }
-        if (!brands || !Array.isArray(brands) || brands.length === 0) {
-            return res.status(400).json({ success: false, message: 'At least one Brand is required' });
+        if (!formatName || !formatName.trim()) {
+            return res.status(400).json({ success: false, message: 'Format Name is required' });
         }
         if (!columns || !Array.isArray(columns) || columns.length === 0) {
             return res.status(400).json({ success: false, message: 'At least one Column definition is required' });
@@ -28,21 +28,42 @@ const addVariationController = async (req, res) => {
             if (!col.column_id || !col.column_name || !col.column_name.trim()) {
                 return res.status(400).json({ success: false, message: 'Column ID and Name are required for all columns' });
             }
-            if (!['user input', 'formulation'].includes(col.type)) {
-                return res.status(400).json({ success: false, message: 'Invalid column type: must be "user input" or "formulation"' });
+            if (!['user input', 'formulation', 'default formulation'].includes(col.type)) {
+                return res.status(400).json({ success: false, message: 'Invalid column type: must be "user input" or "default formulation"' });
             }
-            if (col.type === 'formulation' && (!col.formula || !col.formula.trim())) {
+            if ((col.type === 'formulation' || col.type === 'default formulation') && (!col.formula || !col.formula.trim())) {
                 return res.status(400).json({ success: false, message: 'Formula is required when column type is formulation' });
             }
         }
 
-        const result = await createVariation(stateId, brands, columns, addedBy, deviceId);
+        // Validate brand configurations
+        if (brandConfigs) {
+            if (!Array.isArray(brandConfigs)) {
+                return res.status(400).json({ success: false, message: 'Brand configurations must be an array' });
+            }
+            for (const cfg of brandConfigs) {
+                if (!cfg.brands || !Array.isArray(cfg.brands) || cfg.brands.length === 0) {
+                    return res.status(400).json({ success: false, message: 'Each brand configuration must have at least one brand' });
+                }
+                if (!cfg.columns || !Array.isArray(cfg.columns)) {
+                    return res.status(400).json({ success: false, message: 'Each brand configuration must have a columns array' });
+                }
+                for (const col of cfg.columns) {
+                    if (!col.column_id || !col.formula || !col.formula.trim()) {
+                        return res.status(400).json({ success: false, message: 'Column ID and Formula are required for brand configurations' });
+                    }
+                }
+            }
+        }
+
+        const result = await createVariation(stateId, formatName, columns, brandConfigs, addedBy, deviceId);
 
         const newRecord = {
             id: result.insertId,
             state_id: stateId,
-            brands,
+            format_name: formatName,
             columns,
+            brand_configs: brandConfigs,
             added_by: addedBy,
             device_id: deviceId
         };
@@ -112,14 +133,14 @@ const getVariationByIdController = async (req, res) => {
 const updateVariationController = async (req, res) => {
     try {
         const { id } = req.params;
-        const { stateId, brands, columns } = req.body;
+        const { stateId, formatName, columns, brandConfigs } = req.body;
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
 
         if (!stateId) {
             return res.status(400).json({ success: false, message: 'State is required' });
         }
-        if (!brands || !Array.isArray(brands) || brands.length === 0) {
-            return res.status(400).json({ success: false, message: 'At least one Brand is required' });
+        if (!formatName || !formatName.trim()) {
+            return res.status(400).json({ success: false, message: 'Format Name is required' });
         }
         if (!columns || !Array.isArray(columns) || columns.length === 0) {
             return res.status(400).json({ success: false, message: 'At least one Column definition is required' });
@@ -130,11 +151,31 @@ const updateVariationController = async (req, res) => {
             if (!col.column_id || !col.column_name || !col.column_name.trim()) {
                 return res.status(400).json({ success: false, message: 'Column ID and Name are required for all columns' });
             }
-            if (!['user input', 'formulation'].includes(col.type)) {
-                return res.status(400).json({ success: false, message: 'Invalid column type: must be "user input" or "formulation"' });
+            if (!['user input', 'formulation', 'default formulation'].includes(col.type)) {
+                return res.status(400).json({ success: false, message: 'Invalid column type: must be "user input" or "default formulation"' });
             }
-            if (col.type === 'formulation' && (!col.formula || !col.formula.trim())) {
+            if ((col.type === 'formulation' || col.type === 'default formulation') && (!col.formula || !col.formula.trim())) {
                 return res.status(400).json({ success: false, message: 'Formula is required when column type is formulation' });
+            }
+        }
+
+        // Validate brand configurations
+        if (brandConfigs) {
+            if (!Array.isArray(brandConfigs)) {
+                return res.status(400).json({ success: false, message: 'Brand configurations must be an array' });
+            }
+            for (const cfg of brandConfigs) {
+                if (!cfg.brands || !Array.isArray(cfg.brands) || cfg.brands.length === 0) {
+                    return res.status(400).json({ success: false, message: 'Each brand configuration must have at least one brand' });
+                }
+                if (!cfg.columns || !Array.isArray(cfg.columns)) {
+                    return res.status(400).json({ success: false, message: 'Each brand configuration must have a columns array' });
+                }
+                for (const col of cfg.columns) {
+                    if (!col.column_id || !col.formula || !col.formula.trim()) {
+                        return res.status(400).json({ success: false, message: 'Column ID and Formula are required for brand configurations' });
+                    }
+                }
             }
         }
 
@@ -143,13 +184,14 @@ const updateVariationController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Variation rule not found' });
         }
 
-        await updateVariation(id, stateId, brands, columns);
+        await updateVariation(id, stateId, formatName, columns, brandConfigs);
 
         const afterData = {
             ...beforeData,
             state_id: stateId,
-            brands,
-            columns
+            format_name: formatName,
+            columns,
+            brand_configs: brandConfigs
         };
 
         await createAuditLog(

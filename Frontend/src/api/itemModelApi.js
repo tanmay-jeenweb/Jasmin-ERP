@@ -11,3 +11,7 @@ export const syncItemModels = async () => {
 export const deleteItemModel = async (id) => {
     return apiClient.delete(`/itemmodels/delete/${id}`);
 };
+
+export const getDistinctBrands = async () => {
+    return apiClient.get("/itemmodels/brands");
+};

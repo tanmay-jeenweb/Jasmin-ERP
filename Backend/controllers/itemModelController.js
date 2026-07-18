@@ -2,7 +2,8 @@ const {
     upsertItemModels,
     getAllItemModels,
     deleteItemModel,
-    getItemModelById
+    getItemModelById,
+    getDistinctBrands
 } = require('../models/itemModelModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
 
@@ -138,8 +139,25 @@ const deleteItemModelController = async (req, res) => {
     }
 };
 
+const getDistinctBrandsController = async (req, res) => {
+    try {
+        const brands = await getDistinctBrands();
+        res.status(200).json({
+            success: true,
+            data: brands
+        });
+    } catch (error) {
+        console.error('Error retrieving distinct brands:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+
 module.exports = {
     syncItemModelsController,
     getAllItemModelsController,
-    deleteItemModelController
+    deleteItemModelController,
+    getDistinctBrandsController
 };
