@@ -174,13 +174,13 @@ export default function Navbar() {
             desc: "Manage branches & franchise stores"
         },
         {
-            name: "ABM Branch Mapping",
-            path: "/admin/abm-branch-mappings",
-            masterKey: "abm_branch_mapping",
+            name: "User Branch Mapping",
+            path: "/admin/user-branch-mapping",
+            masterKey: "user_branch_mapping",
             icon: "fa-solid fa-code-merge",
             color: "bg-indigo-50 text-indigo-600 border border-indigo-100/50",
             activeColor: "bg-indigo-100 text-indigo-700",
-            desc: "Map branches to Area Branch Managers"
+            desc: "Map branches to active users"
         }
     ];
 

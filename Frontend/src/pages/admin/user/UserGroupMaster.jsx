@@ -19,7 +19,7 @@ const MASTERS = [
   { key: "item_model_master", label: "Model Master" },
   { key: "model_group_master", label: "Model Group Master" },
   { key: "branch_master", label: "Branch Master" },
-  { key: "abm_branch_mapping", label: "ABM Branch Mapping" },
+  { key: "user_branch_mapping", label: "User Branch Mapping" },
   { key: "support_master", label: "Support Master" },
   { key: "alert_master", label: "Alert Master" },
 ];

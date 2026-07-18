@@ -1,22 +1,23 @@
 import { useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import {
-    getEligibleAbms,
+    getEligibleUsers,
     getActiveBranches,
-    getAllAbmMappings,
-    getAbmMappingById,
-    saveAbmBranchMapping,
-    deleteAbmMapping
-} from "../../api/abmBranchMappingApi";
+    getAllUserMappings,
+    getUserMappingById,
+    saveUserBranchMapping,
+    deleteUserMapping
+} from "../../api/userBranchMappingApi";
 import DataTable from "../../components/DataTable";
 import toast from "react-hot-toast";
 import { usePermission } from "../../context/PermissionContext";
 
 // ─── Modal Component for Adding/Editing Mappings ─────────────────────────
-function AbmBranchMappingModal({ isOpen, mapping, onClose, onSave, saving }) {
-    const [abms, setAbms] = useState([]);
+function UserBranchMappingModal({ isOpen, mapping, onClose, onSave, saving, initialUserId }) {
+    const [users, setUsers] = useState([]);
     const [branches, setBranches] = useState([]);
-    const [selectedAbmId, setSelectedAbmId] = useState("");
+    const [selectedUserId, setSelectedUserId] = useState("");
     const [selectedBranchIds, setSelectedBranchIds] = useState([]);
     const [branchSearch, setBranchSearch] = useState("");
     const [selectedStates, setSelectedStates] = useState([]);
@@ -27,28 +28,28 @@ function AbmBranchMappingModal({ isOpen, mapping, onClose, onSave, saving }) {
 
     useEffect(() => {
         if (isOpen) {
-            // Load ABMs and Branches
+            // Load Users and Branches
             const fetchData = async () => {
                 try {
-                    const abmsRes = await getEligibleAbms();
-                    setAbms(abmsRes.data?.data || []);
+                    const usersRes = await getEligibleUsers();
+                    setUsers(usersRes.data?.data || []);
 
                     const branchesRes = await getActiveBranches();
                     setBranches(branchesRes.data?.data || []);
                 } catch (err) {
                     console.error("Error loading dropdown data:", err);
-                    toast.error("Failed to load ABM or Branch dropdown options.");
+                    toast.error("Failed to load User or Branch dropdown options.");
                 }
             };
             fetchData();
 
             // Set initial state for edit/create
             if (mapping) {
-                setSelectedAbmId(mapping.abm_user_id);
+                setSelectedUserId(mapping.user_id);
                 // Load existing mapping details
                 const loadMappingDetails = async () => {
                     try {
-                        const detailsRes = await getAbmMappingById(mapping.abm_user_id);
+                        const detailsRes = await getUserMappingById(mapping.user_id);
                         setSelectedBranchIds(detailsRes.data?.data || []);
                     } catch (err) {
                         console.error("Error loading mapping details:", err);
@@ -57,7 +58,7 @@ function AbmBranchMappingModal({ isOpen, mapping, onClose, onSave, saving }) {
                 };
                 loadMappingDetails();
             } else {
-                setSelectedAbmId("");
+                setSelectedUserId(initialUserId || "");
                 setSelectedBranchIds([]);
             }
             setBranchSearch("");
@@ -126,14 +127,14 @@ function AbmBranchMappingModal({ isOpen, mapping, onClose, onSave, saving }) {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (!selectedAbmId) {
-            toast.error("Please select an ABM User");
+        if (!selectedUserId) {
+            toast.error("Please select a User");
             return;
         }
         onSave({
-            abmUserId: selectedAbmId,
+            userId: selectedUserId,
             branchIds: selectedBranchIds,
-            oldAbmUserId: isEdit ? mapping.abm_user_id : null
+            oldUserId: isEdit ? mapping.user_id : null
         });
     };
 
@@ -143,8 +144,8 @@ function AbmBranchMappingModal({ isOpen, mapping, onClose, onSave, saving }) {
                 {/* Modal Header */}
                 <div className="px-6 py-5 flex items-center justify-between bg-gradient-to-r from-[#6804a1] to-[#8a0cd2] text-white rounded-t-2xl">
                     <div>
-                        <h2 className="m-0 text-lg font-bold">{isEdit ? "Edit ABM Branch Mapping" : "Create ABM Branch Mapping"}</h2>
-                        <p className="mt-1 text-xs text-white/80">{isEdit ? "Update branches mapped to this ABM" : "Map branches to a selected ABM"}</p>
+                        <h2 className="m-0 text-lg font-bold">{isEdit ? "Edit User Branch Mapping" : "Create User Branch Mapping"}</h2>
+                        <p className="mt-1 text-xs text-white/80">{isEdit ? "Update branches mapped to this user" : "Map branches to a selected user"}</p>
                     </div>
                     <button onClick={onClose} className="bg-white/10 hover:bg-white/20 border-none rounded-lg w-8 h-8 cursor-pointer flex items-center justify-center text-white transition-colors">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-[16px] h-[16px]">
@@ -163,7 +164,7 @@ function AbmBranchMappingModal({ isOpen, mapping, onClose, onSave, saving }) {
                                     Map Branches <span className="text-rose-500">*</span>
                                 </label>
                                 <div
-                                    className="w-full min-h-[42px] px-3.5 py-2.5 border border-slate-350 rounded-lg bg-white text-sm cursor-pointer flex justify-between items-center hover:border-slate-400 transition-colors"
+                                    className="w-full min-h-[42px] px-3.5 py-2.5 border border-slate-355 rounded-lg bg-white text-sm cursor-pointer flex justify-between items-center hover:border-slate-400 transition-colors"
                                     onClick={() => {
                                         setIsBranchDropdownOpen(!isBranchDropdownOpen);
                                         setIsStateFilterOpen(false);
@@ -174,7 +175,7 @@ function AbmBranchMappingModal({ isOpen, mapping, onClose, onSave, saving }) {
                                         {getBranchLabel()}
                                     </span>
                                     <svg className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${isBranchDropdownOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                                     </svg>
                                 </div>
 
@@ -211,7 +212,7 @@ function AbmBranchMappingModal({ isOpen, mapping, onClose, onSave, saving }) {
                                                         {selectedStates.length === 0 ? "All States" : `${selectedStates.length} selected`}
                                                     </span>
                                                     <svg className="w-3.5 h-3.5 text-slate-555" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                                                     </svg>
                                                 </div>
                                                 {isStateFilterOpen && (
@@ -256,7 +257,7 @@ function AbmBranchMappingModal({ isOpen, mapping, onClose, onSave, saving }) {
                                                         {selectedCities.length === 0 ? "All Cities" : `${selectedCities.length} selected`}
                                                     </span>
                                                     <svg className="w-3.5 h-3.5 text-slate-555" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                                                     </svg>
                                                 </div>
                                                 {isCityFilterOpen && (
@@ -324,7 +325,7 @@ function AbmBranchMappingModal({ isOpen, mapping, onClose, onSave, saving }) {
                                                             type="checkbox"
                                                             checked={selectedBranchIds.includes(b.id)}
                                                             onChange={() => handleToggleBranch(b.id)}
-                                                            className="h-4 w-4 text-[#6804a1] border-slate-350 rounded focus:ring-[#6804a1]"
+                                                            className="h-4 w-4 text-[#6804a1] border-slate-355 rounded focus:ring-[#6804a1]"
                                                         />
                                                         <div className="flex flex-col">
                                                             <span className="font-medium text-slate-800">{b.name}</span>
@@ -339,23 +340,23 @@ function AbmBranchMappingModal({ isOpen, mapping, onClose, onSave, saving }) {
                             </div>
                         </div>
 
-                        {/* Right Column: ABM Selection and Tag Previews */}
+                        {/* Right Column: User Selection and Tag Previews */}
                         <div className="flex flex-col space-y-6">
-                            {/* ABM Selector */}
+                            {/* User Selector */}
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                                    Select ABM <span className="text-rose-500">*</span>
+                                    Select User <span className="text-rose-500">*</span>
                                 </label>
                                 <select
-                                    value={selectedAbmId}
-                                    onChange={(e) => setSelectedAbmId(e.target.value)}
+                                    value={selectedUserId}
+                                    onChange={(e) => setSelectedUserId(e.target.value)}
                                     required
                                     className="w-full border border-slate-350 rounded-lg px-3.5 py-2.5 text-sm outline-none text-slate-800 focus:border-[#6804a1] transition-all bg-white cursor-pointer"
                                 >
-                                    <option value="">-- Select ABM --</option>
-                                    {abms.map((abm) => (
-                                        <option key={abm.id} value={abm.id}>
-                                            {abm.name} ({abm.username})
+                                    <option value="">-- Select User --</option>
+                                    {users.map((u) => (
+                                        <option key={u.id} value={u.id}>
+                                            {u.name} ({u.username}) [{u.user_role || u.user_type_name}]
                                         </option>
                                     ))}
                                 </select>
@@ -402,7 +403,7 @@ function AbmBranchMappingModal({ isOpen, mapping, onClose, onSave, saving }) {
                         </button>
                         <button
                             type="submit"
-                            disabled={saving || !selectedAbmId || selectedBranchIds.length === 0}
+                            disabled={saving || !selectedUserId || selectedBranchIds.length === 0}
                             className="px-6 py-2.5 rounded-lg border-none text-white font-bold text-xs transition-all bg-gradient-to-r from-[#6804a1] to-[#8a0cd2] shadow-[0_2px_8px_rgba(104,4,161,0.35)] cursor-pointer disabled:bg-slate-350 disabled:cursor-not-allowed disabled:shadow-none hover:opacity-95">
                             {saving ? "Saving…" : isEdit ? "Update Mapping" : "Create Mapping"}
                         </button>
@@ -414,13 +415,15 @@ function AbmBranchMappingModal({ isOpen, mapping, onClose, onSave, saving }) {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────
-export default function ABMBranchMappingMaster() {
+export default function UserBranchMappingMaster() {
     const [mappings, setMappings] = useState([]);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedMapping, setSelectedMapping] = useState(null);
+    const [searchParams, setSearchParams] = useSearchParams();
+    const userIdParam = searchParams.get("userId");
 
     const { hasPermission } = usePermission();
 
@@ -428,11 +431,25 @@ export default function ABMBranchMappingMaster() {
         setLoading(true);
         setError("");
         try {
-            const response = await getAllAbmMappings();
-            setMappings(response.data?.data || []);
+            const response = await getAllUserMappings();
+            const fetchedMappings = response.data?.data || [];
+            setMappings(fetchedMappings);
+
+            // Handle URL query parameter pre-selection
+            if (userIdParam) {
+                const existingMapping = fetchedMappings.find(m => Number(m.user_id) === Number(userIdParam));
+                if (existingMapping) {
+                    setSelectedMapping(existingMapping);
+                } else {
+                    setSelectedMapping(null);
+                }
+                setIsModalOpen(true);
+                // Clear query parameter so it doesn't reopen
+                setSearchParams({}, { replace: true });
+            }
         } catch (err) {
-            console.error("Failed to load ABM mappings:", err);
-            setError("Unable to load ABM-Branch mappings. Please try again.");
+            console.error("Failed to load user mappings:", err);
+            setError("Unable to load User-Branch mappings. Please try again.");
         } finally {
             setLoading(false);
         }
@@ -445,28 +462,28 @@ export default function ABMBranchMappingMaster() {
     const handleSave = async (data) => {
         setSaving(true);
         try {
-            await saveAbmBranchMapping(data);
-            toast.success("ABM Branch mapping saved successfully");
+            await saveUserBranchMapping(data);
+            toast.success("User Branch mapping saved successfully");
             setIsModalOpen(false);
             setSelectedMapping(null);
             await loadMappings();
         } catch (err) {
-            console.error("Failed to save ABM mapping:", err);
+            console.error("Failed to save user mapping:", err);
             toast.error(err?.response?.data?.message || "Unable to save mapping. Please try again.");
         } finally {
             setSaving(false);
         }
     };
 
-    const handleDelete = async (abmUserId) => {
-        if (!window.confirm("Are you sure you want to delete all branch mappings for this ABM?")) return;
+    const handleDelete = async (userId) => {
+        if (!window.confirm("Are you sure you want to delete all branch mappings for this user?")) return;
         setSaving(true);
         try {
-            await deleteAbmMapping(abmUserId);
-            toast.success("ABM Branch mapping deleted successfully");
+            await deleteUserMapping(userId);
+            toast.success("User Branch mapping deleted successfully");
             await loadMappings();
         } catch (err) {
-            console.error("Failed to delete ABM mapping:", err);
+            console.error("Failed to delete user mapping:", err);
             toast.error(err?.response?.data?.message || "Unable to delete mapping.");
         } finally {
             setSaving(false);
@@ -476,13 +493,13 @@ export default function ABMBranchMappingMaster() {
     const columns = useMemo(() => {
         const cols = [
             {
-                key: "abm_name",
-                label: "ABM User",
+                key: "user_name",
+                label: "User Name",
                 minWidth: "150px",
                 render: (row) => (
                     <div className="flex flex-col">
-                        <span className="font-bold text-slate-800 text-[14px]">{row.abm_name}</span>
-                        <span className="text-[11px] text-slate-400 font-mono">{row.abm_username}</span>
+                        <span className="font-bold text-slate-800 text-[14px]">{row.user_name}</span>
+                        <span className="text-[11px] text-slate-400 font-mono">{row.user_username}</span>
                     </div>
                 )
             },
@@ -508,8 +525,8 @@ export default function ABMBranchMappingMaster() {
             }
         ];
 
-        const canUpdate = hasPermission("abm_branch_mapping", "update");
-        const canDelete = hasPermission("abm_branch_mapping", "delete");
+        const canUpdate = hasPermission("user_branch_mapping", "update");
+        const canDelete = hasPermission("user_branch_mapping", "delete");
 
         if (canUpdate || canDelete) {
             cols.push({
@@ -535,7 +552,7 @@ export default function ABMBranchMappingMaster() {
                         )}
                         {canDelete && (
                             <button
-                                onClick={() => handleDelete(row.abm_user_id)}
+                                onClick={() => handleDelete(row.user_id)}
                                 className="flex w-8 h-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 cursor-pointer hover:bg-rose-100 transition-colors"
                                 title="Delete Mapping"
                             >
@@ -556,9 +573,10 @@ export default function ABMBranchMappingMaster() {
         <div className="flex flex-col flex-1 bg-slate-50 font-sans min-h-screen">
             <Navbar title="ERP Admin" />
 
-            <AbmBranchMappingModal
+            <UserBranchMappingModal
                 isOpen={isModalOpen}
                 mapping={selectedMapping}
+                initialUserId={userIdParam}
                 onClose={() => {
                     setIsModalOpen(false);
                     setSelectedMapping(null);
@@ -575,14 +593,14 @@ export default function ABMBranchMappingMaster() {
                 )}
 
                 <DataTable
-                    tableId="abm_branch_mapping"
-                    title="ABM Branch Mapping Master"
+                    tableId="user_branch_mapping"
+                    title="User Branch Mapping Master"
                     data={mappings}
                     columns={columns}
                     loading={loading}
-                    searchPlaceholder="Search mappings by ABM name..."
+                    searchPlaceholder="Search mappings by user name..."
                     actionButton={
-                        hasPermission("abm_branch_mapping", "write") ? (
+                        hasPermission("user_branch_mapping", "write") ? (
                             <button
                                 onClick={() => {
                                     setSelectedMapping(null);

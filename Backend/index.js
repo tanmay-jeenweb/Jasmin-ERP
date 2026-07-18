@@ -43,8 +43,8 @@ const { createTargetVsAchievementsTable } = require("./models/targetVsAchievemen
 const targetVsAchievementRoutes = require("./routes/targetVsAchievementRoutes.js");
 const { createStockCashDepositTable } = require("./models/stockCashDepositModel.js");
 const stockCashDepositRoutes = require("./routes/stockCashDepositRoutes.js");
-const { createAbmBranchMappingsTable } = require("./models/abmBranchMappingModel.js");
-const abmBranchMappingRoutes = require("./routes/abmBranchMappingRoutes.js");
+const { createUserBranchMappingsTable } = require("./models/userBranchMappingModel.js");
+const userBranchMappingRoutes = require("./routes/userBranchMappingRoutes.js");
 const brandWiseSalesRoutes = require("./routes/brandWiseSalesRoutes.js");
 const { createAlertsTable } = require("./models/alertModel.js");
 const alertRoutes = require("./routes/alertRoutes.js");
@@ -108,7 +108,7 @@ app.use(["/api/branches/finance-codes", "/branches/finance-codes"], branchFinanc
 app.use(["/api/offers", "/offers"], offerRoutes);
 app.use(["/api/target-vs-achievement", "/target-vs-achievement"], targetVsAchievementRoutes);
 app.use(["/api/stock-cash-deposit", "/stock-cash-deposit"], stockCashDepositRoutes);
-app.use(["/api/abm-branch-mappings", "/abm-branch-mappings"], abmBranchMappingRoutes);
+app.use(["/api/user-branch-mappings", "/user-branch-mappings", "/api/user-branch-mapping", "/user-branch-mapping"], userBranchMappingRoutes);
 app.use(["/api/brand-wise-sales", "/brand-wise-sales"], brandWiseSalesRoutes);
 app.use(["/api/alerts", "/alerts"], alertRoutes);
 app.use(["/api/branch-brand-finance-mapping", "/branch-brand-finance-mapping"], branchBrandFinanceMappingRoutes);
@@ -150,7 +150,7 @@ const startServer = async () => {
         await createOffersTable();
         await createTargetVsAchievementsTable();
         await createStockCashDepositTable();
-        await createAbmBranchMappingsTable();
+        await createUserBranchMappingsTable();
         await createAlertsTable();
         await createBranchBrandFinanceMappingTable();
 
