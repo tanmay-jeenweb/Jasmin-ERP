@@ -461,7 +461,7 @@ export default function Navbar() {
                         )}
 
                         {/* Alert Master Tab */}
-                        {isAdmin && (
+                        {(isAdmin || hasPermission("alert_master", "read")) && (
                             <div className="relative">
                                 <button
                                     onClick={() => {

@@ -3,6 +3,7 @@ import Navbar from "../../components/Navbar";
 import { getAlerts, createAlert, updateAlert, deleteAlert, toggleAlertActive } from "../../api/alertApi";
 import DataTable from "../../components/DataTable";
 import toast from "react-hot-toast";
+import { usePermission } from "../../context/PermissionContext";
 
 // ─── Alert Modal (Handles both Create and Edit) ───────────────────────────────────
 function AlertModal({ isOpen, row, onClose, onSave, saving }) {
@@ -181,6 +182,7 @@ function AlertModal({ isOpen, row, onClose, onSave, saving }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function AlertMaster() {
+  const { hasPermission } = usePermission();
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -258,7 +260,10 @@ export default function AlertMaster() {
   };
 
   const columns = useMemo(() => {
-    return [
+    const canUpdate = hasPermission("alert_master", "update");
+    const canDelete = hasPermission("alert_master", "delete");
+
+    const cols = [
       {
         key: "id",
         label: "ID",
@@ -297,48 +302,58 @@ export default function AlertMaster() {
         minWidth: "100px",
         render: (row) => (
           <button
-            onClick={() => handleToggleActive(row.id, !row.active)}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${row.active ? "bg-indigo-650" : "bg-slate-200"}`}
+            onClick={() => canUpdate && handleToggleActive(row.id, !row.active)}
+            disabled={!canUpdate}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${!canUpdate ? "opacity-60 cursor-not-allowed" : ""} ${row.active ? "bg-indigo-650" : "bg-slate-200"}`}
           >
             <span
               className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${row.active ? "translate-x-5" : "translate-x-0"}`}
             />
           </button>
         )
-      },
-      {
+      }
+    ];
+
+    if (canUpdate || canDelete) {
+      cols.push({
         key: "actions",
         label: "Actions",
         minWidth: "120px",
         render: (row) => (
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setSelectedRow(row);
-                setIsModalOpen(true);
-              }}
-              className="flex w-8 h-8 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-indigo-650 cursor-pointer hover:bg-purple-100 transition-colors"
-              title="Edit"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-[15px] h-[15px]">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931Z" />
-              </svg>
-            </button>
-            <button
-              onClick={() => handleDelete(row.id)}
-              disabled={deleting}
-              className="flex w-8 h-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 cursor-pointer hover:bg-rose-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Delete"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-[15px] h-[15px]">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5h12m-1.5 0-.563 12.375A2.25 2.25 0 0113.693 21H10.307a2.25 2.25 0 01-2.244-2.125L7.5 7.5m3-3h3A1.5 1.5 0 0115 6v1.5H9V6a1.5 1.5 0 011.5-1.5Z" />
-              </svg>
-            </button>
+            {canUpdate && (
+              <button
+                onClick={() => {
+                  setSelectedRow(row);
+                  setIsModalOpen(true);
+                }}
+                className="flex w-8 h-8 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-indigo-650 cursor-pointer hover:bg-purple-100 transition-colors"
+                title="Edit"
+              >
+                <svg xmlns="http://www.w3.org/2050/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-[15px] h-[15px]">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931Z" />
+                </svg>
+               </button>
+            )}
+            {canDelete && (
+              <button
+                onClick={() => handleDelete(row.id)}
+                disabled={deleting}
+                className="flex w-8 h-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 cursor-pointer hover:bg-rose-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Delete"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-[15px] h-[15px]">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5h12m-1.5 0-.563 12.375A2.25 2.25 0 0113.693 21H10.307a2.25 2.25 0 01-2.244-2.125L7.5 7.5m3-3h3A1.5 1.5 0 0115 6v1.5H9V6a1.5 1.5 0 011.5-1.5Z" />
+                </svg>
+              </button>
+            )}
           </div>
         )
-      }
-    ];
-  }, [deleting]);
+      });
+    }
+
+    return cols;
+  }, [deleting, hasPermission]);
 
   const createAlertButton = (
     <button
@@ -374,7 +389,7 @@ export default function AlertMaster() {
             data={alerts}
             columns={columns}
             loading={loading}
-            actionButton={createAlertButton}
+            actionButton={hasPermission("alert_master", "write") ? createAlertButton : null}
             searchPlaceholder="Search alerts by title or description..."
           />
         </div>
