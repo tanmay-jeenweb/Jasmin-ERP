@@ -252,7 +252,7 @@ export default function VariationForm() {
     <div className="flex flex-col flex-1 bg-slate-50 font-sans min-h-screen">
       <Navbar title="ERP Admin" />
 
-      <main className="flex-1 w-full max-w-5xl mx-auto px-6 py-8">
+      <main className="flex-1 w-full mx-auto px-6 py-8">
         {/* Page Header */}
         <div className="mb-6 flex items-center justify-between">
           <div>
@@ -416,7 +416,7 @@ export default function VariationForm() {
                 {columns.map((col, index) => (
                   <div
                     key={index}
-                    className="grid grid-cols-12 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200 items-center"
+                    className="grid grid-cols-12 gap-4 p-4 px-0  bg-slate-50 rounded-xl border border-slate-200 items-center"
                   >
                     {/* Column ID Badge */}
                     <div className="col-span-1 flex items-center justify-center gap-2">

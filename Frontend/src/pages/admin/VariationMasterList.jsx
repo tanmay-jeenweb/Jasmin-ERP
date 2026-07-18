@@ -2,12 +2,37 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import { getVariations, deleteVariation } from "../../api/variationApi";
+import { getBranches } from "../../api/branchApi";
 import DataTable from "../../components/DataTable";
 import toast from "react-hot-toast";
 import { usePermission } from "../../context/PermissionContext";
+import ExcelJS from "exceljs";
+
+// Helper to dynamically map formulas to specific spreadsheet rows
+const mapFormulaForRow = (formula, targetRow) => {
+  if (!formula) return "";
+  let upper = formula.trim().toUpperCase();
+  if (upper.startsWith("=")) {
+    upper = upper.substring(1);
+  }
+  const hasRowNumbers = /[A-Z]+\d+/.test(upper);
+  if (hasRowNumbers) {
+    // Replace references to row 2 (e.g., F2, G2) with targetRow
+    return upper.replace(/([A-Z]+)2(?!\d)/g, `$1${targetRow}`);
+  } else {
+    // Append targetRow to standalone column letters (e.g. F+G -> F3+G3)
+    const functions = ["SUM", "AVERAGE", "MIN", "MAX", "IF", "COUNT", "ROUND", "ABS", "PRODUCT", "AND", "OR", "NOT"];
+    return upper.replace(/\b([A-Z]+)\b/g, (match) => {
+      if (functions.includes(match)) return match;
+      if (match.length <= 3) return `${match}${targetRow}`;
+      return match;
+    });
+  }
+};
 
 export default function VariationMasterList() {
   const [variations, setVariations] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
@@ -31,9 +56,157 @@ export default function VariationMasterList() {
     }
   };
 
+  const loadBranches = async () => {
+    try {
+      const response = await getBranches();
+      const rawData = response.data?.success ? (response.data.data || []) : (response.data || []);
+      setBranches(rawData);
+    } catch (err) {
+      console.error("Failed to load branches for export", err);
+    }
+  };
+
   useEffect(() => {
     loadVariations();
+    loadBranches();
   }, []);
+
+  const handleExport = async (row) => {
+    let toastId;
+    try {
+      toastId = toast.loading("Generating Excel file...");
+
+      const brandList = Array.isArray(row.brands)
+        ? row.brands
+        : typeof row.brands === "string"
+        ? JSON.parse(row.brands)
+        : [];
+
+      const columnsList = Array.isArray(row.columns)
+        ? row.columns
+        : typeof row.columns === "string"
+        ? JSON.parse(row.columns)
+        : [];
+
+      // Filter branches by state matching the variation rule state
+      const filteredBranches = branches.filter(
+        (b) => b.state_id === row.state_id && b.status === "active"
+      );
+
+      if (filteredBranches.length === 0) {
+        toast.dismiss(toastId);
+        toast.error("No active branches found for this state.");
+        return;
+      }
+
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Variation Sheet", {
+        views: [{ showGridLines: true }]
+      });
+
+      // 5 Fixed Columns
+      const excelColumns = [
+        { header: "Month", key: "month", width: 15 },
+        { header: "Branch Code", key: "branch_code", width: 15 },
+        { header: "Branch Name", key: "branch_name", width: 25 },
+        { header: "State", key: "state", width: 15 },
+        { header: "Brand", key: "brand", width: 15 }
+      ];
+
+      // Variable Columns
+      columnsList.forEach((col) => {
+        excelColumns.push({
+          header: col.column_name,
+          key: col.column_id,
+          width: 18
+        });
+      });
+
+      worksheet.columns = excelColumns;
+
+      const monthYear = new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
+
+      let currentRowNum = 2; // Data starts on row 2 (row 1 is header)
+      filteredBranches.forEach((branch) => {
+        brandList.forEach((brand) => {
+          const rowData = {
+            month: monthYear,
+            branch_code: branch.code || "",
+            branch_name: branch.name || "",
+            state: branch.state_name || row.state_name || "",
+            brand: brand
+          };
+
+          columnsList.forEach((col) => {
+            if (col.type === "formulation" && col.formula) {
+              const mappedFormula = mapFormulaForRow(col.formula, currentRowNum);
+              rowData[col.column_id] = { formula: mappedFormula };
+            } else {
+              rowData[col.column_id] = "";
+            }
+          });
+
+          worksheet.addRow(rowData);
+          currentRowNum++;
+        });
+      });
+
+      // Style Header
+      const headerRow = worksheet.getRow(1);
+      headerRow.height = 26;
+      headerRow.eachCell((cell) => {
+        cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FF6804A1" }
+        };
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.border = {
+          top: { style: "medium", color: { argb: "FF4A0266" } },
+          bottom: { style: "medium", color: { argb: "FF4A0266" } },
+          left: { style: "thin", color: { argb: "FFE2E8F0" } },
+          right: { style: "thin", color: { argb: "FFE2E8F0" } }
+        };
+      });
+
+      // Style Data Rows
+      for (let r = 2; r < currentRowNum; r++) {
+        const dataRow = worksheet.getRow(r);
+        dataRow.height = 20;
+        dataRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          cell.font = { name: "Segoe UI", size: 10 };
+          cell.border = {
+            top: { style: "thin", color: { argb: "FFE2E8F0" } },
+            bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+            left: { style: "thin", color: { argb: "FFE2E8F0" } },
+            right: { style: "thin", color: { argb: "FFE2E8F0" } }
+          };
+          if (colNumber <= 5) {
+            cell.alignment = { horizontal: "center", vertical: "middle" };
+          } else {
+            cell.alignment = { horizontal: "right", vertical: "middle" };
+          }
+        });
+      }
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `Variation_Sheet_${row.state_name || "State"}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.dismiss(toastId);
+      toast.success("Excel exported successfully!");
+    } catch (err) {
+      console.error("Export failed", err);
+      if (toastId) toast.dismiss(toastId);
+      toast.error("Failed to export variation sheet.");
+    }
+  };
 
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this variation rule?")) return;
@@ -121,65 +294,85 @@ export default function VariationMasterList() {
     const canUpdate = hasPermission("variation_master", "update");
     const canDelete = hasPermission("variation_master", "delete");
 
-    if (canUpdate || canDelete) {
-      cols.push({
-        key: "actions",
-        label: "Actions",
-        sortable: false,
-        minWidth: "120px",
-        render: (row) => (
-          <div className="flex items-center gap-2">
-            {canUpdate && (
-              <button
-                onClick={() => navigate(`/admin/variations/edit/${row.id}`)}
-                className="flex w-8 h-8 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-indigo-650 cursor-pointer hover:bg-purple-100 transition-colors"
-                title="Edit"
+    cols.push({
+      key: "actions",
+      label: "Actions",
+      sortable: false,
+      minWidth: "150px",
+      render: (row) => (
+        <div className="flex items-center gap-2">
+          {/* Excel Export Button */}
+          <button
+            onClick={() => handleExport(row)}
+            className="flex w-8 h-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 cursor-pointer hover:bg-emerald-100 transition-colors"
+            title="Export Excel"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.8}
+              stroke="currentColor"
+              className="w-[15px] h-[15px]"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12-3-3m0 0-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
+              />
+            </svg>
+          </button>
+
+          {canUpdate && (
+            <button
+              onClick={() => navigate(`/admin/variations/edit/${row.id}`)}
+              className="flex w-8 h-8 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-indigo-650 cursor-pointer hover:bg-purple-100 transition-colors"
+              title="Edit"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.8}
+                stroke="currentColor"
+                className="w-[15px] h-[15px]"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.8}
-                  stroke="currentColor"
-                  className="w-[15px] h-[15px]"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931Z"
-                  />
-                </svg>
-              </button>
-            )}
-            {canDelete && (
-              <button
-                onClick={() => handleDelete(row.id)}
-                className="flex w-8 h-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 cursor-pointer hover:bg-rose-100 transition-colors"
-                title="Delete"
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931Z"
+                />
+              </svg>
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={() => handleDelete(row.id)}
+              className="flex w-8 h-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 cursor-pointer hover:bg-rose-100 transition-colors"
+              title="Delete"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.8}
+                stroke="currentColor"
+                className="w-[15px] h-[15px]"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.8}
-                  stroke="currentColor"
-                  className="w-[15px] h-[15px]"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M6 7.5h12m-1.5 0-.563 12.375A2.25 2.25 0 0113.693 21H10.307a2.25 2.25 0 01-2.244-2.125L7.5 7.5m3-3h3A1.5 1.5 0 0115 6v1.5H9V6a1.5 1.5 0 011.5-1.5Z"
-                  />
-                </svg>
-              </button>
-            )}
-          </div>
-        )
-      });
-    }
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M6 7.5h12m-1.5 0-.563 12.375A2.25 2.25 0 0113.693 21H10.307a2.25 2.25 0 01-2.244-2.125L7.5 7.5m3-3h3A1.5 1.5 0 0115 6v1.5H9V6a1.5 1.5 0 011.5-1.5Z"
+                />
+              </svg>
+            </button>
+          )}
+        </div>
+      )
+    });
 
     return cols;
-  }, [hasPermission, navigate]);
+  }, [hasPermission, navigate, branches, handleExport]);
 
   return (
     <div className="flex flex-col flex-1 bg-slate-50 font-sans">
