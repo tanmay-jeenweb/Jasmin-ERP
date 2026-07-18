@@ -129,6 +129,15 @@ export default function Navbar() {
             desc: "Manage geographic states"
         },
         {
+            name: "Variation Master",
+            path: "/admin/variations",
+            masterKey: "variation_master",
+            icon: "fa-solid fa-calculator",
+            color: "bg-purple-50 text-purple-600 border border-purple-100/50",
+            activeColor: "bg-purple-100 text-purple-700",
+            desc: "Manage Excel variation rules"
+        },
+        {
             name: "Support Master",
             path: "/admin/support",
             masterKey: "support_master",

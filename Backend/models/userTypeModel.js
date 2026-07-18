@@ -16,6 +16,7 @@ const MASTERS = [
     { key: 'user_branch_mapping', label: 'User Branch Mapping' },
     { key: 'support_master', label: 'Support Master' },
     { key: 'alert_master', label: 'Alert Master' },
+    { key: 'variation_master', label: 'Variation Master' },
 ];
 
 // ─── Table creation ──────────────────────────────────────────────────────────

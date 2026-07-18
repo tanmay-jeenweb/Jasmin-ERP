@@ -34,6 +34,9 @@ import FinanceBrandReport from "./pages/admin/FinanceBrandReport";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AlertMaster from "./pages/admin/AlertMaster";
+import VariationMasterList from "./pages/admin/VariationMasterList";
+import VariationForm from "./pages/admin/VariationForm";
+
 
 export default function AppRoutes() {
 
@@ -254,6 +257,25 @@ export default function AppRoutes() {
                     element={<BranchFinanceCode />}
                 />
             </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="variation_master" requiredAction="read" />}>
+                <Route
+                    path="/admin/variations"
+                    element={<VariationMasterList />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="variation_master" requiredAction="write" />}>
+                <Route
+                    path="/admin/variations/add"
+                    element={<VariationForm />}
+                />
+                <Route
+                    path="/admin/variations/edit/:id"
+                    element={<VariationForm />}
+                />
+            </Route>
+
 
         </Routes>
     );
