@@ -297,6 +297,7 @@ export default function AdminDashboard() {
             render: (row) => {
                 const canRevoke = hasPermission("device_approval", "write") || user.role === "admin";
                 const canToggle = hasPermission("user_master", "update") || user.role === "admin";
+                const canMap = hasPermission("user_branch_mapping", "read") || user.role === "admin";
                 return (
                     <div className="flex items-center gap-3">
                         {canRevoke && (
@@ -306,6 +307,28 @@ export default function AdminDashboard() {
                                 className="text-red-600 hover:text-red-900 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-medium"
                             >
                                 Revoke Device
+                            </button>
+                        )}
+                        {canMap && (
+                            <button
+                                onClick={() => navigate(`/admin/user-branch-mapping?userId=${row.id}`)}
+                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-indigo-650 hover:bg-purple-100 transition-colors"
+                                title="User Branch Mapping"
+                            >
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    strokeWidth={1.8}
+                                    stroke="currentColor"
+                                    className="h-4 w-4"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"
+                                    />
+                                </svg>
                             </button>
                         )}
                         {canToggle && (

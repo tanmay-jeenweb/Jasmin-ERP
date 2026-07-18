@@ -7,7 +7,7 @@ const {
     upsertBranches
 } = require('../models/branchModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
-const { getEligibleAbms } = require('../models/abmBranchMappingModel.js');
+const { getEligibleAbms } = require('../models/userBranchMappingModel.js');
 
 const addBranchController = async (req, res) => {
     try {

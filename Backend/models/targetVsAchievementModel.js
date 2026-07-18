@@ -104,8 +104,12 @@ const getAllTargetVsAchievements = async () => {
             bm.id AS branch_id
         FROM target_vs_achievements t
         LEFT JOIN branch_master bm ON t.branch_name = bm.name
-        LEFT JOIN abm_branch_mappings abm_m ON bm.id = abm_m.branch_id
-        LEFT JOIN users abm_u ON abm_m.abm_user_id = abm_u.id
+        LEFT JOIN user_branch_mappings abm_m ON bm.id = abm_m.branch_id AND abm_m.user_id IN (
+            SELECT u.id FROM users u
+            JOIN user_types ut ON u.user_type_id = ut.id
+            WHERE ut.user_role = 'ABM' OR ut.type_name = 'ABM'
+        )
+        LEFT JOIN users abm_u ON abm_m.user_id = abm_u.id
         LEFT JOIN users u ON t.added_by = u.id
         ORDER BY 
             (t.qty_tgt IS NULL OR t.value_tgt IS NULL) ASC,
@@ -126,8 +130,12 @@ const getABMWiseTargetVsAchievements = async () => {
         FROM target_vs_achievements t
         LEFT JOIN branch_master bm ON t.branch_name = bm.name
         LEFT JOIN state_master sm ON bm.state_id = sm.id
-        LEFT JOIN abm_branch_mappings abm_m ON bm.id = abm_m.branch_id
-        LEFT JOIN users abm_u ON abm_m.abm_user_id = abm_u.id
+        LEFT JOIN user_branch_mappings abm_m ON bm.id = abm_m.branch_id AND abm_m.user_id IN (
+            SELECT u.id FROM users u
+            JOIN user_types ut ON u.user_type_id = ut.id
+            WHERE ut.user_role = 'ABM' OR ut.type_name = 'ABM'
+        )
+        LEFT JOIN users abm_u ON abm_m.user_id = abm_u.id
         LEFT JOIN users u ON t.added_by = u.id
         ORDER BY 
             (t.qty_tgt IS NULL OR t.value_tgt IS NULL) ASC,
