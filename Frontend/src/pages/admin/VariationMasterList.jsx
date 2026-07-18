@@ -17,18 +17,25 @@ const mapFormulaForRow = (formula, targetRow) => {
     upper = upper.substring(1);
   }
   const hasRowNumbers = /[A-Z]+\d+/.test(upper);
+  let mappedFormula = "";
   if (hasRowNumbers) {
     // Replace references to row 2 (e.g., F2, G2) with targetRow
-    return upper.replace(/([A-Z]+)2(?!\d)/g, `$1${targetRow}`);
+    mappedFormula = upper.replace(/([A-Z]+)2(?!\d)/g, `$1${targetRow}`);
   } else {
     // Append targetRow to standalone column letters (e.g. F+G -> F3+G3)
-    const functions = ["SUM", "AVERAGE", "MIN", "MAX", "IF", "COUNT", "ROUND", "ABS", "PRODUCT", "AND", "OR", "NOT"];
-    return upper.replace(/\b([A-Z]+)\b/g, (match) => {
+    const functions = ["SUM", "AVERAGE", "MIN", "MAX", "IF", "COUNT", "ROUND", "ABS", "PRODUCT", "AND", "OR", "NOT", "IFERROR"];
+    mappedFormula = upper.replace(/\b([A-Z]+)\b/g, (match) => {
       if (functions.includes(match)) return match;
       if (match.length <= 3) return `${match}${targetRow}`;
       return match;
     });
   }
+
+  // Wrap inside IFERROR to display blank instead of #VALUE! when cells are empty
+  if (mappedFormula.startsWith("IFERROR")) {
+    return mappedFormula;
+  }
+  return `IFERROR(${mappedFormula},"")`;
 };
 
 export default function VariationMasterList() {

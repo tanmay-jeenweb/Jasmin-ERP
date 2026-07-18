@@ -36,6 +36,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import AlertMaster from "./pages/admin/AlertMaster";
 import VariationMasterList from "./pages/admin/VariationMasterList";
 import VariationForm from "./pages/admin/VariationForm";
+import PriceListData from "./pages/admin/PriceListData";
 
 
 export default function AppRoutes() {
@@ -262,6 +263,10 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/variations"
                     element={<VariationMasterList />}
+                />
+                <Route
+                    path="/admin/price-list/:variationId"
+                    element={<PriceListData />}
                 />
             </Route>
 

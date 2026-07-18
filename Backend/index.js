@@ -53,6 +53,7 @@ const branchBrandFinanceMappingRoutes = require("./routes/branchBrandFinanceMapp
 const branchBrandFinanceReportRoutes = require("./routes/branchBrandFinanceReportRoutes.js");
 const { createVariationTable } = require("./models/variationModel.js");
 const variationRoutes = require("./routes/variationRoutes.js");
+const priceListRoutes = require("./routes/priceListRoutes.js");
 
 
 
@@ -77,7 +78,8 @@ app.use(cors({
     allowedHeaders: ["Content-Type", "Authorization", "X-HTTP-Method-Override", "x-device-id", "device-id"],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
 }));
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(cookieParser());
 
 // Serve uploaded files statically if set to express
@@ -117,6 +119,7 @@ app.use(["/api/alerts", "/alerts"], alertRoutes);
 app.use(["/api/branch-brand-finance-mapping", "/branch-brand-finance-mapping"], branchBrandFinanceMappingRoutes);
 app.use(["/api/reports", "/reports"], branchBrandFinanceReportRoutes);
 app.use(["/api/variations", "/variations"], variationRoutes);
+app.use(["/api/price-lists", "/price-lists"], priceListRoutes);
 
 
 

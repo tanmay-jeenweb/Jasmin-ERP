@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { logoutUser } from "../api/authApi";
 import { usePermission } from "../context/PermissionContext";
 import { getOffers } from "../api/offerApi";
+import { getVariations } from "../api/variationApi";
 
 const logo = "/Jasmin-Logo.png";
 
@@ -10,10 +11,14 @@ export default function Navbar() {
     const navigate = useNavigate();
     const location = useLocation();
     const user = JSON.parse(localStorage.getItem("user") || "{}");
+    const userModules = user.modules || [];
+    const isAdmin = user.role === "admin" || user.role === "super admin";
     const [isOpen, setIsOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [isReportsOpen, setIsReportsOpen] = useState(false);
     const [isOffersOpen, setIsOffersOpen] = useState(false);
+    const [isPriceListOpen, setIsPriceListOpen] = useState(false);
+    const [priceFormats, setPriceFormats] = useState([]);
     const { hasPermission } = usePermission();
     const [runningOffers, setRunningOffers] = useState([]);
 
@@ -38,6 +43,22 @@ export default function Navbar() {
     }, []);
 
     useEffect(() => {
+        const fetchPriceFormats = async () => {
+            try {
+                const res = await getVariations();
+                if (res.data?.success && Array.isArray(res.data.data)) {
+                    setPriceFormats(res.data.data);
+                }
+            } catch (err) {
+                console.error("Failed to fetch price formats:", err);
+            }
+        };
+        if (isAdmin || hasPermission("variation_master", "read")) {
+            fetchPriceFormats();
+        }
+    }, [isAdmin, hasPermission, location.pathname]);
+
+    useEffect(() => {
         const handleOutsideClick = (e) => {
             if (isOpen && !e.target.closest("#custom-nav-dropdown")) {
                 setIsOpen(false);
@@ -51,10 +72,13 @@ export default function Navbar() {
             if (isOffersOpen && !e.target.closest("#offers-dropdown")) {
                 setIsOffersOpen(false);
             }
+            if (isPriceListOpen && !e.target.closest("#price-list-dropdown")) {
+                setIsPriceListOpen(false);
+            }
         };
         document.addEventListener("click", handleOutsideClick);
         return () => document.removeEventListener("click", handleOutsideClick);
-    }, [isOpen, isProfileOpen, isReportsOpen, isOffersOpen]);
+    }, [isOpen, isProfileOpen, isReportsOpen, isOffersOpen, isPriceListOpen]);
 
     const handleLogout = async () => {
         try {
@@ -70,8 +94,7 @@ export default function Navbar() {
         navigate("/");
     };
 
-    const userModules = user.modules || [];
-    const isAdmin = user.role === "admin" || user.role === "super admin";
+
 
     const allMasters = [
         {
@@ -463,6 +486,75 @@ export default function Navbar() {
                                                     </button>
                                                 );
                                             })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Price List Dropdown */}
+                        {(isAdmin || hasPermission("variation_master", "read")) && (
+                            <div className="relative" id="price-list-dropdown">
+                                <button
+                                    onClick={() => setIsPriceListOpen(!isPriceListOpen)}
+                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isPriceListOpen || location.pathname.startsWith("/admin/price-list")
+                                        ? "bg-white/15"
+                                        : "bg-[#6804a1] hover:bg-white/5"
+                                        }`}
+                                >
+                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                        <span className="font-semibold text-white truncate">Price List</span>
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            strokeWidth={2.5}
+                                            stroke="currentColor"
+                                            className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-200 ${isPriceListOpen ? "rotate-180 text-white" : ""}`}
+                                        >
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                                        </svg>
+                                    </span>
+                                </button>
+
+                                {isPriceListOpen && (
+                                    <div className="absolute left-0 top-full mt-1.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <div className="flex flex-col gap-1 max-h-80 overflow-y-auto">
+                                            {priceFormats.length === 0 ? (
+                                                <p className="text-slate-500 text-xs text-center py-2">No formats configured</p>
+                                            ) : (
+                                                priceFormats.map((f, idx) => {
+                                                    const brandsList = f.brand_configs 
+                                                        ? (typeof f.brand_configs === 'string' ? JSON.parse(f.brand_configs) : f.brand_configs)
+                                                        : [];
+                                                    const label = f.format_name || `${f.state_name} (${brandsList.join(', ')})`;
+                                                    const path = `/admin/price-list/${f.id}`;
+                                                    const isActive = location.pathname === path;
+                                                    return (
+                                                        <button
+                                                            key={idx}
+                                                            onClick={() => {
+                                                                navigate(path);
+                                                                setIsPriceListOpen(false);
+                                                            }}
+                                                            className={`relative group flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border border-transparent ${isActive
+                                                                ? "bg-indigo-50/70 text-indigo-700 font-semibold border-indigo-100/50"
+                                                                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
+                                                                }`}
+                                                        >
+                                                            <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${isActive ? "bg-indigo-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"}`} />
+                                                            <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${isActive ? "bg-indigo-100/80 text-indigo-700" : "bg-slate-100/80 text-slate-500 group-hover:scale-105"}`}>
+                                                                <i className="fa-solid fa-file-invoice-dollar text-xs"></i>
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-indigo-900 font-bold" : "text-slate-800 group-hover:text-slate-950"}`}>
+                                                                    {label}
+                                                                </p>
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })
+                                            )}
                                         </div>
                                     </div>
                                 )}
