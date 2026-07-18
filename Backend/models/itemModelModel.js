@@ -123,10 +123,22 @@ const getItemModelById = async (id) => {
     return rows[0] || null;
 };
 
+const getDistinctBrands = async () => {
+    const query = `
+        SELECT DISTINCT brand_name 
+        FROM item_model_master 
+        WHERE brand_name IS NOT NULL AND brand_name != '' 
+        ORDER BY brand_name ASC
+    `;
+    const [results] = await db.execute(query);
+    return results.map(row => row.brand_name);
+};
+
 module.exports = {
     createItemModelsTable,
     upsertItemModels,
     getAllItemModels,
     deleteItemModel,
-    getItemModelById
+    getItemModelById,
+    getDistinctBrands
 };
