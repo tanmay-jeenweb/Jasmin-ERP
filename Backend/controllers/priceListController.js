@@ -1,5 +1,5 @@
 const { getVariationById } = require('../models/variationModel.js');
-const { getPriceListData, upsertPriceListData } = require('../models/priceListModel.js');
+const { getPriceListData, upsertPriceListData, getPriceListReportData } = require('../models/priceListModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
 
 const getPriceListDataController = async (req, res) => {
@@ -87,7 +87,45 @@ const importPriceListController = async (req, res) => {
     }
 };
 
+const getPriceListReportController = async (req, res) => {
+    try {
+        const { variationId } = req.params;
+
+        // 1. Fetch variation metadata
+        const variation = await getVariationById(variationId);
+        if (!variation) {
+            return res.status(404).json({ success: false, message: 'Price List format not found' });
+        }
+
+        // Parse columns configuration
+        const columns = Array.isArray(variation.columns)
+            ? variation.columns
+            : typeof variation.columns === 'string'
+            ? JSON.parse(variation.columns)
+            : [];
+
+        // 2. Fetch report data (grouped by model_group_name + active offers)
+        let data = [];
+        try {
+            data = await getPriceListReportData(variationId);
+        } catch (err) {
+            console.warn(`Dynamic table for format ${variationId} report error:`, err.message);
+        }
+
+        res.status(200).json({
+            success: true,
+            columns,
+            formatName: variation.format_name || `${variation.state_name} format`,
+            data
+        });
+    } catch (error) {
+        console.error('Error fetching price list report data:', error);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+};
+
 module.exports = {
     getPriceListDataController,
-    importPriceListController
+    importPriceListController,
+    getPriceListReportController
 };

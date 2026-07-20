@@ -38,6 +38,7 @@ import AlertMaster from "./pages/admin/AlertMaster";
 import PricingFormulaMasterList from "./pages/admin/PricingFormulaMasterList";
 import PricingFormulaForm from "./pages/admin/PricingFormulaForm";
 import PriceListData from "./pages/admin/PriceListData";
+import PriceListReport from "./pages/admin/PriceListReport";
 
 
 export default function AppRoutes() {
@@ -279,6 +280,10 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/price-list/:variationId"
                     element={<PriceListData />}
+                />
+                <Route
+                    path="/admin/price-list-report/:variationId"
+                    element={<PriceListReport />}
                 />
             </Route>
 

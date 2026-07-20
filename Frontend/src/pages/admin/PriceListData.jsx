@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import DataTable from "../../components/DataTable";
 import { getPriceListData, importPriceListData } from "../../api/priceListApi";
@@ -65,6 +65,7 @@ const canUserViewColumn = (col, user) => {
 
 export default function PriceListData() {
   const { variationId } = useParams();
+  const navigate = useNavigate();
   const [data, setData] = useState([]);
   const [dynamicColumns, setDynamicColumns] = useState([]);
   const [formatName, setFormatName] = useState("");
@@ -508,6 +509,15 @@ export default function PriceListData() {
           searchPlaceholder="Search products or prices..."
           actionButton={
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate(`/admin/price-list-report/${variationId}`)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-[9px] text-emerald-800 bg-emerald-50 border border-emerald-200 font-semibold text-[13px] hover:bg-emerald-100/80 transition-all cursor-pointer shadow-xs"
+                title="View Price List Report"
+              >
+                <i className="fa-solid fa-square-poll-vertical text-emerald-600 text-xs"></i>
+                <span>View Price Report</span>
+              </button>
+
               <button
                 onClick={handleExportTemplate}
                 disabled={exporting || loading}

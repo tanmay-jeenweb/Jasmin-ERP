@@ -33,7 +33,7 @@ export default function PricingFormulaForm() {
     const [selectedState, setSelectedState] = useState("");
     const [formatName, setFormatName] = useState("");
     const [columns, setColumns] = useState([
-        { column_id: "F", column_name: "", type: "user input", formula: "", landing_types: ["All"], isLandingTypeDropdownOpen: false, landingTypeSearch: "" }
+        { column_id: "F", column_name: "", type: "user input", formula: "", landing_types: ["All"], not_show_in_report: false, isLandingTypeDropdownOpen: false, landingTypeSearch: "" }
     ]);
     const [brandConfigs, setBrandConfigs] = useState([]);
 
@@ -70,6 +70,7 @@ export default function PricingFormulaForm() {
                         ...col,
                         type: col.type === "formulation" ? "default formulation" : col.type,
                         landing_types: Array.isArray(col.landing_types) && col.landing_types.length > 0 ? col.landing_types : ["All"],
+                        not_show_in_report: !!col.not_show_in_report,
                         isLandingTypeDropdownOpen: false,
                         landingTypeSearch: ""
                     }));
@@ -127,7 +128,7 @@ export default function PricingFormulaForm() {
         const nextColId = getExcelColumnLabel(nextIndex);
         setColumns([
             ...columns,
-            { column_id: nextColId, column_name: "", type: "user input", formula: "", landing_types: ["All"], isLandingTypeDropdownOpen: false, landingTypeSearch: "" }
+            { column_id: nextColId, column_name: "", type: "user input", formula: "", landing_types: ["All"], not_show_in_report: false, isLandingTypeDropdownOpen: false, landingTypeSearch: "" }
         ]);
     };
 
@@ -190,10 +191,16 @@ export default function PricingFormulaForm() {
 
     const getColumnLandingTypeLabel = (col) => {
         const selected = col.landing_types || [];
-        if (selected.includes("All")) return "All Landing Types";
-        if (selected.length === 0) return "Select Landing Types";
-        if (selected.length <= 2) return selected.join(", ");
-        return `${selected.length} Types Selected`;
+        let label = "";
+        if (selected.includes("All")) label = "All Landing Types";
+        else if (selected.length === 0) label = "Select Landing Types";
+        else if (selected.length <= 2) label = selected.join(", ");
+        else label = `${selected.length} Types Selected`;
+
+        if (col.not_show_in_report) {
+            label += " • [Not Show in Report]";
+        }
+        return label;
     };
 
     const handleToggleColumnLandingType = (colIndex, typeName) => {
@@ -355,7 +362,8 @@ export default function PricingFormulaForm() {
                     column_name: c.column_name.trim(),
                     type: c.type,
                     formula: (c.type === "default formulation" || c.type === "formulation") ? c.formula.trim() : "",
-                    landing_types: Array.isArray(c.landing_types) && c.landing_types.length > 0 ? c.landing_types : ["All"]
+                    landing_types: Array.isArray(c.landing_types) && c.landing_types.length > 0 ? c.landing_types : ["All"],
+                    not_show_in_report: !!c.not_show_in_report
                 })),
                 brandConfigs: cleanBrandConfigs
             };
@@ -569,6 +577,20 @@ export default function PricingFormulaForm() {
                                                         onChange={(e) => handleColumnLandingTypeSearchChange(index, e.target.value)}
                                                         className="w-full px-2 py-1 mb-2 border border-slate-200 rounded text-xs focus:outline-none focus:border-indigo-500"
                                                     />
+                                                    <label className="flex items-center px-2 py-1.5 text-xs hover:bg-rose-50 rounded cursor-pointer font-bold text-rose-700 border-b border-slate-100 mb-1">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!col.not_show_in_report}
+                                                            onChange={(e) => {
+                                                                const checked = e.target.checked;
+                                                                setColumns((prevCols) =>
+                                                                    prevCols.map((c, i) => i === index ? { ...c, not_show_in_report: checked } : c)
+                                                                );
+                                                            }}
+                                                            className="mr-2 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                                                        />
+                                                        Not Show in Report
+                                                    </label>
                                                     <label className="flex items-center px-2 py-1 text-xs hover:bg-slate-50 rounded cursor-pointer font-bold text-indigo-700 border-b border-slate-100 mb-1">
                                                         <input
                                                             type="checkbox"
