@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import DataTable from "../../components/DataTable";
 import { getPriceListData, importPriceListData } from "../../api/priceListApi";
-import { getVariations } from "../../api/variationApi";
+import { getPricingFormulas as getVariations } from "../../api/pricingFormulaApi";
 import { getItemModels } from "../../api/itemModelApi";
 import ExcelJS from "exceljs";
 import toast from "react-hot-toast";
@@ -167,7 +167,7 @@ export default function PriceListData() {
       });
 
       if (brandsList.length === 0) {
-        toast.error("No brands are configured for this variation master format.", { id: loadToastId });
+        toast.error("No brands are configured for this pricing formula master format.", { id: loadToastId });
         return;
       }
 

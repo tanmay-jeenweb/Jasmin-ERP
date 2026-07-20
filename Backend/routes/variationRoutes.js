@@ -1,19 +1,3 @@
-const express = require('express');
-const {
-    addVariationController,
-    getAllVariationsController,
-    getVariationByIdController,
-    updateVariationController,
-    deleteVariationController
-} = require('../controllers/variationController.js');
-const { verifyToken, verifyPermission } = require('../middleware/authMiddleware.js');
+const pricingFormulaRoutes = require('./pricingFormulaRoutes.js');
 
-const router = express.Router();
-
-router.post('/add', verifyToken, verifyPermission('variation_master', 'write'), addVariationController);
-router.get('/all', verifyToken, verifyPermission('variation_master', 'read'), getAllVariationsController);
-router.get('/:id', verifyToken, verifyPermission('variation_master', 'read'), getVariationByIdController);
-router.put('/update/:id', verifyToken, verifyPermission('variation_master', 'update'), updateVariationController);
-router.delete('/delete/:id', verifyToken, verifyPermission('variation_master', 'delete'), deleteVariationController);
-
-module.exports = router;
+module.exports = pricingFormulaRoutes;

@@ -53,7 +53,7 @@ export default function Navbar() {
                 console.error("Failed to fetch price formats:", err);
             }
         };
-        if (isAdmin || hasPermission("variation_master", "read")) {
+        if (isAdmin || hasPermission("pricing_formula_master", "read") || hasPermission("variation_master", "read")) {
             fetchPriceFormats();
         }
     }, [isAdmin, hasPermission, location.pathname]);
@@ -152,13 +152,13 @@ export default function Navbar() {
             desc: "Manage geographic states"
         },
         {
-            name: "Variation Master",
-            path: "/admin/variations",
-            masterKey: "variation_master",
+            name: "Pricing Formula Master",
+            path: "/admin/pricing-formulas",
+            masterKey: "pricing_formula_master",
             icon: "fa-solid fa-calculator",
             color: "bg-purple-50 text-purple-600 border border-purple-100/50",
             activeColor: "bg-purple-100 text-purple-700",
-            desc: "Manage Excel variation rules"
+            desc: "Manage Excel pricing formula rules"
         },
         {
             name: "Support Master",
@@ -493,7 +493,7 @@ export default function Navbar() {
                         )}
 
                         {/* Price List Dropdown */}
-                        {(isAdmin || hasPermission("variation_master", "read")) && (
+                        {(isAdmin || hasPermission("pricing_formula_master", "read") || hasPermission("variation_master", "read")) && (
                             <div className="relative" id="price-list-dropdown">
                                 <button
                                     onClick={() => setIsPriceListOpen(!isPriceListOpen)}

@@ -51,8 +51,8 @@ const alertRoutes = require("./routes/alertRoutes.js");
 const { createBranchBrandFinanceMappingTable } = require("./models/branchBrandFinanceMappingModel.js");
 const branchBrandFinanceMappingRoutes = require("./routes/branchBrandFinanceMappingRoutes.js");
 const branchBrandFinanceReportRoutes = require("./routes/branchBrandFinanceReportRoutes.js");
-const { createVariationTable } = require("./models/variationModel.js");
-const variationRoutes = require("./routes/variationRoutes.js");
+const { createPricingFormulaTable } = require("./models/pricingFormulaModel.js");
+const pricingFormulaRoutes = require("./routes/pricingFormulaRoutes.js");
 const priceListRoutes = require("./routes/priceListRoutes.js");
 
 
@@ -118,7 +118,7 @@ app.use(["/api/brand-wise-sales", "/brand-wise-sales"], brandWiseSalesRoutes);
 app.use(["/api/alerts", "/alerts"], alertRoutes);
 app.use(["/api/branch-brand-finance-mapping", "/branch-brand-finance-mapping"], branchBrandFinanceMappingRoutes);
 app.use(["/api/reports", "/reports"], branchBrandFinanceReportRoutes);
-app.use(["/api/variations", "/variations"], variationRoutes);
+app.use(["/api/pricing-formulas", "/pricing-formulas", "/api/variations", "/variations"], pricingFormulaRoutes);
 app.use(["/api/price-lists", "/price-lists"], priceListRoutes);
 
 
@@ -161,7 +161,7 @@ const startServer = async () => {
         await createUserBranchMappingsTable();
         await createAlertsTable();
         await createBranchBrandFinanceMappingTable();
-        await createVariationTable();
+        await createPricingFormulaTable();
 
 
         console.log("All database tables are initialized and ready.");
