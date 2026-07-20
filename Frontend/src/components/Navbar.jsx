@@ -152,13 +152,13 @@ export default function Navbar() {
             desc: "Manage geographic states"
         },
         {
-            name: "Variation Master",
-            path: "/admin/variations",
+            name: "Pricing Formula Master",
+            path: "/admin/pricing-formulas",
             masterKey: "variation_master",
             icon: "fa-solid fa-calculator",
             color: "bg-purple-50 text-purple-600 border border-purple-100/50",
             activeColor: "bg-purple-100 text-purple-700",
-            desc: "Manage Excel variation rules"
+            desc: "Manage Excel pricing formula rules"
         },
         {
             name: "Support Master",

@@ -34,8 +34,8 @@ import FinanceBrandReport from "./pages/admin/FinanceBrandReport";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AlertMaster from "./pages/admin/AlertMaster";
-import VariationMasterList from "./pages/admin/VariationMasterList";
-import VariationForm from "./pages/admin/VariationForm";
+import PricingFormulaMasterList from "./pages/admin/PricingFormulaMasterList";
+import PricingFormulaForm from "./pages/admin/PricingFormulaForm";
 import PriceListData from "./pages/admin/PriceListData";
 
 
@@ -261,8 +261,12 @@ export default function AppRoutes() {
 
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="variation_master" requiredAction="read" />}>
                 <Route
+                    path="/admin/pricing-formulas"
+                    element={<PricingFormulaMasterList />}
+                />
+                <Route
                     path="/admin/variations"
-                    element={<VariationMasterList />}
+                    element={<Navigate to="/admin/pricing-formulas" replace />}
                 />
                 <Route
                     path="/admin/price-list/:variationId"
@@ -272,12 +276,16 @@ export default function AppRoutes() {
 
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="variation_master" requiredAction="write" />}>
                 <Route
-                    path="/admin/variations/add"
-                    element={<VariationForm />}
+                    path="/admin/pricing-formulas/add"
+                    element={<PricingFormulaForm />}
                 />
                 <Route
-                    path="/admin/variations/edit/:id"
-                    element={<VariationForm />}
+                    path="/admin/pricing-formulas/edit/:id"
+                    element={<PricingFormulaForm />}
+                />
+                <Route
+                    path="/admin/variations/add"
+                    element={<Navigate to="/admin/pricing-formulas/add" replace />}
                 />
             </Route>
 
