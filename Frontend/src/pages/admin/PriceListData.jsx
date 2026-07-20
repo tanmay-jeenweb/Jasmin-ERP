@@ -150,6 +150,33 @@ export default function PriceListData() {
       });
     });
 
+    cols.push({
+      key: "updated_at",
+      label: "Last Updated",
+      render: (row) => {
+        const rawDate = row.updated_at || row.timestamp;
+        if (!rawDate) return <span className="text-slate-400 text-xs">—</span>;
+        const dateObj = new Date(rawDate);
+        if (isNaN(dateObj.getTime())) return <span className="text-slate-400 text-xs">—</span>;
+        const formattedDate = dateObj.toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric"
+        });
+        const formattedTime = dateObj.toLocaleTimeString("en-IN", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true
+        });
+        return (
+          <div className="flex flex-col text-xs text-slate-700 whitespace-nowrap">
+            <span className="font-semibold">{formattedDate}</span>
+            <span className="text-[11px] text-slate-500 font-mono">{formattedTime}</span>
+          </div>
+        );
+      }
+    });
+
     return cols;
   }, [visibleDynamicColumns]);
 
@@ -205,7 +232,7 @@ export default function PriceListData() {
         { header: "Model Name", key: "model_name", width: 35 },
       ];
 
-      const customHeaders = dynamicColumns.map(col => ({
+      const customHeaders = visibleDynamicColumns.map(col => ({
         header: col.column_name,
         key: col.column_name,
         width: 20
@@ -244,7 +271,7 @@ export default function PriceListData() {
           model_name: m.model_name,
         };
 
-        dynamicColumns.forEach(col => {
+        visibleDynamicColumns.forEach(col => {
           const isFormulaType = col.type === "default formulation" || col.type === "formulation";
           if (isFormulaType) {
             let formulaToUse = "";
@@ -340,7 +367,7 @@ export default function PriceListData() {
           const headerRow = worksheet.getRow(1);
           const colHeaders = [];
           const requiredFixed = ["Product Code", "Brand", "Icat Name", "Model Group Name", "Model Name"];
-          const maxCols = Math.max(worksheet.columnCount, requiredFixed.length + dynamicColumns.length);
+          const maxCols = Math.max(worksheet.columnCount, requiredFixed.length + visibleDynamicColumns.length);
           for (let colNum = 1; colNum <= maxCols; colNum++) {
             const cellVal = headerRow.getCell(colNum).value;
             colHeaders[colNum] = cellVal ? String(cellVal).trim() : "";
@@ -356,7 +383,7 @@ export default function PriceListData() {
           }
 
           // Verify dynamic columns
-          const customColNames = dynamicColumns.map(c => c.column_name.trim());
+          const customColNames = visibleDynamicColumns.map(c => c.column_name.trim());
           for (let i = 0; i < customColNames.length; i++) {
             const expectedHeader = customColNames[i];
             const actualHeader = colHeaders[i + 1 + requiredFixed.length];
@@ -425,7 +452,7 @@ export default function PriceListData() {
               model_name: row.getCell(5).value ? String(row.getCell(5).value).trim() : "",
             };
 
-            dynamicColumns.forEach((col, idx) => {
+            visibleDynamicColumns.forEach((col, idx) => {
               const colIdx = 1 + requiredFixed.length + idx;
               const cellVal = getVal(row, colIdx);
               record[col.column_name] = cellVal !== undefined && cellVal !== null ? String(cellVal).trim() : "";
