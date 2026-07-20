@@ -155,35 +155,17 @@ export default function PriceListData() {
         ? (typeof currentVar.brand_configs === 'string' ? JSON.parse(currentVar.brand_configs) : currentVar.brand_configs)
         : [];
 
-      const brandsList = [];
-      configs.forEach(cfg => {
-        if (Array.isArray(cfg.brands)) {
-          cfg.brands.forEach(b => {
-            if (b && !brandsList.includes(b)) {
-              brandsList.push(b);
-            }
-          });
-        }
-      });
-
-      if (brandsList.length === 0) {
-        toast.error("No brands are configured for this variation master format.", { id: loadToastId });
-        return;
-      }
-
-      const upperBrands = brandsList.map(b => String(b).trim().toUpperCase());
-
       // 2. Fetch all models from Model Master
       const modelsRes = await getItemModels();
       const allModels = modelsRes.data?.data || [];
 
-      // 3. Filter models by configured brands
-      const filteredModels = allModels.filter(m => 
-        m.brand_name && upperBrands.includes(m.brand_name.trim().toUpperCase())
+      // Filter active models
+      const activeModels = allModels.filter(
+        (m) => !m.item_status || String(m.item_status).toLowerCase() === "active"
       );
 
-      if (filteredModels.length === 0) {
-        toast.error(`No product models found in database for brands: ${brandsList.join(", ")}`, { id: loadToastId });
+      if (activeModels.length === 0) {
+        toast.error("No active product models found in database.", { id: loadToastId });
         return;
       }
 
@@ -227,7 +209,7 @@ export default function PriceListData() {
       headerRow.height = 25;
 
       // 6. Populate Rows
-      filteredModels.forEach((m, index) => {
+      activeModels.forEach((m, index) => {
         const rowIndex = index + 2;
         const existingRow = data.find(r => r.product_code === m.item_code);
 
