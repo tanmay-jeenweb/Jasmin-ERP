@@ -9,12 +9,20 @@ const getPriceListData = async (variationId) => {
 
 const upsertPriceListData = async (variationId, columnsList, records, addedBy, deviceId) => {
     const tableName = `price_list_format_${variationId}`;
+    const historyTableName = `price_list_format_history_${variationId}`;
     const connection = await db.getConnection();
     
     try {
-        // Ensure device_id column exists
+        // Ensure device_id column exists on current table
         try {
             await connection.execute(`ALTER TABLE \`${tableName}\` ADD COLUMN device_id VARCHAR(100) NULL`);
+        } catch (e) {
+            // Already exists or table doesn't exist
+        }
+
+        // Ensure device_id column exists on history table
+        try {
+            await connection.execute(`ALTER TABLE \`${historyTableName}\` ADD COLUMN device_id VARCHAR(100) NULL`);
         } catch (e) {
             // Already exists or table doesn't exist
         }
@@ -42,10 +50,15 @@ const upsertPriceListData = async (variationId, columnsList, records, addedBy, d
             'device_id = VALUES(device_id)'
         ].join(', ');
         
-        const sql = `
+        const currentSql = `
             INSERT INTO \`${tableName}\` (${insertFields.map(f => `\`${f}\``).join(', ')})
             VALUES (${placeholders})
             ON DUPLICATE KEY UPDATE ${updateClause}
+        `;
+
+        const historySql = `
+            INSERT INTO \`${historyTableName}\` (${insertFields.map(f => `\`${f}\``).join(', ')})
+            VALUES (${placeholders})
         `;
         
         for (const rec of records) {
@@ -59,7 +72,16 @@ const upsertPriceListData = async (variationId, columnsList, records, addedBy, d
                 addedBy,
                 deviceId
             ];
-            await connection.execute(sql, params);
+
+            // 1. Update Current Active Table (ON DUPLICATE KEY UPDATE)
+            await connection.execute(currentSql, params);
+
+            // 2. Append to History Table (Pure INSERT)
+            try {
+                await connection.execute(historySql, params);
+            } catch (hErr) {
+                console.warn(`Failed to log record into history table ${historyTableName}:`, hErr.message);
+            }
         }
         
         await connection.commit();
@@ -68,6 +90,25 @@ const upsertPriceListData = async (variationId, columnsList, records, addedBy, d
         throw err;
     } finally {
         connection.release();
+    }
+};
+
+const getPriceListHistoryData = async (variationId, productCode = null) => {
+    const historyTableName = `price_list_format_history_${variationId}`;
+    try {
+        let query = `SELECT * FROM \`${historyTableName}\``;
+        const params = [];
+
+        if (productCode) {
+            query += ` WHERE product_code = ?`;
+            params.push(productCode);
+        }
+
+        query += ` ORDER BY timestamp DESC, id DESC`;
+        const [results] = await db.execute(query, params);
+        return results;
+    } catch (e) {
+        return [];
     }
 };
 
@@ -183,5 +224,6 @@ const getPriceListReportData = async (variationId) => {
 module.exports = {
     getPriceListData,
     upsertPriceListData,
+    getPriceListHistoryData,
     getPriceListReportData
 };
