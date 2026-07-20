@@ -34,6 +34,35 @@ const mapFormulaForRow = (formula, targetRow) => {
   return `IFERROR(${mappedFormula},"")`;
 };
 
+const canUserViewColumn = (col, user) => {
+  const allowedLandingTypes = col.landing_types && Array.isArray(col.landing_types) && col.landing_types.length > 0
+    ? col.landing_types
+    : ["All"];
+
+  if (allowedLandingTypes.includes("All")) {
+    return true;
+  }
+
+  let userLandingTypes = user?.landing_type;
+  if (typeof userLandingTypes === "string") {
+    try {
+      userLandingTypes = JSON.parse(userLandingTypes);
+    } catch (e) {
+      userLandingTypes = [userLandingTypes];
+    }
+  }
+
+  if (!userLandingTypes || !Array.isArray(userLandingTypes) || userLandingTypes.length === 0) {
+    return true;
+  }
+
+  if (userLandingTypes.includes("All")) {
+    return true;
+  }
+
+  return userLandingTypes.some(ult => allowedLandingTypes.includes(ult));
+};
+
 export default function PriceListData() {
   const { variationId } = useParams();
   const [data, setData] = useState([]);
@@ -43,6 +72,18 @@ export default function PriceListData() {
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+
+  const currentUser = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}");
+    } catch (e) {
+      return {};
+    }
+  }, []);
+
+  const visibleDynamicColumns = useMemo(() => {
+    return dynamicColumns.filter(col => canUserViewColumn(col, currentUser));
+  }, [dynamicColumns, currentUser]);
 
   const loadData = async () => {
     setLoading(true);
@@ -67,8 +108,6 @@ export default function PriceListData() {
   useEffect(() => {
     loadData();
   }, [variationId]);
-
-
 
   const columns = useMemo(() => {
     const cols = [
@@ -99,7 +138,7 @@ export default function PriceListData() {
       }
     ];
 
-    dynamicColumns.forEach(c => {
+    visibleDynamicColumns.forEach(c => {
       cols.push({
         key: c.column_name,
         label: c.column_name,
@@ -112,7 +151,7 @@ export default function PriceListData() {
     });
 
     return cols;
-  }, [dynamicColumns]);
+  }, [visibleDynamicColumns]);
 
   const handleExportTemplate = async () => {
     setExporting(true);

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import { getStates } from "../../api/stateApi";
 import { getDistinctBrands } from "../../api/itemModelApi";
+import { getLandingTypes } from "../../api/landingTypeApi";
 import { createPricingFormula, updatePricingFormula, getPricingFormulaById } from "../../api/pricingFormulaApi";
 import toast from "react-hot-toast";
 
@@ -26,12 +27,13 @@ export default function PricingFormulaForm() {
     // Master lists options
     const [statesList, setStatesList] = useState([]);
     const [allBrands, setAllBrands] = useState([]);
+    const [landingTypesList, setLandingTypesList] = useState([]);
 
     // Form Fields
     const [selectedState, setSelectedState] = useState("");
     const [formatName, setFormatName] = useState("");
     const [columns, setColumns] = useState([
-        { column_id: "F", column_name: "", type: "user input", formula: "" }
+        { column_id: "F", column_name: "", type: "user input", formula: "", landing_types: ["All"], isLandingTypeDropdownOpen: false, landingTypeSearch: "" }
     ]);
     const [brandConfigs, setBrandConfigs] = useState([]);
 
@@ -42,12 +44,14 @@ export default function PricingFormulaForm() {
     const loadFormData = async () => {
         setLoading(true);
         try {
-            const [stateRes, brandRes] = await Promise.all([
+            const [stateRes, brandRes, ltRes] = await Promise.all([
                 getStates(),
-                getDistinctBrands()
+                getDistinctBrands(),
+                getLandingTypes()
             ]);
             setStatesList((stateRes.data?.data || []).filter((s) => s.live === "Yes"));
             setAllBrands(brandRes.data?.data || []);
+            setLandingTypesList((ltRes.data?.data || []).filter((lt) => lt.live === "Yes"));
 
             if (isEdit) {
                 const varRes = await getPricingFormulaById(id);
@@ -64,7 +68,10 @@ export default function PricingFormulaForm() {
                     
                     const mappedColumns = parsedColumns.map((col) => ({
                         ...col,
-                        type: col.type === "formulation" ? "default formulation" : col.type
+                        type: col.type === "formulation" ? "default formulation" : col.type,
+                        landing_types: Array.isArray(col.landing_types) && col.landing_types.length > 0 ? col.landing_types : ["All"],
+                        isLandingTypeDropdownOpen: false,
+                        landingTypeSearch: ""
                     }));
                     setColumns(mappedColumns);
 
@@ -104,6 +111,11 @@ export default function PricingFormulaForm() {
                     prev.map((c) => ({ ...c, isDropdownOpen: false, searchQuery: "" }))
                 );
             }
+            if (!event.target.closest(".col-landing-type-select-container")) {
+                setColumns((prev) =>
+                    prev.map((c) => ({ ...c, isLandingTypeDropdownOpen: false, landingTypeSearch: "" }))
+                );
+            }
         };
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -115,7 +127,7 @@ export default function PricingFormulaForm() {
         const nextColId = getExcelColumnLabel(nextIndex);
         setColumns([
             ...columns,
-            { column_id: nextColId, column_name: "", type: "user input", formula: "" }
+            { column_id: nextColId, column_name: "", type: "user input", formula: "", landing_types: ["All"], isLandingTypeDropdownOpen: false, landingTypeSearch: "" }
         ]);
     };
 
@@ -174,6 +186,60 @@ export default function PricingFormulaForm() {
                 }))
             );
         }
+    };
+
+    const getColumnLandingTypeLabel = (col) => {
+        const selected = col.landing_types || [];
+        if (selected.includes("All")) return "All Landing Types";
+        if (selected.length === 0) return "Select Landing Types";
+        if (selected.length <= 2) return selected.join(", ");
+        return `${selected.length} Types Selected`;
+    };
+
+    const handleToggleColumnLandingType = (colIndex, typeName) => {
+        setColumns((prevCols) =>
+            prevCols.map((col, idx) => {
+                if (idx !== colIndex) return col;
+                let current = [...(col.landing_types || [])];
+                const search = (col.landingTypeSearch || "").toLowerCase();
+                const filteredLTs = landingTypesList.filter((lt) =>
+                    lt.name.toLowerCase().includes(search)
+                );
+
+                if (typeName === "All") {
+                    const isAllSelected = current.includes("All") || (
+                        filteredLTs.length > 0 && filteredLTs.every((lt) => current.includes(lt.name))
+                    );
+                    if (isAllSelected) {
+                        const filteredNames = filteredLTs.map((lt) => lt.name);
+                        current = current.filter((t) => t !== "All" && !filteredNames.includes(t));
+                    } else {
+                        filteredLTs.forEach((lt) => {
+                            if (!current.includes(lt.name)) current.push(lt.name);
+                        });
+                        if (landingTypesList.length > 0 && landingTypesList.every((lt) => current.includes(lt.name))) {
+                            if (!current.includes("All")) current.push("All");
+                        }
+                    }
+                } else {
+                    if (current.includes(typeName)) {
+                        current = current.filter((t) => t !== typeName && t !== "All");
+                    } else {
+                        current.push(typeName);
+                        if (landingTypesList.length > 0 && landingTypesList.every((lt) => current.includes(lt.name))) {
+                            if (!current.includes("All")) current.push("All");
+                        }
+                    }
+                }
+                return { ...col, landing_types: current };
+            })
+        );
+    };
+
+    const handleColumnLandingTypeSearchChange = (colIndex, value) => {
+        setColumns((prevCols) =>
+            prevCols.map((col, idx) => (idx === colIndex ? { ...col, landingTypeSearch: value } : col))
+        );
     };
 
     // Brand Override Handlers
@@ -288,7 +354,8 @@ export default function PricingFormulaForm() {
                     column_id: c.column_id,
                     column_name: c.column_name.trim(),
                     type: c.type,
-                    formula: (c.type === "default formulation" || c.type === "formulation") ? c.formula.trim() : ""
+                    formula: (c.type === "default formulation" || c.type === "formulation") ? c.formula.trim() : "",
+                    landing_types: Array.isArray(c.landing_types) && c.landing_types.length > 0 ? c.landing_types : ["All"]
                 })),
                 brandConfigs: cleanBrandConfigs
             };
@@ -448,7 +515,7 @@ export default function PricingFormulaForm() {
                                             />
                                         </div>
 
-                                        <div className="w-full md:w-48">
+                                         <div className="w-full md:w-48">
                                             <select
                                                 value={col.type}
                                                 onChange={(e) => handleColumnFieldChange(index, "type", e.target.value)}
@@ -471,6 +538,65 @@ export default function PricingFormulaForm() {
                                                 />
                                             </div>
                                         )}
+
+                                        <div className="w-full md:w-52 relative col-landing-type-select-container">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setColumns((prevCols) =>
+                                                        prevCols.map((c, i) =>
+                                                            i === index
+                                                                ? { ...c, isLandingTypeDropdownOpen: !c.isLandingTypeDropdownOpen }
+                                                                : { ...c, isLandingTypeDropdownOpen: false }
+                                                        )
+                                                    );
+                                                }}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm bg-white text-left flex items-center justify-between focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                                                title="Allowed Landing Types"
+                                            >
+                                                <span className="truncate text-slate-700 font-medium">{getColumnLandingTypeLabel(col)}</span>
+                                                <svg className="w-4 h-4 text-slate-400 shrink-0 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                            </button>
+
+                                            {col.isLandingTypeDropdownOpen && (
+                                                <div className="absolute z-30 right-0 md:left-0 mt-1 w-60 bg-white border border-slate-200 rounded-md shadow-lg p-2 max-h-56 overflow-y-auto">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Search landing types..."
+                                                        value={col.landingTypeSearch || ""}
+                                                        onChange={(e) => handleColumnLandingTypeSearchChange(index, e.target.value)}
+                                                        className="w-full px-2 py-1 mb-2 border border-slate-200 rounded text-xs focus:outline-none focus:border-indigo-500"
+                                                    />
+                                                    <label className="flex items-center px-2 py-1 text-xs hover:bg-slate-50 rounded cursor-pointer font-bold text-indigo-700 border-b border-slate-100 mb-1">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={
+                                                                (col.landing_types || []).includes("All") ||
+                                                                (landingTypesList.length > 0 && landingTypesList.every((lt) => (col.landing_types || []).includes(lt.name)))
+                                                            }
+                                                            onChange={() => handleToggleColumnLandingType(index, "All")}
+                                                            className="mr-2 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                        />
+                                                        All Landing Types
+                                                    </label>
+                                                    {landingTypesList
+                                                        .filter((lt) => lt.name.toLowerCase().includes((col.landingTypeSearch || "").toLowerCase()))
+                                                        .map((lt) => (
+                                                            <label key={lt.id} className="flex items-center px-2 py-1 text-xs hover:bg-slate-50 rounded cursor-pointer text-slate-700">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={(col.landing_types || []).includes(lt.name)}
+                                                                    onChange={() => handleToggleColumnLandingType(index, lt.name)}
+                                                                    className="mr-2 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                                />
+                                                                {lt.name}
+                                                            </label>
+                                                        ))}
+                                                </div>
+                                            )}
+                                        </div>
 
                                         <button
                                             type="button"

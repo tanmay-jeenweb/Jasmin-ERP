@@ -105,6 +105,17 @@ const createUsersTable = async () => {
         }
     }
 
+    // Migrate existing users without landing_type to default '["All"]'
+    try {
+        await db.execute(`
+            UPDATE users 
+            SET landing_type = '["All"]' 
+            WHERE landing_type IS NULL OR landing_type = '' OR landing_type = '[]'
+        `);
+    } catch (err) {
+        console.warn("Could not migrate null landing_type for existing users:", err.message);
+    }
+
     // Add UNIQUE index on username if not already present
     try {
         const [indexes] = await db.execute(`SHOW INDEX FROM users WHERE Key_name = 'username'`);

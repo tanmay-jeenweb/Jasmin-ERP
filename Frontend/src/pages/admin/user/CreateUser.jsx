@@ -243,6 +243,12 @@ export default function CreateUser() {
 
     const handleCreateUser = async (e) => {
         e.preventDefault();
+
+        if (!selectedLandingTypes || selectedLandingTypes.length === 0) {
+            toast.error("Please select at least one Landing Type.");
+            return;
+        }
+
         setCreatingUser(true);
         try {
             const payload = {
