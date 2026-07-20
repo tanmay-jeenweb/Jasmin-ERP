@@ -457,9 +457,7 @@ export default function PriceListReport() {
                       {stockModalData.productName}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Showing available devices with <strong className="text-teal-700 font-semibold">Saleable Stock ≥ 1</strong>, grouped by place in alphabetical order.
-                  </p>
+                 
                 </div>
               </div>
               <button
