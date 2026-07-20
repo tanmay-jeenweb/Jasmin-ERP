@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import DataTable from "../../components/DataTable";
-import { getPriceListReport } from "../../api/priceListApi";
+import { getPriceListReport, getModelGroupStockInfo } from "../../api/priceListApi";
 import ExcelJS from "exceljs";
 import toast from "react-hot-toast";
 
@@ -43,7 +43,10 @@ export default function PriceListReport() {
   const [formatName, setFormatName] = useState("");
   const [loading, setLoading] = useState(false);
   const [selectedOfferModal, setSelectedOfferModal] = useState(null);
-  const [selectedStockModal, setSelectedStockModal] = useState(null);
+  
+  // Dynamic Stock Modal state
+  const [stockModalData, setStockModalData] = useState(null);
+  const [stockSearchQuery, setStockSearchQuery] = useState("");
 
   const currentUser = useMemo(() => {
     try {
@@ -82,6 +85,100 @@ export default function PriceListReport() {
   useEffect(() => {
     loadReportData();
   }, [variationId]);
+
+  const handleOpenStockModal = async (row) => {
+    const modelGroup = row.model_group_name;
+    const productName = row.product_name || row.icat_name || "—";
+
+    setStockModalData({
+      isOpen: true,
+      modelGroup,
+      productName,
+      loading: true,
+      error: null,
+      rawItems: []
+    });
+    setStockSearchQuery("");
+
+    try {
+      const res = await getModelGroupStockInfo(modelGroup);
+      if (res.data?.success) {
+        setStockModalData(prev => prev ? {
+          ...prev,
+          loading: false,
+          rawItems: res.data.data || []
+        } : null);
+      } else {
+        setStockModalData(prev => prev ? {
+          ...prev,
+          loading: false,
+          error: res.data?.message || "Failed to fetch stock information."
+        } : null);
+      }
+    } catch (err) {
+      console.error("Error fetching stock info:", err);
+      setStockModalData(prev => prev ? {
+        ...prev,
+        loading: false,
+        error: "Unable to connect to stock service. Please try again."
+      } : null);
+    }
+  };
+
+  // Group and sort stock data by Branch Name alphabetically (A to Z) with Saleable Stock >= 1
+  const processedStockData = useMemo(() => {
+    if (!stockModalData || !stockModalData.rawItems) {
+      return { sortedBranches: [], branchGroups: {}, totalAvailableStock: 0, totalDeviceTypes: 0 };
+    }
+
+    // Filter devices where SALEABLE_STOCK >= 1 (or > 1)
+    const validItems = stockModalData.rawItems.filter(item => {
+      const stock = Number(item.SALEABLE_STOCK || 0);
+      return stock >= 1;
+    });
+
+    // Filter by modal search query (branch name, branch code, device name, item code)
+    const query = stockSearchQuery.trim().toLowerCase();
+    const searchedItems = validItems.filter(item => {
+      if (!query) return true;
+      const bName = String(item.BRANCH_NAME || "").toLowerCase();
+      const bCode = String(item.BRANCH_CODE || "").toLowerCase();
+      const iName = String(item.ITEM_NAME || "").toLowerCase();
+      const iCode = String(item.ITEM_CODE || "").toLowerCase();
+      return bName.includes(query) || bCode.includes(query) || iName.includes(query) || iCode.includes(query);
+    });
+
+    const groups = {};
+    let totalAvailableStock = 0;
+
+    searchedItems.forEach(item => {
+      const branchKey = (item.BRANCH_NAME || item.BRANCH_CODE || "Unknown Location").trim();
+      if (!groups[branchKey]) {
+        groups[branchKey] = {
+          branchName: item.BRANCH_NAME || branchKey,
+          branchCode: item.BRANCH_CODE || "",
+          items: [],
+          branchTotalStock: 0
+        };
+      }
+      const itemStock = Number(item.SALEABLE_STOCK || 0);
+      groups[branchKey].items.push(item);
+      groups[branchKey].branchTotalStock += itemStock;
+      totalAvailableStock += itemStock;
+    });
+
+    // Sort branches in alphabetical order (A to Z)
+    const sortedBranches = Object.keys(groups).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+
+    return {
+      sortedBranches,
+      branchGroups: groups,
+      totalAvailableStock,
+      totalDeviceTypes: searchedItems.length
+    };
+  }, [stockModalData, stockSearchQuery]);
 
   const columns = useMemo(() => {
     const cols = [
@@ -142,13 +239,13 @@ export default function PriceListReport() {
       }
     });
 
-    // Static View Stock Button
+    // View Stock Button
     cols.push({
       key: "view_stock",
       label: "Stock Status",
       render: (row) => (
         <button
-          onClick={() => setSelectedStockModal(row)}
+          onClick={() => handleOpenStockModal(row)}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xs hover:from-teal-700 hover:to-emerald-700 transition-all cursor-pointer"
         >
           <i className="fa-solid fa-boxes-stacked text-[11px]"></i>
@@ -343,32 +440,189 @@ export default function PriceListReport() {
         </div>
       )}
 
-      {/* View Stock Static Modal */}
-      {selectedStockModal && (
+      {/* Dynamic View Stock Modal */}
+      {stockModalData && stockModalData.isOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 flex flex-col gap-4 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-xl mx-auto">
-              <i className="fa-solid fa-boxes-stacked"></i>
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-900 text-lg">Stock Status</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Model Group: <strong className="text-slate-800">{selectedStockModal.model_group_name}</strong>
-              </p>
-              <p className="text-xs text-slate-500">
-                Product Name: <strong className="text-slate-800">{selectedStockModal.product_name || selectedStockModal.icat_name}</strong>
-              </p>
-            </div>
-
-            <div className="bg-teal-50/80 p-4 rounded-xl border border-teal-200/60 text-xs text-teal-900 space-y-1">
-              <p className="font-bold text-sm text-teal-950">Static Stock Placeholder</p>
-              <p className="text-teal-700">Live branch inventory integration is ready to be linked for this model group.</p>
-            </div>
-
-            <div className="flex justify-center pt-2">
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[85vh] p-6 shadow-2xl border border-slate-200 flex flex-col gap-4 overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-lg shadow-xs">
+                  <i className="fa-solid fa-boxes-stacked"></i>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-slate-900 text-lg">{stockModalData.modelGroup}</h3>
+                    <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                      {stockModalData.productName}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Showing available devices with <strong className="text-teal-700 font-semibold">Saleable Stock ≥ 1</strong>, grouped by place in alphabetical order.
+                  </p>
+                </div>
+              </div>
               <button
-                onClick={() => setSelectedStockModal(null)}
-                className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-semibold text-xs hover:bg-indigo-700 transition-all cursor-pointer shadow-sm"
+                onClick={() => setStockModalData(null)}
+                className="text-slate-400 hover:text-slate-600 text-xl cursor-pointer p-1 transition-colors"
+                title="Close"
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            {/* Modal Sub-Bar / Search & Metrics */}
+            {!stockModalData.loading && !stockModalData.error && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200/80">
+                <div className="relative w-full sm:w-72">
+                  <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                  <input
+                    type="text"
+                    value={stockSearchQuery}
+                    onChange={(e) => setStockSearchQuery(e.target.value)}
+                    placeholder="Search place, device or code..."
+                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden focus:border-teal-500 focus:ring-1 focus:ring-teal-500 text-slate-800 placeholder-slate-400"
+                  />
+                  {stockSearchQuery && (
+                    <button
+                      onClick={() => setStockSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                    >
+                      <i className="fa-solid fa-xmark"></i>
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3 w-full sm:w-auto justify-end text-xs">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-50 text-teal-800 border border-teal-200/80 font-medium">
+                    <span>Locations Available:</span>
+                    <strong className="font-bold text-teal-900">{processedStockData.sortedBranches.length}</strong>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-medium shadow-2xs">
+                    <span>Total Saleable Stock:</span>
+                    <strong className="font-bold text-white text-sm">{processedStockData.totalAvailableStock}</strong>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal Body / Content */}
+            <div className="flex-1 overflow-y-auto pr-1 space-y-4 min-h-[200px]">
+              {stockModalData.loading ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-500 gap-3">
+                  <div className="w-10 h-10 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+                  <p className="text-xs font-semibold text-slate-600">Fetching live inventory for {stockModalData.modelGroup}...</p>
+                </div>
+              ) : stockModalData.error ? (
+                <div className="bg-rose-50 border border-rose-200 rounded-xl p-5 text-center text-rose-800 space-y-3">
+                  <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center mx-auto text-rose-600">
+                    <i className="fa-solid fa-triangle-exclamation"></i>
+                  </div>
+                  <p className="text-xs font-semibold">{stockModalData.error}</p>
+                  <button
+                    onClick={() => handleOpenStockModal({ model_group_name: stockModalData.modelGroup, product_name: stockModalData.productName })}
+                    className="px-4 py-1.5 bg-rose-600 text-white rounded-lg text-xs font-semibold hover:bg-rose-700 transition-colors"
+                  >
+                    Retry Fetching
+                  </button>
+                </div>
+              ) : processedStockData.sortedBranches.length === 0 ? (
+                <div className="bg-slate-50 border border-dashed border-slate-300 rounded-xl p-10 text-center text-slate-500 space-y-2">
+                  <div className="w-12 h-12 bg-slate-200/70 rounded-full flex items-center justify-center mx-auto text-slate-400 text-xl">
+                    <i className="fa-solid fa-boxes-packing"></i>
+                  </div>
+                  <h4 className="font-bold text-slate-700 text-sm">No Saleable Stock Available</h4>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    {stockSearchQuery
+                      ? `No locations matching "${stockSearchQuery}" with Saleable Stock ≥ 1.`
+                      : `Currently there are no devices in stock (Saleable Stock ≥ 1) for ${stockModalData.modelGroup}.`}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {processedStockData.sortedBranches.map((branchName, bIdx) => {
+                    const group = processedStockData.branchGroups[branchName];
+                    return (
+                      <div
+                        key={bIdx}
+                        className="bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden transition-all"
+                      >
+                        {/* Branch Header (Alphabetically Sorted) */}
+                        <div className="bg-slate-50/90 px-4 py-2.5 border-b border-slate-200/70 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
+                              {bIdx + 1}
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <i className="fa-solid fa-location-dot text-indigo-600 text-xs"></i>
+                              <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wide">
+                                {group.branchName}
+                              </h4>
+                              {group.branchCode && (
+                                <span className="text-[11px] font-mono text-slate-500 font-semibold">
+                                  ({group.branchCode})
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] text-slate-500">Available Stock:</span>
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-teal-100 text-teal-800 border border-teal-200">
+                              {group.branchTotalStock}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Items Table for this Branch */}
+                        <div className="divide-y divide-slate-100 text-xs">
+                          {group.items.map((item, iIdx) => (
+                            <div
+                              key={iIdx}
+                              className="px-4 py-2.5 flex items-center justify-between hover:bg-slate-50/50 transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 text-xs">
+                                  <i className="fa-solid fa-mobile-screen"></i>
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-slate-800 text-xs">
+                                    {item.ITEM_NAME || "Item Details"}
+                                  </span>
+                                  {item.ITEM_CODE && (
+                                    <span className="text-[10px] font-mono text-slate-400">
+                                      Code: {item.ITEM_CODE}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3">
+                                <div className="flex flex-col items-end">
+                                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200/80">
+                                    {item.SALEABLE_STOCK} Saleable Stock
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+              <span className="text-[11px] text-slate-400 italic">
+                Source: Live APX Inventory Sync
+              </span>
+              <button
+                onClick={() => setStockModalData(null)}
+                className="px-5 py-2 bg-slate-100 text-slate-700 rounded-xl font-semibold text-xs hover:bg-slate-200 transition-all cursor-pointer"
               >
                 Close Stock View
               </button>
@@ -379,3 +633,4 @@ export default function PriceListReport() {
     </div>
   );
 }
+
