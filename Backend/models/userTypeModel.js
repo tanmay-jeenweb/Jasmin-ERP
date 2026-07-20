@@ -17,6 +17,7 @@ const MASTERS = [
     { key: 'support_master', label: 'Support Master' },
     { key: 'alert_master', label: 'Alert Master' },
     { key: 'variation_master', label: 'Variation Master' },
+    { key: 'landing_type_master', label: 'Landing Type Master' },
 ];
 
 // ─── Table creation ──────────────────────────────────────────────────────────

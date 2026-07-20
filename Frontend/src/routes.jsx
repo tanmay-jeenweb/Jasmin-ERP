@@ -13,6 +13,7 @@ import MobileBrandMaster from "./pages/admin/MobileBrandMaster";
 import BankMaster from "./pages/admin/BankMaster";
 import FinanceMachineMaster from "./pages/admin/FinanceMachineMaster";
 import StateMaster from "./pages/admin/StateMaster";
+import LandingTypeMaster from "./pages/admin/LandingTypeMaster";
 import SupportMaster from "./pages/admin/SupportMaster";
 import ProductTypeMaster from "./pages/admin/ProductTypeMaster";
 import ItemModelMaster from "./pages/admin/ItemModelMaster";
@@ -199,6 +200,13 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/states"
                     element={<StateMaster />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="landing_type_master" requiredAction="read" />}>
+                <Route
+                    path="/admin/landing-types"
+                    element={<LandingTypeMaster />}
                 />
             </Route>
 

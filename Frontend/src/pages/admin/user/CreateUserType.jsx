@@ -20,6 +20,7 @@ const MASTERS = [
   { key: "support_master", label: "Support Master" },
   { key: "alert_master", label: "Alert Master" },
   { key: "variation_master", label: "Pricing Formula Master" },
+  { key: "landing_type_master", label: "Landing Type Master" },
 ];
 
 const PERMS = ["canRead", "canWrite", "canUpdate", "canDelete"];

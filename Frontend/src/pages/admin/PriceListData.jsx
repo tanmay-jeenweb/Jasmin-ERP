@@ -68,23 +68,7 @@ export default function PriceListData() {
     loadData();
   }, [variationId]);
 
-  // Load variation details to get brand configurations for filtering during export
-  useEffect(() => {
-    const fetchVariationDetails = async () => {
-      try {
-        const res = await getPriceListData(variationId);
-        if (res.data?.success) {
-          // In order to get the brand list, we can fetch from backend details.
-          // Since the first API returns variation metadata we can extract brands from brand_configs
-          const resMeta = await getPriceListData(variationId);
-          // Wait, we need the exact brand configs from variation rule. Let's do another request or parse from first res.
-        }
-      } catch (err) {
-        console.error("Failed to fetch variation details:", err);
-      }
-    };
-    fetchVariationDetails();
-  }, [variationId]);
+
 
   const columns = useMemo(() => {
     const cols = [
@@ -155,43 +139,25 @@ export default function PriceListData() {
         ? (typeof currentVar.brand_configs === 'string' ? JSON.parse(currentVar.brand_configs) : currentVar.brand_configs)
         : [];
 
-      const brandsList = [];
-      configs.forEach(cfg => {
-        if (Array.isArray(cfg.brands)) {
-          cfg.brands.forEach(b => {
-            if (b && !brandsList.includes(b)) {
-              brandsList.push(b);
-            }
-          });
-        }
-      });
-
-      if (brandsList.length === 0) {
-        toast.error("No brands are configured for this pricing formula master format.", { id: loadToastId });
-        return;
-      }
-
-      const upperBrands = brandsList.map(b => String(b).trim().toUpperCase());
-
       // 2. Fetch all models from Model Master
       const modelsRes = await getItemModels();
       const allModels = modelsRes.data?.data || [];
 
-      // 3. Filter models by configured brands
-      const filteredModels = allModels.filter(m =>
-        m.brand_name && upperBrands.includes(m.brand_name.trim().toUpperCase())
+      // Filter active models (include all active product models)
+      const activeModels = allModels.filter(m =>
+        !m.item_status || String(m.item_status).toLowerCase() === "active"
       );
 
-      if (filteredModels.length === 0) {
-        toast.error(`No product models found in database for brands: ${brandsList.join(", ")}`, { id: loadToastId });
+      if (activeModels.length === 0) {
+        toast.error("No active product models found in database.", { id: loadToastId });
         return;
       }
 
-      // 4. Generate the Excel workbook
+      // 3. Generate the Excel workbook
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Price List");
 
-      // 5. Columns configuration
+      // 4. Columns configuration
       const fixedHeaders = [
         { header: "Product Code", key: "product_code", width: 18 },
         { header: "Brand", key: "brand", width: 15 },
@@ -226,8 +192,8 @@ export default function PriceListData() {
       });
       headerRow.height = 25;
 
-      // 6. Populate Rows
-      filteredModels.forEach((m, index) => {
+      // 5. Populate Rows for all active product models
+      activeModels.forEach((m, index) => {
         const rowIndex = index + 2;
         const existingRow = data.find(r => r.product_code === m.item_code);
 
@@ -244,9 +210,9 @@ export default function PriceListData() {
           if (isFormulaType) {
             let formulaToUse = "";
 
-            // Check brand configurations for specific formula
+            // Check brand configurations for specific formula override
             const matchingConfig = configs.find(cfg =>
-              cfg.brands && cfg.brands.map(b => b.trim().toUpperCase()).includes(m.brand_name.trim().toUpperCase())
+              m.brand_name && cfg.brands && cfg.brands.map(b => String(b).trim().toUpperCase()).includes(String(m.brand_name).trim().toUpperCase())
             );
             if (matchingConfig) {
               const matchingColFormula = matchingConfig.columns?.find(c => c.column_id === col.column_id);
