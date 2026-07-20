@@ -53,7 +53,7 @@ export default function Navbar() {
                 console.error("Failed to fetch price formats:", err);
             }
         };
-        if (isAdmin || hasPermission("pricing_formula_master", "read") || hasPermission("variation_master", "read")) {
+        if (isAdmin || hasPermission("variation_master", "read")) {
             fetchPriceFormats();
         }
     }, [isAdmin, hasPermission, location.pathname]);
@@ -152,13 +152,13 @@ export default function Navbar() {
             desc: "Manage geographic states"
         },
         {
-            name: "Pricing Formula Master",
-            path: "/admin/pricing-formulas",
-            masterKey: "pricing_formula_master",
+            name: "Variation Master",
+            path: "/admin/variations",
+            masterKey: "variation_master",
             icon: "fa-solid fa-calculator",
             color: "bg-purple-50 text-purple-600 border border-purple-100/50",
             activeColor: "bg-purple-100 text-purple-700",
-            desc: "Manage Excel pricing formula rules"
+            desc: "Manage Excel variation rules"
         },
         {
             name: "Support Master",
@@ -493,7 +493,7 @@ export default function Navbar() {
                         )}
 
                         {/* Price List Dropdown */}
-                        {(isAdmin || hasPermission("pricing_formula_master", "read") || hasPermission("variation_master", "read")) && (
+                        {(isAdmin || hasPermission("variation_master", "read")) && (
                             <div className="relative" id="price-list-dropdown">
                                 <button
                                     onClick={() => setIsPriceListOpen(!isPriceListOpen)}
@@ -524,7 +524,7 @@ export default function Navbar() {
                                                 <p className="text-slate-500 text-xs text-center py-2">No formats configured</p>
                                             ) : (
                                                 priceFormats.map((f, idx) => {
-                                                    const brandsList = f.brand_configs 
+                                                    const brandsList = f.brand_configs
                                                         ? (typeof f.brand_configs === 'string' ? JSON.parse(f.brand_configs) : f.brand_configs)
                                                         : [];
                                                     const label = f.format_name || `${f.state_name} (${brandsList.join(', ')})`;

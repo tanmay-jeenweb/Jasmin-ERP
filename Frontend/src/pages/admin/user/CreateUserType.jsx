@@ -19,7 +19,7 @@ const MASTERS = [
   { key: "user_branch_mapping", label: "User Branch Mapping" },
   { key: "support_master", label: "Support Master" },
   { key: "alert_master", label: "Alert Master" },
-  { key: "pricing_formula_master", label: "Pricing Formula Master" },
+  { key: "variation_master", label: "Variation Master" },
 ];
 
 const PERMS = ["canRead", "canWrite", "canUpdate", "canDelete"];
@@ -89,12 +89,12 @@ export default function CreateUserType() {
       prev.map((p) =>
         p.masterName === masterKey
           ? {
-              ...p,
-              canRead: !allChecked,
-              canWrite: !allChecked,
-              canUpdate: isApprovalRow ? false : !allChecked,
-              canDelete: isApprovalRow ? false : !allChecked,
-            }
+            ...p,
+            canRead: !allChecked,
+            canWrite: !allChecked,
+            canUpdate: isApprovalRow ? false : !allChecked,
+            canDelete: isApprovalRow ? false : !allChecked,
+          }
           : p
       )
     );
@@ -147,7 +147,7 @@ export default function CreateUserType() {
     }
     return p[perm];
   });
-  
+
   const isAllAll = () => permissions.every((p) => {
     const isApprovalRow = p.masterName.endsWith("_approval");
     const applicablePerms = isApprovalRow ? ["canRead", "canWrite"] : PERMS;

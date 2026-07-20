@@ -16,7 +16,7 @@ const MASTERS = [
     { key: 'user_branch_mapping', label: 'User Branch Mapping' },
     { key: 'support_master', label: 'Support Master' },
     { key: 'alert_master', label: 'Alert Master' },
-    { key: 'pricing_formula_master', label: 'Pricing Formula Master' },
+    { key: 'variation_master', label: 'Variation Master' },
 ];
 
 // ─── Table creation ──────────────────────────────────────────────────────────
@@ -76,7 +76,7 @@ const createUserTypePermissionsTable = async () => {
 
         await db.execute("UPDATE IGNORE user_type_permissions SET master_name = 'user_branch_mapping' WHERE master_name = 'abm_branch_mapping'");
         await db.execute("DELETE FROM user_type_permissions WHERE master_name = 'abm_branch_mapping'");
-        
+
         console.log("✅ Permission keys migrated to worker_employee, worker_employee_type, and user_branch_mapping.");
     } catch (err) {
         console.error("Migration of user permissions failed:", err.message);

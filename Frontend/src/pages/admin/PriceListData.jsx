@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import DataTable from "../../components/DataTable";
 import { getPriceListData, importPriceListData } from "../../api/priceListApi";
-import { getPricingFormulas as getVariations } from "../../api/pricingFormulaApi";
+import { getVariations } from "../../api/variationApi";
 import { getItemModels } from "../../api/itemModelApi";
 import ExcelJS from "exceljs";
 import toast from "react-hot-toast";
@@ -51,7 +51,7 @@ export default function PriceListData() {
       if (res.data?.success) {
         setData(res.data.data || []);
         setFormatName(res.data.formatName || "Price List");
-        
+
         // Save variation configurations
         const cols = res.data.columns || [];
         setDynamicColumns(cols);
@@ -141,17 +141,17 @@ export default function PriceListData() {
         toast.error("Failed to fetch format config.", { id: loadToastId });
         return;
       }
-      
+
       // Get the brands list from the model configuration
       const listRes = await getVariations();
       const currentVar = listRes.data?.data?.find(v => String(v.id) === String(variationId));
-      
+
       if (!currentVar) {
         toast.error("Failed to locate variation configuration.", { id: loadToastId });
         return;
       }
 
-      const configs = currentVar.brand_configs 
+      const configs = currentVar.brand_configs
         ? (typeof currentVar.brand_configs === 'string' ? JSON.parse(currentVar.brand_configs) : currentVar.brand_configs)
         : [];
 
@@ -167,7 +167,7 @@ export default function PriceListData() {
       });
 
       if (brandsList.length === 0) {
-        toast.error("No brands are configured for this pricing formula master format.", { id: loadToastId });
+        toast.error("No brands are configured for this variation master format.", { id: loadToastId });
         return;
       }
 
@@ -178,7 +178,7 @@ export default function PriceListData() {
       const allModels = modelsRes.data?.data || [];
 
       // 3. Filter models by configured brands
-      const filteredModels = allModels.filter(m => 
+      const filteredModels = allModels.filter(m =>
         m.brand_name && upperBrands.includes(m.brand_name.trim().toUpperCase())
       );
 
@@ -243,9 +243,9 @@ export default function PriceListData() {
           const isFormulaType = col.type === "default formulation" || col.type === "formulation";
           if (isFormulaType) {
             let formulaToUse = "";
-            
+
             // Check brand configurations for specific formula
-            const matchingConfig = configs.find(cfg => 
+            const matchingConfig = configs.find(cfg =>
               cfg.brands && cfg.brands.map(b => b.trim().toUpperCase()).includes(m.brand_name.trim().toUpperCase())
             );
             if (matchingConfig) {
@@ -261,8 +261,8 @@ export default function PriceListData() {
             }
 
             if (formulaToUse) {
-              rowData[col.column_name] = { 
-                formula: mapFormulaForRow(formulaToUse, rowIndex) 
+              rowData[col.column_name] = {
+                formula: mapFormulaForRow(formulaToUse, rowIndex)
               };
             } else {
               rowData[col.column_name] = "";

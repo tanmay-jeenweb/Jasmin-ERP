@@ -7,7 +7,7 @@ const { verifyToken, verifyPermission } = require('../middleware/authMiddleware.
 
 const router = express.Router();
 
-router.get('/:variationId', verifyToken, verifyPermission('pricing_formula_master', 'read'), getPriceListDataController);
-router.post('/import/:variationId', verifyToken, verifyPermission('pricing_formula_master', 'update'), importPriceListController);
+router.get('/:variationId', verifyToken, verifyPermission('variation_master', 'read'), getPriceListDataController);
+router.post('/import/:variationId', verifyToken, verifyPermission('variation_master', 'update'), importPriceListController);
 
 module.exports = router;

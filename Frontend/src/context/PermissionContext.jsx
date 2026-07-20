@@ -47,7 +47,7 @@ export function PermissionProvider({ children }) {
 
     useEffect(() => {
         fetchPermissions();
-        
+
         // Listen for storage or custom events for login/logout
         const handleStorageChange = () => {
             fetchPermissions();
@@ -67,10 +67,7 @@ export function PermissionProvider({ children }) {
         const user = JSON.parse(localStorage.getItem("user") || "null");
         if (user && user.role === "admin") return true;
 
-        let perm = permissions[masterName];
-        if (!perm && masterName === "pricing_formula_master") {
-            perm = permissions["variation_master"];
-        }
+        const perm = permissions[masterName];
         if (!perm) return false;
 
         return !!perm[action];

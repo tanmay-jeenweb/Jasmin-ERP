@@ -34,8 +34,8 @@ import FinanceBrandReport from "./pages/admin/FinanceBrandReport";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AlertMaster from "./pages/admin/AlertMaster";
-import PricingFormulaMasterList from "./pages/admin/PricingFormulaMasterList";
-import PricingFormulaForm from "./pages/admin/PricingFormulaForm";
+import VariationMasterList from "./pages/admin/VariationMasterList";
+import VariationForm from "./pages/admin/VariationForm";
 import PriceListData from "./pages/admin/PriceListData";
 
 
@@ -259,14 +259,10 @@ export default function AppRoutes() {
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="pricing_formula_master" requiredAction="read" />}>
-                <Route
-                    path="/admin/pricing-formulas"
-                    element={<PricingFormulaMasterList />}
-                />
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="variation_master" requiredAction="read" />}>
                 <Route
                     path="/admin/variations"
-                    element={<Navigate to="/admin/pricing-formulas" replace />}
+                    element={<VariationMasterList />}
                 />
                 <Route
                     path="/admin/price-list/:variationId"
@@ -274,18 +270,14 @@ export default function AppRoutes() {
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="pricing_formula_master" requiredAction="write" />}>
-                <Route
-                    path="/admin/pricing-formulas/add"
-                    element={<PricingFormulaForm />}
-                />
-                <Route
-                    path="/admin/pricing-formulas/edit/:id"
-                    element={<PricingFormulaForm />}
-                />
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="variation_master" requiredAction="write" />}>
                 <Route
                     path="/admin/variations/add"
-                    element={<Navigate to="/admin/pricing-formulas/add" replace />}
+                    element={<VariationForm />}
+                />
+                <Route
+                    path="/admin/variations/edit/:id"
+                    element={<VariationForm />}
                 />
             </Route>
 

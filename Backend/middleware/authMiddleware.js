@@ -97,26 +97,20 @@ const verifyPermission = (masterName, action) => {
                 });
             }
 
-            const mastersToCheck = Array.isArray(masterName)
-                ? masterName
-                : (masterName === 'pricing_formula_master' ? ['pricing_formula_master', 'variation_master'] : [masterName]);
+            const query = `
+                SELECT ${column} AS permitted 
+                FROM user_type_permissions 
+                WHERE user_type_id = ? AND master_name = ?
+            `;
+            const [permRows] = await db.execute(query, [userTypeId, masterName]);
 
-            for (const mName of mastersToCheck) {
-                const query = `
-                    SELECT ${column} AS permitted 
-                    FROM user_type_permissions 
-                    WHERE user_type_id = ? AND master_name = ?
-                `;
-                const [permRows] = await db.execute(query, [userTypeId, mName]);
-
-                if (permRows.length > 0 && permRows[0].permitted === 1) {
-                    return next();
-                }
+            if (permRows.length > 0 && permRows[0].permitted === 1) {
+                return next();
             }
 
             return res.status(403).json({
                 success: false,
-                message: `Access Denied. Insufficient permissions for ${Array.isArray(masterName) ? masterName.join('/') : masterName} (${action}).`
+                message: `Access Denied. Insufficient permissions for ${masterName} (${action}).`
             });
 
         } catch (error) {
