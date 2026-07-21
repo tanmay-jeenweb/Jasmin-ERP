@@ -22,7 +22,8 @@ const MASTERS = [
   { key: "user_branch_mapping", label: "User Branch Mapping" },
   { key: "support_master", label: "Support Master" },
   { key: "alert_master", label: "Alert Master" },
-  { key: "variation_master", label: "Variation Master" },
+  { key: "variation_master", label: "Pricing Formula Master" },
+  { key: "landing_type_master", label: "Landing Type Master" },
 ];
 const PERMS = ["canRead", "canWrite", "canUpdate", "canDelete"];
 const PERM_LABELS = { canRead: "Read", canWrite: "Write / Approval", canUpdate: "Update", canDelete: "Delete" };
@@ -141,12 +142,12 @@ function EditModal({ row, onClose, onSave, saving }) {
     const all = applicablePerms.every((perm) => r[perm]);
     setPermissions((prev) => prev.map((p) => p.masterName === masterKey
       ? {
-          ...p,
-          canRead: !all,
-          canWrite: !all,
-          canUpdate: isApprovalRow ? false : !all,
-          canDelete: isApprovalRow ? false : !all
-        } : p));
+        ...p,
+        canRead: !all,
+        canWrite: !all,
+        canUpdate: isApprovalRow ? false : !all,
+        canDelete: isApprovalRow ? false : !all
+      } : p));
   };
 
   const toggleColumn = (perm) => {
@@ -418,12 +419,11 @@ export default function UserGroupMaster() {
       {
         key: "user_role", label: "User Role",
         render: (row) => (
-          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-            row.user_role === 'ADMIN' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
-            row.user_role === 'ABM' ? 'bg-teal-50 text-teal-700 border-teal-200' :
-            row.user_role === 'MANAGER' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-            'bg-slate-50 text-slate-700 border-slate-200'
-          }`}>
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${row.user_role === 'ADMIN' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+              row.user_role === 'ABM' ? 'bg-teal-50 text-teal-700 border-teal-200' :
+                row.user_role === 'MANAGER' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                  'bg-slate-50 text-slate-700 border-slate-200'
+            }`}>
             {row.user_role || 'VIEWER'}
           </span>
         )

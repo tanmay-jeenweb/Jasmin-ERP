@@ -6,6 +6,7 @@ import { getStates } from "../../../api/stateApi";
 import { getBranches } from "../../../api/branchApi";
 import { getProductTypes } from "../../../api/productTypeApi";
 import { getMobileBrands } from "../../../api/mobileBrandApi";
+import { getLandingTypes } from "../../../api/landingTypeApi";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
@@ -17,6 +18,7 @@ export default function CreateUser() {
     const [statesList, setStatesList] = useState([]);
     const [productTypesList, setProductTypesList] = useState([]);
     const [brandsList, setBrandsList] = useState([]);
+    const [landingTypesList, setLandingTypesList] = useState([]);
 
     // Dropdown visibility states
     const [isStateDropdownOpen, setIsStateDropdownOpen] = useState(false);
@@ -37,11 +39,9 @@ export default function CreateUser() {
     const [landingTypeSearch, setLandingTypeSearch] = useState("");
     const [brandSearch, setBrandSearch] = useState("");
 
-    const landingTypesOptions = ["GST DP", "net LANDING", "MANAGER LANDING", "JASMIN LANDING"];
-
     const filteredStates = statesList.filter(s => s.name.toLowerCase().includes(stateSearch.toLowerCase()));
     const filteredProductTypes = productTypesList.filter(pt => pt.product_type_name.toLowerCase().includes(productTypeSearch.toLowerCase()));
-    const filteredLandingTypes = landingTypesOptions.filter(opt => opt.toLowerCase().includes(landingTypeSearch.toLowerCase()));
+    const filteredLandingTypes = landingTypesList.filter(lt => lt.name.toLowerCase().includes(landingTypeSearch.toLowerCase()));
     const filteredBrands = brandsList.filter(b => b.mobile_brand.toLowerCase().includes(brandSearch.toLowerCase()));
 
     const [newUserForm, setNewUserForm] = useState({
@@ -59,16 +59,18 @@ export default function CreateUser() {
 
     const loadFormData = async () => {
         try {
-            const [utRes, stateRes, ptRes, brandRes] = await Promise.all([
+            const [utRes, stateRes, ptRes, brandRes, ltRes] = await Promise.all([
                 getUserTypes(),
                 getStates(),
                 getProductTypes(),
-                getMobileBrands()
+                getMobileBrands(),
+                getLandingTypes()
             ]);
             setUserTypes(utRes.data.data || []);
             setStatesList((stateRes.data.data || []).filter(s => s.live === "Yes"));
             setProductTypesList(ptRes.data.data || []);
             setBrandsList(brandRes.data.data || []);
+            setLandingTypesList((ltRes.data.data || []).filter(lt => lt.live === "Yes"));
         } catch (error) {
             console.error("Error loading form data:", error);
             toast.error("Failed to load options for user registration.");
@@ -156,7 +158,7 @@ export default function CreateUser() {
     const handleToggleLandingType = (name) => {
         let updated = [...selectedLandingTypes];
         if (name === "All") {
-            const allFiltered = filteredLandingTypes;
+            const allFiltered = filteredLandingTypes.map(lt => lt.name);
             const isAllFilteredSelected = allFiltered.every(item => updated.includes(item));
             if (isAllFilteredSelected) {
                 updated = updated.filter(val => !allFiltered.includes(val) && val !== "All");
@@ -164,7 +166,7 @@ export default function CreateUser() {
                 allFiltered.forEach(item => {
                     if (!updated.includes(item)) updated.push(item);
                 });
-                if (landingTypesOptions.every(opt => updated.includes(opt))) {
+                if (landingTypesList.every(lt => updated.includes(lt.name))) {
                     updated.push("All");
                 }
             }
@@ -173,7 +175,7 @@ export default function CreateUser() {
                 updated = updated.filter(val => val !== name && val !== "All");
             } else {
                 updated.push(name);
-                if (landingTypesOptions.every(opt => updated.includes(opt))) {
+                if (landingTypesList.every(lt => updated.includes(lt.name))) {
                     updated.push("All");
                 }
             }
@@ -241,6 +243,12 @@ export default function CreateUser() {
 
     const handleCreateUser = async (e) => {
         e.preventDefault();
+
+        if (!selectedLandingTypes || selectedLandingTypes.length === 0) {
+            toast.error("Please select at least one Landing Type.");
+            return;
+        }
+
         setCreatingUser(true);
         try {
             const payload = {
@@ -567,7 +575,7 @@ export default function CreateUser() {
                                          <label className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer text-sm font-medium text-slate-700">
                                              <input
                                                  type="checkbox"
-                                                 checked={filteredLandingTypes.length > 0 && filteredLandingTypes.every(opt => selectedLandingTypes.includes(opt))}
+                                                 checked={filteredLandingTypes.length > 0 && filteredLandingTypes.every(lt => selectedLandingTypes.includes(lt.name))}
                                                  onChange={() => handleToggleLandingType("All")}
                                                  className="h-4 w-4 text-[#6804a1] border-slate-300 rounded focus:ring-[#6804a1]"
                                              />
@@ -576,15 +584,15 @@ export default function CreateUser() {
                                          {filteredLandingTypes.length === 0 ? (
                                              <div className="text-xs text-slate-400 p-1.5">No landing types found</div>
                                          ) : (
-                                             filteredLandingTypes.map(opt => (
-                                                 <label key={opt} className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer text-sm text-slate-700">
+                                             filteredLandingTypes.map(lt => (
+                                                 <label key={lt.id} className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer text-sm text-slate-700">
                                                      <input
                                                          type="checkbox"
-                                                         checked={selectedLandingTypes.includes(opt)}
-                                                         onChange={() => handleToggleLandingType(opt)}
+                                                         checked={selectedLandingTypes.includes(lt.name)}
+                                                         onChange={() => handleToggleLandingType(lt.name)}
                                                          className="h-4 w-4 text-[#6804a1] border-slate-300 rounded focus:ring-[#6804a1]"
                                                      />
-                                                     {opt}
+                                                     {lt.name}
                                                  </label>
                                              ))
                                          )}

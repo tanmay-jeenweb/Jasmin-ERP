@@ -58,6 +58,13 @@ const login = async (req, res) => {
             });
         }
 
+        // Helper to format landing_type array
+        let userLandingType = user.landing_type;
+        if (typeof userLandingType === 'string') {
+            try { userLandingType = JSON.parse(userLandingType); } catch (e) { userLandingType = [userLandingType]; }
+        }
+        if (!userLandingType) userLandingType = ["All"];
+
         // ================= ADMIN LOGIN =================
         if (user.role === "admin" && (user.device_verification_required === 0 || user.device_verification_required === false)) {
             const token = jwt.sign(
@@ -77,7 +84,8 @@ const login = async (req, res) => {
                     email: user.email,
                     role: user.role,
                     mob_no: user.mob_no,
-                    modules: user.modules || []
+                    modules: user.modules || [],
+                    landing_type: userLandingType
                 }
             });
         }
@@ -101,7 +109,8 @@ const login = async (req, res) => {
                     email: user.email,
                     role: user.role,
                     mob_no: user.mob_no,
-                    modules: user.modules || []
+                    modules: user.modules || [],
+                    landing_type: userLandingType
                 }
             });
         }
@@ -128,7 +137,8 @@ const login = async (req, res) => {
                         email: user.email,
                         role: user.role,
                         mob_no: user.mob_no,
-                        modules: user.modules || []
+                        modules: user.modules || [],
+                        landing_type: userLandingType
                     }
                 });
             } else {

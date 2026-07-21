@@ -1,9 +1,9 @@
 import { useEffect, useState, useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import DataTable from "../../components/DataTable";
 import { getPriceListData, importPriceListData } from "../../api/priceListApi";
-import { getVariations } from "../../api/variationApi";
+import { getPricingFormulas as getVariations } from "../../api/pricingFormulaApi";
 import { getItemModels } from "../../api/itemModelApi";
 import ExcelJS from "exceljs";
 import toast from "react-hot-toast";
@@ -34,8 +34,38 @@ const mapFormulaForRow = (formula, targetRow) => {
   return `IFERROR(${mappedFormula},"")`;
 };
 
+const canUserViewColumn = (col, user) => {
+  const allowedLandingTypes = col.landing_types && Array.isArray(col.landing_types) && col.landing_types.length > 0
+    ? col.landing_types
+    : ["All"];
+
+  if (allowedLandingTypes.includes("All")) {
+    return true;
+  }
+
+  let userLandingTypes = user?.landing_type;
+  if (typeof userLandingTypes === "string") {
+    try {
+      userLandingTypes = JSON.parse(userLandingTypes);
+    } catch (e) {
+      userLandingTypes = [userLandingTypes];
+    }
+  }
+
+  if (!userLandingTypes || !Array.isArray(userLandingTypes) || userLandingTypes.length === 0) {
+    return true;
+  }
+
+  if (userLandingTypes.includes("All")) {
+    return true;
+  }
+
+  return userLandingTypes.some(ult => allowedLandingTypes.includes(ult));
+};
+
 export default function PriceListData() {
   const { variationId } = useParams();
+  const navigate = useNavigate();
   const [data, setData] = useState([]);
   const [dynamicColumns, setDynamicColumns] = useState([]);
   const [formatName, setFormatName] = useState("");
@@ -44,6 +74,18 @@ export default function PriceListData() {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
 
+  const currentUser = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}");
+    } catch (e) {
+      return {};
+    }
+  }, []);
+
+  const visibleDynamicColumns = useMemo(() => {
+    return dynamicColumns.filter(col => canUserViewColumn(col, currentUser));
+  }, [dynamicColumns, currentUser]);
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -51,7 +93,7 @@ export default function PriceListData() {
       if (res.data?.success) {
         setData(res.data.data || []);
         setFormatName(res.data.formatName || "Price List");
-        
+
         // Save variation configurations
         const cols = res.data.columns || [];
         setDynamicColumns(cols);
@@ -66,24 +108,6 @@ export default function PriceListData() {
 
   useEffect(() => {
     loadData();
-  }, [variationId]);
-
-  // Load variation details to get brand configurations for filtering during export
-  useEffect(() => {
-    const fetchVariationDetails = async () => {
-      try {
-        const res = await getPriceListData(variationId);
-        if (res.data?.success) {
-          // In order to get the brand list, we can fetch from backend details.
-          // Since the first API returns variation metadata we can extract brands from brand_configs
-          const resMeta = await getPriceListData(variationId);
-          // Wait, we need the exact brand configs from variation rule. Let's do another request or parse from first res.
-        }
-      } catch (err) {
-        console.error("Failed to fetch variation details:", err);
-      }
-    };
-    fetchVariationDetails();
   }, [variationId]);
 
   const columns = useMemo(() => {
@@ -115,7 +139,7 @@ export default function PriceListData() {
       }
     ];
 
-    dynamicColumns.forEach(c => {
+    visibleDynamicColumns.forEach(c => {
       cols.push({
         key: c.column_name,
         label: c.column_name,
@@ -127,8 +151,35 @@ export default function PriceListData() {
       });
     });
 
+    cols.push({
+      key: "updated_at",
+      label: "Last Updated",
+      render: (row) => {
+        const rawDate = row.updated_at || row.timestamp;
+        if (!rawDate) return <span className="text-slate-400 text-xs">—</span>;
+        const dateObj = new Date(rawDate);
+        if (isNaN(dateObj.getTime())) return <span className="text-slate-400 text-xs">—</span>;
+        const formattedDate = dateObj.toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric"
+        });
+        const formattedTime = dateObj.toLocaleTimeString("en-IN", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true
+        });
+        return (
+          <div className="flex flex-col text-xs text-slate-700 whitespace-nowrap">
+            <span className="font-semibold">{formattedDate}</span>
+            <span className="text-[11px] text-slate-500 font-mono">{formattedTime}</span>
+          </div>
+        );
+      }
+    });
+
     return cols;
-  }, [dynamicColumns]);
+  }, [visibleDynamicColumns]);
 
   const handleExportTemplate = async () => {
     setExporting(true);
@@ -141,17 +192,17 @@ export default function PriceListData() {
         toast.error("Failed to fetch format config.", { id: loadToastId });
         return;
       }
-      
+
       // Get the brands list from the model configuration
       const listRes = await getVariations();
       const currentVar = listRes.data?.data?.find(v => String(v.id) === String(variationId));
-      
+
       if (!currentVar) {
         toast.error("Failed to locate variation configuration.", { id: loadToastId });
         return;
       }
 
-      const configs = currentVar.brand_configs 
+      const configs = currentVar.brand_configs
         ? (typeof currentVar.brand_configs === 'string' ? JSON.parse(currentVar.brand_configs) : currentVar.brand_configs)
         : [];
 
@@ -159,9 +210,9 @@ export default function PriceListData() {
       const modelsRes = await getItemModels();
       const allModels = modelsRes.data?.data || [];
 
-      // Filter active models
-      const activeModels = allModels.filter(
-        (m) => !m.item_status || String(m.item_status).toLowerCase() === "active"
+      // Filter active models (include all active product models)
+      const activeModels = allModels.filter(m =>
+        !m.item_status || String(m.item_status).toLowerCase() === "active"
       );
 
       if (activeModels.length === 0) {
@@ -169,11 +220,11 @@ export default function PriceListData() {
         return;
       }
 
-      // 4. Generate the Excel workbook
+      // 3. Generate the Excel workbook
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Price List");
 
-      // 5. Columns configuration
+      // 4. Columns configuration
       const fixedHeaders = [
         { header: "Product Code", key: "product_code", width: 18 },
         { header: "Brand", key: "brand", width: 15 },
@@ -182,7 +233,7 @@ export default function PriceListData() {
         { header: "Model Name", key: "model_name", width: 35 },
       ];
 
-      const customHeaders = dynamicColumns.map(col => ({
+      const customHeaders = visibleDynamicColumns.map(col => ({
         header: col.column_name,
         key: col.column_name,
         width: 20
@@ -208,7 +259,7 @@ export default function PriceListData() {
       });
       headerRow.height = 25;
 
-      // 6. Populate Rows
+      // 5. Populate Rows for all active product models
       activeModels.forEach((m, index) => {
         const rowIndex = index + 2;
         const existingRow = data.find(r => r.product_code === m.item_code);
@@ -221,14 +272,14 @@ export default function PriceListData() {
           model_name: m.model_name,
         };
 
-        dynamicColumns.forEach(col => {
+        visibleDynamicColumns.forEach(col => {
           const isFormulaType = col.type === "default formulation" || col.type === "formulation";
           if (isFormulaType) {
             let formulaToUse = "";
-            
-            // Check brand configurations for specific formula
-            const matchingConfig = configs.find(cfg => 
-              cfg.brands && cfg.brands.map(b => b.trim().toUpperCase()).includes(m.brand_name.trim().toUpperCase())
+
+            // Check brand configurations for specific formula override
+            const matchingConfig = configs.find(cfg =>
+              m.brand_name && cfg.brands && cfg.brands.map(b => String(b).trim().toUpperCase()).includes(String(m.brand_name).trim().toUpperCase())
             );
             if (matchingConfig) {
               const matchingColFormula = matchingConfig.columns?.find(c => c.column_id === col.column_id);
@@ -243,8 +294,8 @@ export default function PriceListData() {
             }
 
             if (formulaToUse) {
-              rowData[col.column_name] = { 
-                formula: mapFormulaForRow(formulaToUse, rowIndex) 
+              rowData[col.column_name] = {
+                formula: mapFormulaForRow(formulaToUse, rowIndex)
               };
             } else {
               rowData[col.column_name] = "";
@@ -317,7 +368,7 @@ export default function PriceListData() {
           const headerRow = worksheet.getRow(1);
           const colHeaders = [];
           const requiredFixed = ["Product Code", "Brand", "Icat Name", "Model Group Name", "Model Name"];
-          const maxCols = Math.max(worksheet.columnCount, requiredFixed.length + dynamicColumns.length);
+          const maxCols = Math.max(worksheet.columnCount, requiredFixed.length + visibleDynamicColumns.length);
           for (let colNum = 1; colNum <= maxCols; colNum++) {
             const cellVal = headerRow.getCell(colNum).value;
             colHeaders[colNum] = cellVal ? String(cellVal).trim() : "";
@@ -333,7 +384,7 @@ export default function PriceListData() {
           }
 
           // Verify dynamic columns
-          const customColNames = dynamicColumns.map(c => c.column_name.trim());
+          const customColNames = visibleDynamicColumns.map(c => c.column_name.trim());
           for (let i = 0; i < customColNames.length; i++) {
             const expectedHeader = customColNames[i];
             const actualHeader = colHeaders[i + 1 + requiredFixed.length];
@@ -402,7 +453,7 @@ export default function PriceListData() {
               model_name: row.getCell(5).value ? String(row.getCell(5).value).trim() : "",
             };
 
-            dynamicColumns.forEach((col, idx) => {
+            visibleDynamicColumns.forEach((col, idx) => {
               const colIdx = 1 + requiredFixed.length + idx;
               const cellVal = getVal(row, colIdx);
               record[col.column_name] = cellVal !== undefined && cellVal !== null ? String(cellVal).trim() : "";
@@ -458,6 +509,15 @@ export default function PriceListData() {
           searchPlaceholder="Search products or prices..."
           actionButton={
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate(`/admin/price-list-report/${variationId}`)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-[9px] text-emerald-800 bg-emerald-50 border border-emerald-200 font-semibold text-[13px] hover:bg-emerald-100/80 transition-all cursor-pointer shadow-xs"
+                title="View Price List Report"
+              >
+                <i className="fa-solid fa-square-poll-vertical text-emerald-600 text-xs"></i>
+                <span>View Price Report</span>
+              </button>
+
               <button
                 onClick={handleExportTemplate}
                 disabled={exporting || loading}

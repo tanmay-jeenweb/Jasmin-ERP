@@ -54,6 +54,8 @@ const branchBrandFinanceReportRoutes = require("./routes/branchBrandFinanceRepor
 const { createVariationTable } = require("./models/variationModel.js");
 const variationRoutes = require("./routes/variationRoutes.js");
 const priceListRoutes = require("./routes/priceListRoutes.js");
+const { createLandingTypeTable } = require("./models/landingTypeModel.js");
+const landingTypeRoutes = require("./routes/landingTypeRoutes.js");
 
 
 
@@ -120,6 +122,7 @@ app.use(["/api/branch-brand-finance-mapping", "/branch-brand-finance-mapping"], 
 app.use(["/api/reports", "/reports"], branchBrandFinanceReportRoutes);
 app.use(["/api/variations", "/variations"], variationRoutes);
 app.use(["/api/price-lists", "/price-lists"], priceListRoutes);
+app.use(["/api/landingtypes", "/landingtypes"], landingTypeRoutes);
 
 
 
@@ -162,6 +165,7 @@ const startServer = async () => {
         await createAlertsTable();
         await createBranchBrandFinanceMappingTable();
         await createVariationTable();
+        await createLandingTypeTable();
 
 
         console.log("All database tables are initialized and ready.");

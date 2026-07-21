@@ -13,6 +13,7 @@ import MobileBrandMaster from "./pages/admin/MobileBrandMaster";
 import BankMaster from "./pages/admin/BankMaster";
 import FinanceMachineMaster from "./pages/admin/FinanceMachineMaster";
 import StateMaster from "./pages/admin/StateMaster";
+import LandingTypeMaster from "./pages/admin/LandingTypeMaster";
 import SupportMaster from "./pages/admin/SupportMaster";
 import ProductTypeMaster from "./pages/admin/ProductTypeMaster";
 import ItemModelMaster from "./pages/admin/ItemModelMaster";
@@ -34,9 +35,10 @@ import FinanceBrandReport from "./pages/admin/FinanceBrandReport";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AlertMaster from "./pages/admin/AlertMaster";
-import VariationMasterList from "./pages/admin/VariationMasterList";
-import VariationForm from "./pages/admin/VariationForm";
+import PricingFormulaMasterList from "./pages/admin/PricingFormulaMasterList";
+import PricingFormulaForm from "./pages/admin/PricingFormulaForm";
 import PriceListData from "./pages/admin/PriceListData";
+import PriceListReport from "./pages/admin/PriceListReport";
 
 
 export default function AppRoutes() {
@@ -202,6 +204,13 @@ export default function AppRoutes() {
                 />
             </Route>
 
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="landing_type_master" requiredAction="read" />}>
+                <Route
+                    path="/admin/landing-types"
+                    element={<LandingTypeMaster />}
+                />
+            </Route>
+
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="support_master" requiredAction="read" />}>
                 <Route
                     path="/admin/support"
@@ -261,23 +270,35 @@ export default function AppRoutes() {
 
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="variation_master" requiredAction="read" />}>
                 <Route
+                    path="/admin/pricing-formulas"
+                    element={<PricingFormulaMasterList />}
+                />
+                <Route
                     path="/admin/variations"
-                    element={<VariationMasterList />}
+                    element={<Navigate to="/admin/pricing-formulas" replace />}
                 />
                 <Route
                     path="/admin/price-list/:variationId"
                     element={<PriceListData />}
                 />
+                <Route
+                    path="/admin/price-list-report/:variationId"
+                    element={<PriceListReport />}
+                />
             </Route>
 
             <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="variation_master" requiredAction="write" />}>
                 <Route
-                    path="/admin/variations/add"
-                    element={<VariationForm />}
+                    path="/admin/pricing-formulas/add"
+                    element={<PricingFormulaForm />}
                 />
                 <Route
-                    path="/admin/variations/edit/:id"
-                    element={<VariationForm />}
+                    path="/admin/pricing-formulas/edit/:id"
+                    element={<PricingFormulaForm />}
+                />
+                <Route
+                    path="/admin/variations/add"
+                    element={<Navigate to="/admin/pricing-formulas/add" replace />}
                 />
             </Route>
 

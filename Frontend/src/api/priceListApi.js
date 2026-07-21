@@ -7,3 +7,14 @@ export const getPriceListData = async (variationId) => {
 export const importPriceListData = async (variationId, records) => {
     return apiClient.post(`/price-lists/import/${variationId}`, { records });
 };
+
+export const getPriceListReport = async (variationId) => {
+    return apiClient.get(`/price-lists/report/${variationId}`);
+};
+
+export const getModelGroupStockInfo = async (modelGroup) => {
+    return apiClient.get(`/price-lists/stock-info`, {
+        params: { modelGroup }
+    });
+};
+
