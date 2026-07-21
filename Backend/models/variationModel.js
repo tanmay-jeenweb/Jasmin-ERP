@@ -1,5 +1,16 @@
 const db = require('../config/db.js');
 
+const sanitize = (name) => {
+    if (!name) return '';
+    if (typeof name === 'string') return name.replace(/`/g, '');
+    if (typeof name === 'object') {
+        if (name.column_name) return String(name.column_name).replace(/`/g, '');
+        if (name.name) return String(name.name).replace(/`/g, '');
+    }
+    return String(name).replace(/`/g, '');
+};
+
+
 const createVariationTable = async () => {
     const query = `
         CREATE TABLE IF NOT EXISTS variation_master (
@@ -64,7 +75,6 @@ const createVariationTable = async () => {
 
             if (currentExists && !historyExists) {
                 console.log(`Migrating history table for variation #${vId}...`);
-                const sanitize = (name) => name.replace(/`/g, '');
                 const columnDefs = columns.map(col => {
                     const safeName = sanitize(col.column_name);
                     return `\`${safeName}\` VARCHAR(255) NULL`;
@@ -125,7 +135,6 @@ const checkTableExists = async (tableName) => {
 const createFormatTable = async (variationId, columns) => {
     const tableName = `price_list_format_${variationId}`;
     const historyTableName = `price_list_format_history_${variationId}`;
-    const sanitize = (name) => name.replace(/`/g, '');
 
     const columnDefs = columns.map(col => {
         const safeName = sanitize(col.column_name);
@@ -175,7 +184,6 @@ const createFormatTable = async (variationId, columns) => {
 const syncFormatTableSchema = async (variationId, oldColumns, newColumns) => {
     const tableName = `price_list_format_${variationId}`;
     const historyTableName = `price_list_format_history_${variationId}`;
-    const sanitize = (name) => name.replace(/`/g, '');
 
     const oldColsMap = new Map(oldColumns.map(c => [c.column_id, c.column_name]));
     const newColsMap = new Map(newColumns.map(c => [c.column_id, c.column_name]));

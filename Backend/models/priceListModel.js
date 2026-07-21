@@ -7,7 +7,17 @@ const getPriceListData = async (variationId) => {
     return results;
 };
 
-const upsertPriceListData = async (variationId, columnsList, records, addedBy, deviceId) => {
+const sanitize = (name) => {
+    if (!name) return '';
+    if (typeof name === 'string') return name.replace(/`/g, '');
+    if (typeof name === 'object') {
+        if (name.column_name) return String(name.column_name).replace(/`/g, '');
+        if (name.name) return String(name.name).replace(/`/g, '');
+    }
+    return String(name).replace(/`/g, '');
+};
+
+const upsertPriceListData = async (variationId, columnsList = [], records = [], addedBy = null, deviceId = 'Unknown') => {
     const tableName = `price_list_format_${variationId}`;
     const historyTableName = `price_list_format_history_${variationId}`;
     const connection = await db.getConnection();
@@ -29,8 +39,9 @@ const upsertPriceListData = async (variationId, columnsList, records, addedBy, d
 
         await connection.beginTransaction();
         
-        const sanitize = (name) => name.replace(/`/g, '');
-        const customFields = columnsList.map(c => sanitize(c.column_name));
+        const customFields = (Array.isArray(columnsList) ? columnsList : [])
+            .map(c => sanitize(c))
+            .filter(f => f !== '');
         
         const insertFields = [
             'product_code', 'brand', 'icat_name', 'model_group_name', 'model_name',
@@ -45,7 +56,7 @@ const upsertPriceListData = async (variationId, columnsList, records, addedBy, d
             'icat_name = VALUES(icat_name)',
             'model_group_name = VALUES(model_group_name)',
             'model_name = VALUES(model_name)',
-            ...customFields.map(f => `\`${f}\` = VALUES(\`${f}\`)`),
+            ...customFields.map(f => `\`${f}\` = COALESCE(VALUES(\`${f}\`), \`${f}\`)`),
             'added_by = VALUES(added_by)',
             'device_id = VALUES(device_id)'
         ].join(', ');
