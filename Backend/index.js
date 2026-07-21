@@ -56,6 +56,7 @@ const variationRoutes = require("./routes/variationRoutes.js");
 const priceListRoutes = require("./routes/priceListRoutes.js");
 const { createLandingTypeTable } = require("./models/landingTypeModel.js");
 const landingTypeRoutes = require("./routes/landingTypeRoutes.js");
+const { createStockCacheTable } = require("./models/stockCacheModel.js");
 
 
 
@@ -166,6 +167,7 @@ const startServer = async () => {
         await createBranchBrandFinanceMappingTable();
         await createVariationTable();
         await createLandingTypeTable();
+        await createStockCacheTable();
 
 
         console.log("All database tables are initialized and ready.");

@@ -86,32 +86,46 @@ export default function PriceListReport() {
     loadReportData();
   }, [variationId]);
 
-  const handleOpenStockModal = async (row) => {
-    const modelGroup = row.model_group_name;
-    const productName = row.product_name || row.icat_name || "—";
+  const handleOpenStockModal = async (row, forceSync = false) => {
+    const modelGroup = row.model_group_name || stockModalData?.modelGroup;
+    const productName = row.product_name || row.icat_name || stockModalData?.productName || "—";
 
-    setStockModalData({
-      isOpen: true,
-      modelGroup,
-      productName,
-      loading: true,
-      error: null,
-      rawItems: []
-    });
-    setStockSearchQuery("");
+    if (forceSync) {
+      setStockModalData(prev => prev ? { ...prev, syncing: true } : null);
+    } else {
+      setStockModalData({
+        isOpen: true,
+        modelGroup,
+        productName,
+        loading: true,
+        error: null,
+        rawItems: [],
+        isCached: false,
+        updatedAt: null,
+        syncing: false
+      });
+      setStockSearchQuery("");
+    }
 
     try {
-      const res = await getModelGroupStockInfo(modelGroup);
+      const res = await getModelGroupStockInfo(modelGroup, forceSync);
       if (res.data?.success) {
         setStockModalData(prev => prev ? {
           ...prev,
           loading: false,
-          rawItems: res.data.data || []
+          syncing: false,
+          rawItems: res.data.data || [],
+          isCached: res.data.isCached || false,
+          updatedAt: res.data.updatedAt || new Date().toISOString()
         } : null);
+        if (forceSync) {
+          toast.success("Live stock synced successfully!");
+        }
       } else {
         setStockModalData(prev => prev ? {
           ...prev,
           loading: false,
+          syncing: false,
           error: res.data?.message || "Failed to fetch stock information."
         } : null);
       }
@@ -120,6 +134,7 @@ export default function PriceListReport() {
       setStockModalData(prev => prev ? {
         ...prev,
         loading: false,
+        syncing: false,
         error: "Unable to connect to stock service. Please try again."
       } : null);
     }
@@ -456,17 +471,44 @@ export default function PriceListReport() {
                     <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
                       {stockModalData.productName}
                     </span>
+                    {stockModalData.updatedAt && (
+                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 border ${
+                        stockModalData.isCached 
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                          : "bg-indigo-50 text-indigo-700 border-indigo-200"
+                      }`}>
+                        <i className={`fa-solid ${stockModalData.isCached ? "fa-database" : "fa-bolt"} text-[10px]`}></i>
+                        <span>{stockModalData.isCached ? "DB Stored" : "Live Synced"}</span>
+                      </span>
+                    )}
                   </div>
-                 
+                  {stockModalData.updatedAt && (
+                    <p className="text-[11px] text-slate-400 mt-0.5 font-medium">
+                      Last Synced: <strong className="text-slate-600">{new Date(stockModalData.updatedAt).toLocaleString()}</strong>
+                    </p>
+                  )}
                 </div>
               </div>
-              <button
-                onClick={() => setStockModalData(null)}
-                className="text-slate-400 hover:text-slate-600 text-xl cursor-pointer p-1 transition-colors"
-                title="Close"
-              >
-                <i className="fa-solid fa-xmark"></i>
-              </button>
+              
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleOpenStockModal({ model_group_name: stockModalData.modelGroup, product_name: stockModalData.productName }, true)}
+                  disabled={stockModalData.syncing || stockModalData.loading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs cursor-pointer transition-all disabled:opacity-50 border-none"
+                  title="Sync latest live stock from APX API into Database"
+                >
+                  <i className={`fa-solid fa-rotate ${stockModalData.syncing ? 'animate-spin' : ''}`}></i>
+                  <span>{stockModalData.syncing ? "Syncing APX..." : "Sync Live Stock"}</span>
+                </button>
+
+                <button
+                  onClick={() => setStockModalData(null)}
+                  className="text-slate-400 hover:text-slate-600 text-xl cursor-pointer p-1.5 transition-colors rounded-lg hover:bg-slate-100"
+                  title="Close"
+                >
+                  <i className="fa-solid fa-xmark"></i>
+                </button>
+              </div>
             </div>
 
             {/* Modal Sub-Bar / Search & Metrics */}
