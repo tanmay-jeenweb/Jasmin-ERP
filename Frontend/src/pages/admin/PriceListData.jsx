@@ -301,10 +301,8 @@ export default function PriceListData() {
               rowData[col.column_name] = "";
             }
           } else {
-            // Pre-fill existing user inputs if already imported
-            rowData[col.column_name] = existingRow && existingRow[col.column_name] !== undefined && existingRow[col.column_name] !== null
-              ? (isNaN(Number(existingRow[col.column_name])) ? existingRow[col.column_name] : Number(existingRow[col.column_name]))
-              : "";
+            // Set initial placeholder to '-' for user input columns in exported template
+            rowData[col.column_name] = "-";
           }
         });
 
@@ -456,7 +454,12 @@ export default function PriceListData() {
             visibleDynamicColumns.forEach((col, idx) => {
               const colIdx = 1 + requiredFixed.length + idx;
               const cellVal = getVal(row, colIdx);
-              record[col.column_name] = cellVal !== undefined && cellVal !== null ? String(cellVal).trim() : "";
+              const strVal = cellVal !== undefined && cellVal !== null ? String(cellVal).trim() : "";
+              if (strVal === "-" || strVal === "") {
+                record[col.column_name] = "";
+              } else {
+                record[col.column_name] = strVal;
+              }
             });
 
             records.push(record);

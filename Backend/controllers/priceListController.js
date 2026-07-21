@@ -40,6 +40,142 @@ const getPriceListDataController = async (req, res) => {
     }
 };
 
+const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs, records) => {
+    if (!columnsList || !Array.isArray(columnsList) || columnsList.length === 0) return records;
+
+    const formulaCols = columnsList.filter(c => c.type === 'default formulation' || c.type === 'formulation');
+    if (formulaCols.length === 0) return records;
+
+    // Fetch existing database rows to merge previous values if columns were omitted from import
+    let existingMap = new Map();
+    try {
+        const existingRows = await getPriceListData(variationId);
+        if (Array.isArray(existingRows)) {
+            existingRows.forEach(r => {
+                if (r.product_code) {
+                    existingMap.set(String(r.product_code).trim(), r);
+                }
+            });
+        }
+    } catch (e) {
+        // Dynamic table may not exist yet or be empty
+    }
+
+    const evaluateSingleFormula = (rawFormula, rec) => {
+        if (!rawFormula || typeof rawFormula !== 'string') return "";
+
+        let expr = rawFormula.trim();
+        if (expr.startsWith('=')) expr = expr.substring(1).trim();
+
+        // Handle IFERROR(formula, fallback)
+        const ifErrorMatch = expr.match(/^IFERROR\s*\(\s*(.+)\s*,\s*".*"\s*\)$/i);
+        if (ifErrorMatch) {
+            expr = ifErrorMatch[1].trim();
+        }
+
+        // Sort columns by column_id length descending (e.g. AA before A)
+        const sortedCols = [...columnsList].sort((a, b) => (b.column_id || '').length - (a.column_id || '').length);
+
+        for (const col of sortedCols) {
+            const colId = col.column_id;
+            const colName = col.column_name;
+            if (!colId) continue;
+
+            let val = rec[colName];
+            if (val === undefined || val === null || val === "") {
+                val = 0;
+            } else if (typeof val === 'string') {
+                const cleanedVal = val.replace(/,/g, '').trim();
+                val = !isNaN(Number(cleanedVal)) ? Number(cleanedVal) : 0;
+            } else if (typeof val !== 'number') {
+                val = 0;
+            }
+
+            // Replace cell references like F2, F12, F (case-insensitive word boundaries)
+            const cellRefRegex = new RegExp(`\\b${colId}\\d*\\b`, 'gi');
+            expr = expr.replace(cellRefRegex, `(${val})`);
+
+            // Replace column name if referenced directly
+            if (colName && colName !== colId) {
+                const escapedName = colName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                const colNameRegex = new RegExp(`\\[?${escapedName}\\]?`, 'gi');
+                expr = expr.replace(colNameRegex, `(${val})`);
+            }
+        }
+
+        // Replace Excel IF(cond, val1, val2) with JS ternary ((cond) ? (val1) : (val2))
+        expr = expr.replace(/IF\s*\(([^,]+),([^,]+),([^)]+)\)/gi, '(($1) ? ($2) : ($3))');
+        
+        // Replace ROUND(val, decimals) with Math.round
+        expr = expr.replace(/ROUND\s*\(([^,]+),([^)]+)\)/gi, '(Math.round(($1) * Math.pow(10, $2)) / Math.pow(10, $2))');
+        expr = expr.replace(/ROUND\s*\(([^)]+)\)/gi, '(Math.round($1))');
+
+        // Replace SUM(a, b, ...)
+        expr = expr.replace(/SUM\s*\(([^)]+)\)/gi, '($1)'.replace(/,/g, '+'));
+
+        // Replace single = with === in conditions
+        expr = expr.replace(/([^=><!])=([^=])/g, '$1===$2');
+
+        try {
+            const safeResult = new Function(`"use strict"; return (${expr});`)();
+            if (typeof safeResult === 'number' && !isNaN(safeResult) && isFinite(safeResult)) {
+                return Math.round(safeResult * 10000) / 10000;
+            }
+            return safeResult !== undefined && safeResult !== null ? String(safeResult) : "";
+        } catch (e) {
+            return "";
+        }
+    };
+
+    for (const rec of records) {
+        const prodCode = rec.product_code ? String(rec.product_code).trim() : "";
+        const existingRow = existingMap.get(prodCode);
+
+        // Merge existing database column values if omitted or '-' or empty in imported record
+        if (existingRow) {
+            columnsList.forEach(c => {
+                const val = rec[c.column_name];
+                const isUnchangedOrEmpty = val === undefined || val === null || val === "" || String(val).trim() === "-";
+                if (isUnchangedOrEmpty && existingRow[c.column_name] !== undefined && existingRow[c.column_name] !== null) {
+                    rec[c.column_name] = existingRow[c.column_name];
+                }
+            });
+        }
+
+        // Determine brand override formulas if applicable
+        const recBrand = rec.brand ? String(rec.brand).trim().toUpperCase() : "";
+        let brandOverrideMap = new Map();
+        if (recBrand && Array.isArray(brandConfigs)) {
+            const matchingConfig = brandConfigs.find(cfg =>
+                cfg.brands && Array.isArray(cfg.brands) && cfg.brands.some(b => String(b).trim().toUpperCase() === recBrand)
+            );
+            if (matchingConfig && Array.isArray(matchingConfig.columns)) {
+                matchingConfig.columns.forEach(c => {
+                    if (c.column_id && c.formula) {
+                        brandOverrideMap.set(c.column_id, c.formula);
+                    }
+                });
+            }
+        }
+
+        // Evaluate formulation columns (up to 3 passes for chained dependencies)
+        const passes = Math.min(formulaCols.length, 3);
+        for (let pass = 0; pass < passes; pass++) {
+            for (const col of formulaCols) {
+                const formulaToUse = brandOverrideMap.get(col.column_id) || col.formula;
+                if (formulaToUse) {
+                    const computedVal = evaluateSingleFormula(formulaToUse, rec);
+                    if (computedVal !== "" && computedVal !== null && computedVal !== undefined) {
+                        rec[col.column_name] = computedVal;
+                    }
+                }
+            }
+        }
+    }
+
+    return records;
+};
+
 const importPriceListController = async (req, res) => {
     try {
         const { variationId } = req.params;
@@ -55,23 +191,39 @@ const importPriceListController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Price List format not found' });
         }
 
-        // 2. Upsert data records
-        await upsertPriceListData(variationId, records);
+        const columnsList = Array.isArray(variation.columns)
+            ? variation.columns
+            : typeof variation.columns === 'string'
+                ? JSON.parse(variation.columns)
+                : [];
 
-        // Audit Log
+        const brandConfigs = Array.isArray(variation.brand_configs)
+            ? variation.brand_configs
+            : typeof variation.brand_configs === 'string'
+                ? JSON.parse(variation.brand_configs)
+                : [];
+
         const addedBy = req.user?.id;
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+
+        // 2. Automatically evaluate formulation columns for all imported records
+        const processedRecords = await evaluateFormulasForRecords(variationId, columnsList, brandConfigs, records);
+
+        // 3. Upsert data records
+        await upsertPriceListData(variationId, columnsList, processedRecords, addedBy, deviceId);
+
+        // Audit Log
         await createAuditLog(
             addedBy,
             'Price List Data Imported',
             'PRICE_LIST_IMPORT',
-            `Imported ${records.length} records into format ID ${variationId} (${variation.format_name || variation.state_name})`,
+            `Imported ${processedRecords.length} records into format ID ${variationId} (${variation.format_name || variation.state_name})`,
             deviceId
         );
 
         res.status(200).json({
             success: true,
-            message: `Successfully imported ${records.length} records.`
+            message: `Successfully imported ${processedRecords.length} records.`
         });
     } catch (error) {
         console.error('Error importing price list:', error);
