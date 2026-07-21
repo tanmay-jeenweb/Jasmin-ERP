@@ -120,14 +120,17 @@ export default function AppRoutes() {
                 />
             </Route>
 
+            <Route element={<ProtectedRoute requiredMaster="stock_vs_cash_deposit" requiredAction="read" />}>
+                <Route
+                    path="/admin/stock-vs-cash-deposit"
+                    element={<StockVsCashDepositReport />}
+                />
+            </Route>
+
             <Route element={<ProtectedRoute />}>
                 <Route
                     path="/admin/report"
                     element={<ActivityReport />}
-                />
-                <Route
-                    path="/admin/stock-vs-cash-deposit"
-                    element={<StockVsCashDepositReport />}
                 />
                 <Route
                     path="/admin/finance-brand-report"

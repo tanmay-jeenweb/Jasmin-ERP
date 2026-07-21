@@ -43,6 +43,7 @@ const MASTER_GROUPS = [
     category: "📊 Reports & Analytics",
     masters: [
       { key: "target_vs_achievement", label: "Target vs Achievement", note: "Write = Import/Export Template & Sync" },
+      { key: "stock_vs_cash_deposit", label: "Stock vs Cash Deposit", note: "Write = Import/Export Template" },
     ]
   },
   {

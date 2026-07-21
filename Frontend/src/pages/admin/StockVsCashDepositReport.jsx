@@ -11,8 +11,12 @@ import DataTable from "../../components/DataTable";
 import * as XLSX from "xlsx-js-style";
 import ExcelJS from "exceljs";
 import toast from "react-hot-toast";
+import { usePermission } from "../../context/PermissionContext";
 
 export default function StockVsCashDepositReport() {
+  const { hasPermission, isAdmin } = usePermission();
+  const canWriteOrUpdate = isAdmin || hasPermission("stock_vs_cash_deposit", "write") || hasPermission("stock_vs_cash_deposit", "update");
+
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -1315,151 +1319,163 @@ export default function StockVsCashDepositReport() {
           toggleActions={filtersElement}
           searchPlaceholder="Search branch, state or city..."
           actionButton={
-            <div className="relative inline-block text-left">
+            canWriteOrUpdate ? (
+              <div className="relative inline-block text-left">
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="flex items-center gap-2 h-10 px-4 rounded-lg bg-[#6804a1] hover:bg-[#520380] text-white text-sm font-semibold shadow-md transition-all duration-200 cursor-pointer border-none focus:outline-none"
+                >
+                  <i className="fa-solid fa-file-excel text-base"></i>
+                  Import / Export
+                  <i className={`fa-solid fa-chevron-down text-xs transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`}></i>
+                </button>
+
+                {isDropdownOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40 cursor-default"
+                      onClick={() => setIsDropdownOpen(false)}
+                    ></div>
+
+                    <div className="absolute right-0 mt-2 w-[340px] rounded-xl border border-slate-200 bg-white shadow-xl py-3 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Stock & Support</div>
+                      <div className="grid grid-cols-2 gap-2 px-4 mb-3">
+                        <button
+                          onClick={() => {
+                            setIsDropdownOpen(false);
+                            handleExportTemplate();
+                          }}
+                          disabled={exporting}
+                          className="flex items-center justify-center gap-1.5 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold transition-colors duration-150 focus:outline-none disabled:opacity-50"
+                        >
+                          <i className="fa-solid fa-download text-emerald-600"></i>
+                          Export Template
+                        </button>
+                        <label className="flex items-center justify-center gap-1.5 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold transition-colors duration-150 disabled:opacity-50">
+                          <i className="fa-solid fa-upload text-emerald-600"></i>
+                          Import Excel
+                          <input
+                            type="file"
+                            accept=".xlsx, .xls"
+                            onChange={(e) => handleImport(e, 'stock')}
+                            disabled={importing}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+
+                      <div className="border-t border-slate-100 mb-2.5"></div>
+                      <div className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Current Stock</div>
+                      <div className="grid grid-cols-2 gap-2 px-4 mb-3">
+                        <button
+                          onClick={() => {
+                            setIsDropdownOpen(false);
+                            handleExportCurrentStockTemplate();
+                          }}
+                          disabled={exporting}
+                          className="flex items-center justify-center gap-1.5 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold transition-colors duration-150 focus:outline-none disabled:opacity-50"
+                        >
+                          <i className="fa-solid fa-download text-blue-600"></i>
+                          Export Template
+                        </button>
+                        <label className="flex items-center justify-center gap-1.5 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold transition-colors duration-150 disabled:opacity-50">
+                          <i className="fa-solid fa-upload text-blue-600"></i>
+                          Import Excel
+                          <input
+                            type="file"
+                            accept=".xlsx, .xls"
+                            onChange={(e) => handleImport(e, 'current_stock')}
+                            disabled={importing}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+
+                      <div className="border-t border-slate-100 mb-2.5"></div>
+                      <div className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Opening Cash & Credit</div>
+                      <div className="grid grid-cols-2 gap-2 px-4 mb-3">
+                        <button
+                          onClick={() => {
+                            setIsDropdownOpen(false);
+                            handleExportOpeningCashAndCreditTemplate();
+                          }}
+                          disabled={exporting}
+                          className="flex items-center justify-center gap-1.5 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold transition-colors duration-150 focus:outline-none disabled:opacity-50"
+                        >
+                          <i className="fa-solid fa-download text-amber-600"></i>
+                          Export Template
+                        </button>
+                        <label className="flex items-center justify-center gap-1.5 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold transition-colors duration-150 disabled:opacity-50">
+                          <i className="fa-solid fa-upload text-amber-600"></i>
+                          Import Excel
+                          <input
+                            type="file"
+                            accept=".xlsx, .xls"
+                            onChange={(e) => handleImport(e, 'opening_credit')}
+                            disabled={importing}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+
+                      <div className="border-t border-slate-100 mb-2.5"></div>
+                      <div className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Cash Deposit</div>
+                      <div className="grid grid-cols-2 gap-2 px-4 mb-3">
+                        <button
+                          onClick={() => {
+                            setIsDropdownOpen(false);
+                            handleExportCashDepositTemplate();
+                          }}
+                          disabled={exporting}
+                          className="flex items-center justify-center gap-1.5 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold transition-colors duration-150 focus:outline-none disabled:opacity-50"
+                        >
+                          <i className="fa-solid fa-download text-pink-600"></i>
+                          Export Template
+                        </button>
+                        <label className="flex items-center justify-center gap-1.5 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold transition-colors duration-150 disabled:opacity-50">
+                          <i className="fa-solid fa-upload text-pink-600"></i>
+                          Import Excel
+                          <input
+                            type="file"
+                            accept=".xlsx, .xls"
+                            onChange={(e) => handleImport(e, 'cash_deposit')}
+                            disabled={importing}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+
+                      <div className="border-t border-slate-100 mb-2.5"></div>
+                      <div className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Full Report</div>
+                      <div className="px-4">
+                        <button
+                          onClick={() => {
+                            setIsDropdownOpen(false);
+                            handleExportFullReport();
+                          }}
+                          disabled={exporting}
+                          className="w-full flex items-center justify-center gap-2 py-2 px-4 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg border-none cursor-pointer font-semibold transition-colors duration-150 focus:outline-none"
+                        >
+                          <i className="fa-solid fa-file-export text-white"></i>
+                          Export Full Report
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
               <button
                 type="button"
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="flex items-center gap-2 h-10 px-4 rounded-lg bg-[#6804a1] hover:bg-[#520380] text-white text-sm font-semibold shadow-md transition-all duration-200 cursor-pointer border-none focus:outline-none"
+                onClick={handleExportFullReport}
+                disabled={exporting}
+                className="flex items-center gap-2 h-10 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-md transition-all duration-200 cursor-pointer border-none focus:outline-none disabled:opacity-50"
               >
-                <i className="fa-solid fa-file-excel text-base"></i>
-                Import / Export
-                <i className={`fa-solid fa-chevron-down text-xs transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`}></i>
+                <i className="fa-solid fa-file-export text-base"></i>
+                Export Full Report
               </button>
-
-              {isDropdownOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40 cursor-default"
-                    onClick={() => setIsDropdownOpen(false)}
-                  ></div>
-
-                  <div className="absolute right-0 mt-2 w-[340px] rounded-xl border border-slate-200 bg-white shadow-xl py-3 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Stock & Support</div>
-                    <div className="grid grid-cols-2 gap-2 px-4 mb-3">
-                      <button
-                        onClick={() => {
-                          setIsDropdownOpen(false);
-                          handleExportTemplate();
-                        }}
-                        disabled={exporting}
-                        className="flex items-center justify-center gap-1.5 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold transition-colors duration-150 focus:outline-none disabled:opacity-50"
-                      >
-                        <i className="fa-solid fa-download text-emerald-600"></i>
-                        Export Template
-                      </button>
-                      <label className="flex items-center justify-center gap-1.5 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold transition-colors duration-150 disabled:opacity-50">
-                        <i className="fa-solid fa-upload text-emerald-600"></i>
-                        Import Excel
-                        <input
-                          type="file"
-                          accept=".xlsx, .xls"
-                          onChange={(e) => handleImport(e, 'stock')}
-                          disabled={importing}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
-
-                    <div className="border-t border-slate-100 mb-2.5"></div>
-                    <div className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Current Stock</div>
-                    <div className="grid grid-cols-2 gap-2 px-4 mb-3">
-                      <button
-                        onClick={() => {
-                          setIsDropdownOpen(false);
-                          handleExportCurrentStockTemplate();
-                        }}
-                        disabled={exporting}
-                        className="flex items-center justify-center gap-1.5 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold transition-colors duration-150 focus:outline-none disabled:opacity-50"
-                      >
-                        <i className="fa-solid fa-download text-blue-600"></i>
-                        Export Template
-                      </button>
-                      <label className="flex items-center justify-center gap-1.5 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold transition-colors duration-150 disabled:opacity-50">
-                        <i className="fa-solid fa-upload text-blue-600"></i>
-                        Import Excel
-                        <input
-                          type="file"
-                          accept=".xlsx, .xls"
-                          onChange={(e) => handleImport(e, 'current_stock')}
-                          disabled={importing}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
-
-                    <div className="border-t border-slate-100 mb-2.5"></div>
-                    <div className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Opening Cash & Credit</div>
-                    <div className="grid grid-cols-2 gap-2 px-4 mb-3">
-                      <button
-                        onClick={() => {
-                          setIsDropdownOpen(false);
-                          handleExportOpeningCashAndCreditTemplate();
-                        }}
-                        disabled={exporting}
-                        className="flex items-center justify-center gap-1.5 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold transition-colors duration-150 focus:outline-none disabled:opacity-50"
-                      >
-                        <i className="fa-solid fa-download text-amber-600"></i>
-                        Export Template
-                      </button>
-                      <label className="flex items-center justify-center gap-1.5 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold transition-colors duration-150 disabled:opacity-50">
-                        <i className="fa-solid fa-upload text-amber-600"></i>
-                        Import Excel
-                        <input
-                          type="file"
-                          accept=".xlsx, .xls"
-                          onChange={(e) => handleImport(e, 'opening_credit')}
-                          disabled={importing}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
-
-                    <div className="border-t border-slate-100 mb-2.5"></div>
-                    <div className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Cash Deposit</div>
-                    <div className="grid grid-cols-2 gap-2 px-4 mb-3">
-                      <button
-                        onClick={() => {
-                          setIsDropdownOpen(false);
-                          handleExportCashDepositTemplate();
-                        }}
-                        disabled={exporting}
-                        className="flex items-center justify-center gap-1.5 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold transition-colors duration-150 focus:outline-none disabled:opacity-50"
-                      >
-                        <i className="fa-solid fa-download text-pink-600"></i>
-                        Export Template
-                      </button>
-                      <label className="flex items-center justify-center gap-1.5 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer font-semibold transition-colors duration-150 disabled:opacity-50">
-                        <i className="fa-solid fa-upload text-pink-600"></i>
-                        Import Excel
-                        <input
-                          type="file"
-                          accept=".xlsx, .xls"
-                          onChange={(e) => handleImport(e, 'cash_deposit')}
-                          disabled={importing}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
-
-                    <div className="border-t border-slate-100 mb-2.5"></div>
-                    <div className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Full Report</div>
-                    <div className="px-4">
-                      <button
-                        onClick={() => {
-                          setIsDropdownOpen(false);
-                          handleExportFullReport();
-                        }}
-                        disabled={exporting}
-                        className="w-full flex items-center justify-center gap-2 py-2 px-4 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg border-none cursor-pointer font-semibold transition-colors duration-150 focus:outline-none"
-                      >
-                        <i className="fa-solid fa-file-export text-white"></i>
-                        Export Full Report
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            )
           }
         />
       </main>

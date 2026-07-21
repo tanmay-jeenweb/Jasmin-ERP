@@ -271,6 +271,9 @@ export default function Navbar() {
         if (r.path === "/admin/target-vs-achievement" || r.path === "/admin/abm-wise-tva") {
             return isAdmin || hasPermission("target_vs_achievement", "read");
         }
+        if (r.path === "/admin/stock-vs-cash-deposit") {
+            return isAdmin || hasPermission("stock_vs_cash_deposit", "read");
+        }
         if (r.path === "/admin/finance-brand-mapping") {
             return isAdmin;
         }
@@ -673,7 +676,7 @@ export default function Navbar() {
                                 </button>
 
                                 {isOffersOpen && (
-                                    <div className="absolute left-0 top-full mt-1.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="absolute right-0 top-full mt-1.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top-right animate-in fade-in slide-in-from-top-2 duration-200">
                                         <div className="flex flex-col gap-1">
                                             {[
                                                 {
@@ -749,7 +752,7 @@ export default function Navbar() {
                                 </button>
 
                                 {isReportsOpen && (
-                                    <div className="absolute left-0 top-full mt-1.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="absolute right-0 top-full mt-1.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top-right animate-in fade-in slide-in-from-top-2 duration-200">
                                         <div className="flex flex-col gap-1">
                                             {availableReports.map((r, idx) => {
                                                 const isActive = location.pathname === r.path;
