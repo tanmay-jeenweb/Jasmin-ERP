@@ -8,9 +8,53 @@ const { getAllBranches } = require('../models/branchModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
 const db = require('../config/db.js');
 
+// Helper to retrieve allowed branch names for a user based on User Branch Mapping
+const getUserAllowedBranchNames = async (user) => {
+    if (!user || !user.id) return [];
+
+    // Check if user is admin from JWT user object
+    const isAdmin = user.role === 'admin' || user.role === 'super admin';
+    if (isAdmin) {
+        return null; // null indicates access to ALL branches
+    }
+
+    // Double check user role / user type in database
+    const [userRows] = await db.execute(
+        `SELECT u.id, u.role, ut.user_role, ut.type_name 
+         FROM users u 
+         LEFT JOIN user_types ut ON u.user_type_id = ut.id 
+         WHERE u.id = ?`,
+        [user.id]
+    );
+
+    if (userRows.length > 0) {
+        const u = userRows[0];
+        if (u.role === 'admin' || u.role === 'super admin' || u.user_role === 'Admin' || u.type_name === 'Admin') {
+            return null; // Admin has access to all branches
+        }
+    }
+
+    // Fetch mapped branch names for non-admin user from user_branch_mappings
+    const [mappingRows] = await db.execute(
+        `SELECT bm.name AS branch_name
+         FROM user_branch_mappings ubm
+         JOIN branch_master bm ON ubm.branch_id = bm.id
+         WHERE ubm.user_id = ?`,
+        [user.id]
+    );
+
+    return mappingRows.map(r => String(r.branch_name).trim().toUpperCase());
+};
+
 const getAllTargetVsAchievementsController = async (req, res) => {
     try {
-        const records = await getAllTargetVsAchievements();
+        let records = await getAllTargetVsAchievements();
+        const allowedBranchNames = await getUserAllowedBranchNames(req.user);
+
+        if (allowedBranchNames !== null) {
+            records = records.filter(r => r.branch_name && allowedBranchNames.includes(String(r.branch_name).trim().toUpperCase()));
+        }
+
         res.status(200).json({
             success: true,
             message: 'Target vs Achievement records retrieved successfully',
@@ -27,7 +71,13 @@ const getAllTargetVsAchievementsController = async (req, res) => {
 
 const getABMWiseTargetVsAchievementsController = async (req, res) => {
     try {
-        const records = await getABMWiseTargetVsAchievements();
+        let records = await getABMWiseTargetVsAchievements();
+        const allowedBranchNames = await getUserAllowedBranchNames(req.user);
+
+        if (allowedBranchNames !== null) {
+            records = records.filter(r => r.branch_name && allowedBranchNames.includes(String(r.branch_name).trim().toUpperCase()));
+        }
+
         res.status(200).json({
             success: true,
             message: 'ABM Wise Target vs Achievement records retrieved successfully',
@@ -55,13 +105,25 @@ const importTargetVsAchievementsController = async (req, res) => {
             });
         }
 
-        // Validate branch name is present in all rows
+        const allowedBranchNames = await getUserAllowedBranchNames(req.user);
+
+        // Validate branch name is present in all rows and user has mapping access
         for (const r of records) {
             if (!r.branch_name) {
                 return res.status(400).json({
                     success: false,
                     message: 'Branch Name is required for all rows'
                 });
+            }
+
+            if (allowedBranchNames !== null) {
+                const branchUpper = String(r.branch_name).trim().toUpperCase();
+                if (!allowedBranchNames.includes(branchUpper)) {
+                    return res.status(403).json({
+                        success: false,
+                        message: `Access Denied: You do not have permission to import target data for branch "${r.branch_name}".`
+                    });
+                }
             }
         }
 

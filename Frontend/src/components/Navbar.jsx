@@ -267,7 +267,15 @@ export default function Navbar() {
         }
     ];
 
-    const availableReports = allReports.filter(r => isAdmin);
+    const availableReports = allReports.filter(r => {
+        if (r.path === "/admin/target-vs-achievement" || r.path === "/admin/abm-wise-tva") {
+            return isAdmin || hasPermission("target_vs_achievement", "read");
+        }
+        if (r.path === "/admin/finance-brand-mapping") {
+            return isAdmin;
+        }
+        return true;
+    });
 
     let marqueeText = runningOffers.length > 0
         ? runningOffers.map(o => `🔥 [${o.brand_name}] ${o.offer_type} (Valid: ${new Date(o.from_date).toLocaleDateString()} to ${new Date(o.to_date).toLocaleDateString()})`).join("   |   ")
@@ -716,7 +724,7 @@ export default function Navbar() {
                             </div>
                         )}
                         {/* Reports Dropdown */}
-                        {isAdmin && (
+                        {availableReports.length > 0 && (
                             <div className="relative" id="reports-dropdown">
                                 <button
                                     onClick={() => setIsReportsOpen(!isReportsOpen)}

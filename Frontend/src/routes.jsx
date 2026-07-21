@@ -109,31 +109,29 @@ export default function AppRoutes() {
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
+            <Route element={<ProtectedRoute requiredMaster="target_vs_achievement" requiredAction="read" />}>
                 <Route
                     path="/admin/target-vs-achievement"
                     element={<TargetVsAchievement />}
                 />
+                <Route
+                    path="/admin/abm-wise-tva"
+                    element={<ABMWiseTvAReport />}
+                />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
+            <Route element={<ProtectedRoute />}>
                 <Route
                     path="/admin/report"
                     element={<ActivityReport />}
                 />
-            </Route>
-
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
                 <Route
                     path="/admin/stock-vs-cash-deposit"
                     element={<StockVsCashDepositReport />}
                 />
-            </Route>
-
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
                 <Route
-                    path="/admin/abm-wise-tva"
-                    element={<ABMWiseTvAReport />}
+                    path="/admin/finance-brand-report"
+                    element={<FinanceBrandReport />}
                 />
             </Route>
 
@@ -145,13 +143,6 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/finance-brand-mapping/:branchId"
                     element={<FinanceBrandMappingDetail />}
-                />
-            </Route>
-
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
-                <Route
-                    path="/admin/finance-brand-report"
-                    element={<FinanceBrandReport />}
                 />
             </Route>
 

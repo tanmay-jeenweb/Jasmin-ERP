@@ -6,9 +6,52 @@ const {
     importCashDepositData
 } = require('../models/stockCashDepositModel.js');
 
+const db = require('../config/db.js');
+
+// Helper to retrieve allowed branch names for a user based on User Branch Mapping
+const getUserAllowedBranchNames = async (user) => {
+    if (!user || !user.id) return [];
+
+    const isAdmin = user.role === 'admin' || user.role === 'super admin';
+    if (isAdmin) {
+        return null; // null indicates access to ALL branches
+    }
+
+    const [userRows] = await db.execute(
+        `SELECT u.id, u.role, ut.user_role, ut.type_name 
+         FROM users u 
+         LEFT JOIN user_types ut ON u.user_type_id = ut.id 
+         WHERE u.id = ?`,
+        [user.id]
+    );
+
+    if (userRows.length > 0) {
+        const u = userRows[0];
+        if (u.role === 'admin' || u.role === 'super admin' || u.user_role === 'Admin' || u.type_name === 'Admin') {
+            return null;
+        }
+    }
+
+    const [mappingRows] = await db.execute(
+        `SELECT bm.name AS branch_name
+         FROM user_branch_mappings ubm
+         JOIN branch_master bm ON ubm.branch_id = bm.id
+         WHERE ubm.user_id = ?`,
+        [user.id]
+    );
+
+    return mappingRows.map(r => String(r.branch_name).trim().toUpperCase());
+};
+
 const getStockCashDepositReportController = async (req, res) => {
     try {
-        const records = await getStockCashDepositReportData();
+        let records = await getStockCashDepositReportData();
+        const allowedBranchNames = await getUserAllowedBranchNames(req.user);
+
+        if (allowedBranchNames !== null) {
+            records = records.filter(r => r.branch_name && allowedBranchNames.includes(String(r.branch_name).trim().toUpperCase()));
+        }
+
         res.status(200).json({
             success: true,
             message: 'Stock vs Cash Deposit report data retrieved successfully',
