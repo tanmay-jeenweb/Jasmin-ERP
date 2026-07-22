@@ -105,7 +105,7 @@ const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs
 
         // Replace Excel IF(cond, val1, val2) with JS ternary ((cond) ? (val1) : (val2))
         expr = expr.replace(/IF\s*\(([^,]+),([^,]+),([^)]+)\)/gi, '(($1) ? ($2) : ($3))');
-        
+
         // Replace ROUND(val, decimals) with Math.round
         expr = expr.replace(/ROUND\s*\(([^,]+),([^)]+)\)/gi, '(Math.round(($1) * Math.pow(10, $2)) / Math.pow(10, $2))');
         expr = expr.replace(/ROUND\s*\(([^)]+)\)/gi, '(Math.round($1))');
@@ -234,6 +234,7 @@ const importPriceListController = async (req, res) => {
 const getPriceListReportController = async (req, res) => {
     try {
         const { variationId } = req.params;
+        const { date } = req.query;
 
         // 1. Fetch variation metadata
         const variation = await getVariationById(variationId);
@@ -245,13 +246,13 @@ const getPriceListReportController = async (req, res) => {
         const columns = Array.isArray(variation.columns)
             ? variation.columns
             : typeof variation.columns === 'string'
-            ? JSON.parse(variation.columns)
-            : [];
+                ? JSON.parse(variation.columns)
+                : [];
 
         // 2. Fetch report data (grouped by model_group_name + active offers)
         let data = [];
         try {
-            data = await getPriceListReportData(variationId);
+            data = await getPriceListReportData(variationId, date);
         } catch (err) {
             console.warn(`Dynamic table for format ${variationId} report error:`, err.message);
         }
@@ -260,6 +261,7 @@ const getPriceListReportController = async (req, res) => {
             success: true,
             columns,
             formatName: variation.format_name || `${variation.state_name} format`,
+            selectedDate: date || null,
             data
         });
     } catch (error) {
