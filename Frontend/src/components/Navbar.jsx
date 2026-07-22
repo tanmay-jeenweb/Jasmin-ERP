@@ -53,7 +53,10 @@ export default function Navbar() {
                 console.error("Failed to fetch price formats:", err);
             }
         };
-        if (isAdmin || hasPermission("variation_master", "read")) {
+        const canViewPriceList = isAdmin || hasPermission("price_list", "read");
+        const canViewPriceReport = isAdmin || hasPermission("price_list_report", "read");
+
+        if (canViewPriceList || canViewPriceReport) {
             fetchPriceFormats();
         }
     }, [isAdmin, hasPermission, location.pathname]);
@@ -79,6 +82,10 @@ export default function Navbar() {
         document.addEventListener("click", handleOutsideClick);
         return () => document.removeEventListener("click", handleOutsideClick);
     }, [isOpen, isProfileOpen, isReportsOpen, isOffersOpen, isPriceListOpen]);
+
+    const canSeePriceListTab = isAdmin || hasPermission("price_list", "read") || hasPermission("price_list_report", "read");
+    const canSeePriceListTables = isAdmin || hasPermission("price_list", "read");
+    const canSeePriceListReports = isAdmin || hasPermission("price_list_report", "read");
 
     const handleLogout = async () => {
         try {
@@ -513,7 +520,7 @@ export default function Navbar() {
                         )}
 
                         {/* Price List Dropdown */}
-                        {(isAdmin || hasPermission("variation_master", "read")) && (
+                        {canSeePriceListTab && (
                             <div className="relative" id="price-list-dropdown">
                                 <button
                                     onClick={() => setIsPriceListOpen(!isPriceListOpen)}
@@ -545,52 +552,55 @@ export default function Navbar() {
                                             ) : (
                                                 <>
                                                     {/* Section 1: Price List Data */}
-                                                    <div>
-                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1.5 flex items-center gap-1.5">
-                                                            <i className="fa-solid fa-table-list text-indigo-500"></i>
-                                                            Price List Tables
-                                                        </p>
-                                                        <div className="flex flex-col gap-1">
-                                                            {priceFormats.map((f, idx) => {
-                                                                const brandsList = f.brand_configs
-                                                                    ? (typeof f.brand_configs === 'string' ? JSON.parse(f.brand_configs) : f.brand_configs)
-                                                                    : [];
-                                                                const label = f.format_name || `${f.state_name} (${brandsList.join(', ')})`;
-                                                                const path = `/admin/price-list/${f.id}`;
-                                                                const isActive = location.pathname === path;
-                                                                return (
-                                                                    <button
-                                                                        key={idx}
-                                                                        onClick={() => {
-                                                                            navigate(path);
-                                                                            setIsPriceListOpen(false);
-                                                                        }}
-                                                                        className={`relative group flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border border-transparent ${isActive
-                                                                            ? "bg-indigo-50/70 text-indigo-700 font-semibold border-indigo-100/50"
-                                                                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
-                                                                            }`}
-                                                                    >
-                                                                        <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${isActive ? "bg-indigo-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"}`} />
-                                                                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${isActive ? "bg-indigo-100/80 text-indigo-700" : "bg-slate-100/80 text-slate-500 group-hover:scale-105"}`}>
-                                                                            <i className="fa-solid fa-file-invoice-dollar text-xs"></i>
-                                                                        </div>
-                                                                        <div className="flex-1">
-                                                                            <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-indigo-900 font-bold" : "text-slate-800 group-hover:text-slate-950"}`}>
-                                                                                {label}
-                                                                            </p>
-                                                                        </div>
-                                                                    </button>
-                                                                );
-                                                            })}
+                                                    {canSeePriceListTables && (
+                                                        <div>
+                                                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1.5 flex items-center gap-1.5">
+                                                                <i className="fa-solid fa-table-list text-indigo-500"></i>
+                                                                Price List Tables
+                                                            </p>
+                                                            <div className="flex flex-col gap-1">
+                                                                {priceFormats.map((f, idx) => {
+                                                                    const brandsList = f.brand_configs
+                                                                        ? (typeof f.brand_configs === 'string' ? JSON.parse(f.brand_configs) : f.brand_configs)
+                                                                        : [];
+                                                                    const label = f.format_name || `${f.state_name} (${brandsList.join(', ')})`;
+                                                                    const path = `/admin/price-list/${f.id}`;
+                                                                    const isActive = location.pathname === path;
+                                                                    return (
+                                                                        <button
+                                                                            key={idx}
+                                                                            onClick={() => {
+                                                                                navigate(path);
+                                                                                setIsPriceListOpen(false);
+                                                                            }}
+                                                                            className={`relative group flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border border-transparent ${isActive
+                                                                                ? "bg-indigo-50/70 text-indigo-700 font-semibold border-indigo-100/50"
+                                                                                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
+                                                                                }`}
+                                                                        >
+                                                                            <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${isActive ? "bg-indigo-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"}`} />
+                                                                            <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${isActive ? "bg-indigo-100/80 text-indigo-700" : "bg-slate-100/80 text-slate-500 group-hover:scale-105"}`}>
+                                                                                <i className="fa-solid fa-file-invoice-dollar text-xs"></i>
+                                                                            </div>
+                                                                            <div className="flex-1">
+                                                                                <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-indigo-900 font-bold" : "text-slate-800 group-hover:text-slate-950"}`}>
+                                                                                    {label}
+                                                                                </p>
+                                                                            </div>
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
                                                         </div>
-                                                    </div>
+                                                    )}
 
                                                     {/* Section 2: Price List Reports */}
-                                                    <div className="border-t border-slate-100 pt-2">
-                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1.5 flex items-center gap-1.5">
-                                                            <i className="fa-solid fa-chart-pie text-emerald-500"></i>
-                                                            Price List Reports
-                                                        </p>
+                                                    {canSeePriceListReports && (
+                                                        <div className="border-t border-slate-100 pt-2">
+                                                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1.5 flex items-center gap-1.5">
+                                                                <i className="fa-solid fa-chart-pie text-emerald-500"></i>
+                                                                Price List Reports
+                                                            </p>
                                                         <div className="flex flex-col gap-1">
                                                             {priceFormats.map((f, idx) => {
                                                                 const brandsList = f.brand_configs
@@ -625,6 +635,7 @@ export default function Navbar() {
                                                             })}
                                                         </div>
                                                     </div>
+                                                    )}
                                                 </>
                                             )}
                                         </div>

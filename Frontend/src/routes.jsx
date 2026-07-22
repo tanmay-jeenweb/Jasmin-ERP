@@ -271,10 +271,16 @@ export default function AppRoutes() {
                     path="/admin/variations"
                     element={<Navigate to="/admin/pricing-formulas" replace />}
                 />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="price_list" requiredAction="read" />}>
                 <Route
                     path="/admin/price-list/:variationId"
                     element={<PriceListData />}
                 />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="price_list_report" requiredAction="read" />}>
                 <Route
                     path="/admin/price-list-report/:variationId"
                     element={<PriceListReport />}
