@@ -6,8 +6,12 @@ import DataTable from "../../components/DataTable";
 import * as XLSX from "xlsx-js-style";
 import ExcelJS from "exceljs";
 import toast from "react-hot-toast";
+import { usePermission } from "../../context/PermissionContext";
 
 export default function TargetVsAchievement() {
+  const { hasPermission, isAdmin } = usePermission();
+  const canWriteOrUpdate = isAdmin || hasPermission("target_vs_achievement", "write") || hasPermission("target_vs_achievement", "update");
+
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -70,7 +74,13 @@ export default function TargetVsAchievement() {
     setExporting(true);
     try {
       const response = await getBranches();
-      const branches = response.data.data || [];
+      const allBranches = response.data.data || [];
+
+      // Filter exported template branches to user's mapped/accessible branches (if available)
+      const accessibleBranchNames = new Set(data.map(d => String(d.branch_name).trim().toUpperCase()));
+      const branches = data.length > 0
+        ? allBranches.filter(b => accessibleBranchNames.has(String(b.name).trim().toUpperCase()))
+        : allBranches;
 
       const monthName = new Date().toLocaleString('en-US', { month: 'long' });
       const monthYear = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
@@ -509,7 +519,7 @@ export default function TargetVsAchievement() {
         }
       } catch (err) {
         console.error("Failed to parse/import Excel file:", err);
-        toast.error("Failed to import Excel. Please verify the format.");
+        toast.error(err.response?.data?.message || err.message || "Failed to import Excel. Please verify the format.");
       } finally {
         setImporting(false);
         if (fileInputRef.current) {
@@ -935,28 +945,31 @@ export default function TargetVsAchievement() {
           searchPlaceholder="Search ..."
           actionButton={
             <div className="contents">
-              {/* Date selector for manual sync override */}
-              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-lg px-2 h-10">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-                </svg>
-                <input
-                  type="date"
-                  value={syncDate}
-                  onChange={(e) => setSyncDate(e.target.value)}
-                  className="bg-transparent border-none text-xs text-slate-700 font-semibold focus:outline-none cursor-pointer w-[110px] p-0"
-                />
-              </div>
+              {/* Date selector and Sync Achievements button */}
+              {canWriteOrUpdate && (
+                <>
+                  <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-lg px-2 h-10">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+                    </svg>
+                    <input
+                      type="date"
+                      value={syncDate}
+                      onChange={(e) => setSyncDate(e.target.value)}
+                      className="bg-transparent border-none text-xs text-slate-700 font-semibold focus:outline-none cursor-pointer w-[110px] p-0"
+                    />
+                  </div>
 
-              {/* Sync Achievements button */}
-              <button
-                onClick={handleSync}
-                disabled={syncing || exporting || exportingReport || importing}
-                className="flex items-center justify-center h-10 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none focus:outline-none"
-                title="Sync Achievements from External API"
-              >
-                {syncing ? "Syncing..." : "Sync"}
-              </button>
+                  <button
+                    onClick={handleSync}
+                    disabled={syncing || exporting || exportingReport || importing}
+                    className="flex items-center justify-center h-10 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none focus:outline-none"
+                    title="Sync Achievements from External API"
+                  >
+                    {syncing ? "Syncing..." : "Sync"}
+                  </button>
+                </>
+              )}
 
               {/* Actions Dropdown */}
               <div className="relative inline-block text-left" ref={dropdownRef}>
@@ -974,7 +987,7 @@ export default function TargetVsAchievement() {
 
                 {showDropdown && (
                   <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1.5 origin-top-right">
-                    {/* Export Report */}
+                    {/* Export Report - Available to Read Users */}
                     <button
                       onClick={() => {
                         setShowDropdown(false);
@@ -989,35 +1002,38 @@ export default function TargetVsAchievement() {
                       <span>E. Report</span>
                     </button>
 
-                    {/* Export Template */}
-                    <button
-                      onClick={() => {
-                        setShowDropdown(false);
-                        handleExport();
-                      }}
-                      disabled={exporting || exportingReport || syncing || importing}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 border-none bg-transparent cursor-pointer text-sm font-medium"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className={`w-4 h-4 text-emerald-600 flex-shrink-0 ${exporting ? 'animate-bounce' : ''}`}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                      </svg>
-                      <span>E. Template</span>
-                    </button>
+                    {/* Export Template & Import - Available to Write/Update Users (Unified) */}
+                    {canWriteOrUpdate && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setShowDropdown(false);
+                            handleExport();
+                          }}
+                          disabled={exporting || exportingReport || syncing || importing}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 border-none bg-transparent cursor-pointer text-sm font-medium"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className={`w-4 h-4 text-emerald-600 flex-shrink-0 ${exporting ? 'animate-bounce' : ''}`}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                          </svg>
+                          <span>E. Template</span>
+                        </button>
 
-                    {/* Import */}
-                    <button
-                      onClick={() => {
-                        setShowDropdown(false);
-                        fileInputRef.current.click();
-                      }}
-                      disabled={importing || exporting || exportingReport || syncing}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 border-none bg-transparent cursor-pointer text-sm font-medium"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className={`w-4 h-4 text-indigo-600 flex-shrink-0 ${importing ? 'animate-bounce' : ''}`}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-                      </svg>
-                      <span>Import</span>
-                    </button>
+                        <button
+                          onClick={() => {
+                            setShowDropdown(false);
+                            fileInputRef.current.click();
+                          }}
+                          disabled={importing || exporting || exportingReport || syncing}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 border-none bg-transparent cursor-pointer text-sm font-medium"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className={`w-4 h-4 text-indigo-600 flex-shrink-0 ${importing ? 'animate-bounce' : ''}`}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                          </svg>
+                          <span>Import</span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

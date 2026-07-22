@@ -4,27 +4,61 @@ import { createUserType } from "../../../api/userTypeMasterApi";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
-const MASTERS = [
-  { key: "user_type", label: "User Type Master" },
-  { key: "mobile_brand_master", label: "Brand Master" },
-  { key: "bank_master", label: "Finance Company Master" },
-  { key: "finance_machine_master", label: "Finance Machine Master" },
-  { key: "user_master", label: "User Master" },
-  { key: "device_approval", label: "Device Approval" },
-  { key: "state_master", label: "State Master" },
-  { key: "product_type_master", label: "Product Type Master" },
-  { key: "item_model_master", label: "Model Master" },
-  { key: "model_group_master", label: "Model Group Master" },
-  { key: "branch_master", label: "Branch Master" },
-  { key: "user_branch_mapping", label: "User Branch Mapping" },
-  { key: "support_master", label: "Support Master" },
-  { key: "alert_master", label: "Alert Master" },
-  { key: "variation_master", label: "Pricing Formula Master" },
-  { key: "landing_type_master", label: "Landing Type Master" },
+const MASTER_GROUPS = [
+  {
+    category: "👥 User & Access Management",
+    masters: [
+      { key: "user_type", label: "User Type Master" },
+      { key: "user_master", label: "User Master" },
+      { key: "user_branch_mapping", label: "User Branch Mapping", note: "Write = Branch Access Mapping" },
+      { key: "device_approval", label: "Device Approval" },
+    ]
+  },
+  {
+    category: "🏢 Organization & Locations",
+    masters: [
+      { key: "branch_master", label: "Branch Master" },
+      { key: "state_master", label: "State Master" },
+    ]
+  },
+  {
+    category: "📦 Products & Catalog",
+    masters: [
+      { key: "mobile_brand_master", label: "Brand Master" },
+      { key: "product_type_master", label: "Product Type Master" },
+      { key: "item_model_master", label: "Model Master" },
+      { key: "model_group_master", label: "Model Group Master" },
+    ]
+  },
+  {
+    category: "💳 Finance & Pricing",
+    masters: [
+      { key: "bank_master", label: "Finance Company Master" },
+      { key: "finance_machine_master", label: "Finance Machine Master" },
+      { key: "variation_master", label: "Pricing Formula Master", note: "Write = Price List Import/Export" },
+      { key: "landing_type_master", label: "Landing Type Master" },
+    ]
+  },
+  {
+    category: "📊 Reports & Analytics",
+    masters: [
+      { key: "target_vs_achievement", label: "Target vs Achievement", note: "Write = Import/Export Template & Sync" },
+      { key: "stock_vs_cash_deposit", label: "Stock vs Cash Deposit", note: "Write = Import/Export Template" },
+    ]
+  },
+  {
+    category: "⚙️ System Operations & Support",
+    masters: [
+      { key: "support_master", label: "Support Master" },
+      { key: "alert_master", label: "Alert Master" },
+    ]
+  }
 ];
 
+const MASTERS = MASTER_GROUPS.flatMap((g) => g.masters);
+
 const PERMS = ["canRead", "canWrite", "canUpdate", "canDelete"];
-const PERM_LABELS = { canRead: "Read", canWrite: "Write / Approval", canUpdate: "Update", canDelete: "Delete" };
+const PERM_LABELS = { canRead: "Read", canWrite: "Write / Import / Approval", canUpdate: "Update", canDelete: "Delete" };
 
 const PERM_CLASSES = {
   canRead: "bg-purple-50 text-indigo-650 border-purple-200",
@@ -98,6 +132,31 @@ export default function CreateUserType() {
           }
           : p
       )
+    );
+  };
+
+  // Toggle entire section / group (all perms for masters in group)
+  const toggleGroup = (groupMasters) => {
+    const keys = groupMasters.map((m) => m.key);
+    const allChecked = keys.every((key) => {
+      const isApprovalRow = key.endsWith("_approval");
+      const applicablePerms = isApprovalRow ? ["canRead", "canWrite"] : PERMS;
+      const row = permissions.find((p) => p.masterName === key);
+      return row && applicablePerms.every((perm) => row[perm]);
+    });
+
+    setPermissions((prev) =>
+      prev.map((p) => {
+        if (!keys.includes(p.masterName)) return p;
+        const isApprovalRow = p.masterName.endsWith("_approval");
+        return {
+          ...p,
+          canRead: !allChecked,
+          canWrite: !allChecked,
+          canUpdate: isApprovalRow ? false : !allChecked,
+          canDelete: isApprovalRow ? false : !allChecked,
+        };
+      })
     );
   };
 
@@ -294,58 +353,100 @@ export default function CreateUserType() {
                   </tr>
                 </thead>
                 <tbody>
-                  {MASTERS.map((master, idx) => {
-                    const row = permissions.find((p) => p.masterName === master.key);
-                    const rowAll = isRowAll(master.key);
+                  {MASTER_GROUPS.map((group) => {
+                    const groupAll = group.masters.every((m) => isRowAll(m.key));
                     return (
-                      <tr
-                        key={master.key}
-                        className={`transition-colors border-b border-slate-100 last:border-b-0 hover:bg-slate-50/80 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}
-                      >
-                        <td className="px-3.5 py-3 text-sm font-semibold text-slate-700">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-indigo-600 flex-shrink-0" />
-                            {master.label}
-                          </div>
-                        </td>
-                        {PERMS.map((perm) => {
-                          const checked = row[perm];
-                          const isApprovalRow = master.key.endsWith("_approval");
-
-                          if (isApprovalRow && (perm === "canUpdate" || perm === "canDelete")) {
-                            return (
-                              <td key={perm} className="text-center px-2 py-3 text-slate-400">
-                                —
-                              </td>
-                            );
-                          }
-
-                          return (
-                            <td key={perm} className="text-center px-2 py-3">
-                              <div
-                                onClick={() => togglePerm(master.key, perm)}
-                                className={`w-5.5 h-5.5 rounded-md border flex items-center justify-center cursor-pointer transition-all mx-auto ${checked ? `ring-4 ${PERM_CHECKBOX_RING_CLASSES[perm]}` : "border-slate-300 bg-white"}`}
-                              >
-                                {checked && (
-                                  <svg viewBox="0 0 12 10" className="w-[11px] h-[11px]">
-                                    <polyline points="1,5 4.5,8.5 11,1" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
-                                )}
+                      <tbody key={group.category} className="contents">
+                        {/* Section Header */}
+                        <tr className="bg-gradient-to-r from-slate-100 via-indigo-50/60 to-purple-50/60 border-y border-indigo-100/80">
+                          <td colSpan={6} className="px-3.5 py-2.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-extrabold text-indigo-950 uppercase tracking-wide">
+                                  {group.category}
+                                </span>
+                                <span className="text-[11px] font-semibold text-slate-500 bg-white/80 px-2 py-0.5 rounded-full border border-slate-200">
+                                  {group.masters.length} {group.masters.length === 1 ? 'module' : 'modules'}
+                                </span>
                               </div>
-                            </td>
+                              <button
+                                type="button"
+                                onClick={() => toggleGroup(group.masters)}
+                                className={`text-[10px] font-bold px-2.5 py-1 rounded-md cursor-pointer border transition-all ${
+                                  groupAll
+                                    ? "border-indigo-600 bg-indigo-600 text-white shadow-xs"
+                                    : "border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-100 shadow-xs"
+                                }`}
+                              >
+                                {groupAll ? "✓ Group All" : "Select Group"}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* Section Items */}
+                        {group.masters.map((master, idx) => {
+                          const row = permissions.find((p) => p.masterName === master.key);
+                          const rowAll = isRowAll(master.key);
+                          return (
+                            <tr
+                              key={master.key}
+                              className={`transition-colors border-b border-slate-100 last:border-b-0 hover:bg-slate-50/80 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}
+                            >
+                              <td className="px-3.5 py-3 text-sm font-semibold text-slate-700 pl-7">
+                                <div className="flex flex-col gap-0.5">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-600 flex-shrink-0" />
+                                    <span>{master.label}</span>
+                                  </div>
+                                  {master.note && (
+                                    <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50/80 px-1.75 py-0.25 rounded border border-indigo-200/60 w-max ml-3.5">
+                                      {master.note}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              {PERMS.map((perm) => {
+                                const checked = row[perm];
+                                const isApprovalRow = master.key.endsWith("_approval");
+
+                                if (isApprovalRow && (perm === "canUpdate" || perm === "canDelete")) {
+                                  return (
+                                    <td key={perm} className="text-center px-2 py-3 text-slate-400">
+                                      —
+                                    </td>
+                                  );
+                                }
+
+                                return (
+                                  <td key={perm} className="text-center px-2 py-3">
+                                    <div
+                                      onClick={() => togglePerm(master.key, perm)}
+                                      className={`w-5.5 h-5.5 rounded-md border flex items-center justify-center cursor-pointer transition-all mx-auto ${checked ? `ring-4 ${PERM_CHECKBOX_RING_CLASSES[perm]}` : "border-slate-300 bg-white"}`}
+                                    >
+                                      {checked && (
+                                        <svg viewBox="0 0 12 10" className="w-[11px] h-[11px]">
+                                          <polyline points="1,5 4.5,8.5 11,1" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                      )}
+                                    </div>
+                                  </td>
+                                );
+                              })}
+                              {/* Row toggle */}
+                              <td className="text-center px-2 py-3">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleRow(master.key)}
+                                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-md cursor-pointer border-[1.5px] transition-all ${rowAll ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-slate-50 text-slate-500 hover:bg-slate-100"}`}
+                                >
+                                  {rowAll ? "✓ All" : "All"}
+                                </button>
+                              </td>
+                            </tr>
                           );
                         })}
-                        {/* Row toggle */}
-                        <td className="text-center px-2 py-3">
-                          <button
-                            type="button"
-                            onClick={() => toggleRow(master.key)}
-                            className={`text-[11px] font-semibold px-2.5 py-1 rounded-md cursor-pointer border-[1.5px] transition-all ${rowAll ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-slate-50 text-slate-500 hover:bg-slate-100"}`}
-                          >
-                            {rowAll ? "✓ All" : "All"}
-                          </button>
-                        </td>
-                      </tr>
+                      </tbody>
                     );
                   })}
                 </tbody>

@@ -18,6 +18,7 @@ const MASTERS = [
     { key: 'alert_master', label: 'Alert Master' },
     { key: 'variation_master', label: 'Variation Master' },
     { key: 'landing_type_master', label: 'Landing Type Master' },
+    { key: 'target_vs_achievement', label: 'Target vs Achievement' },
 ];
 
 // ─── Table creation ──────────────────────────────────────────────────────────

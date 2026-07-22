@@ -268,14 +268,33 @@ const getPriceListReportController = async (req, res) => {
     }
 };
 
+const { getStockCacheByModelGroup, saveStockCache } = require('../models/stockCacheModel.js');
+
 const getModelGroupStockInfoController = async (req, res) => {
     try {
-        const { modelGroup } = req.query;
+        const { modelGroup, sync } = req.query;
         if (!modelGroup) {
             return res.status(400).json({ success: false, message: 'Model group parameter is required' });
         }
 
-        // 1. Fetch item_codes and model_names belonging to this model group from database
+        const isForceSync = sync === 'true' || sync === '1';
+
+        // 1. If not forcing sync, check database cache first
+        if (!isForceSync) {
+            const cached = await getStockCacheByModelGroup(modelGroup);
+            if (cached) {
+                return res.status(200).json({
+                    success: true,
+                    data: cached.data,
+                    isCached: true,
+                    updatedAt: cached.updatedAt,
+                    totalLocations: cached.totalLocations,
+                    totalStock: cached.totalStock
+                });
+            }
+        }
+
+        // 2. Query item_model_master for model group codes/names
         let modelGroupItemCodes = new Set();
         let modelNames = [];
         try {
@@ -291,7 +310,7 @@ const getModelGroupStockInfoController = async (req, res) => {
             console.warn("Could not query item_model_master for model group stock filtering:", e.message);
         }
 
-        // 2. Fetch external stock data from APX API
+        // 3. Fetch external stock data from APX API
         const encodedMg = encodeURIComponent(modelGroup);
         const apiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetStockInfo?CompanyCode=JITPL&ItemClassificationValue=${encodedMg}`;
 
@@ -305,6 +324,16 @@ const getModelGroupStockInfoController = async (req, res) => {
         });
 
         if (!response.ok) {
+            const cached = await getStockCacheByModelGroup(modelGroup);
+            if (cached) {
+                return res.status(200).json({
+                    success: true,
+                    data: cached.data,
+                    isCached: true,
+                    updatedAt: cached.updatedAt,
+                    warning: `APX API failed (${response.statusText}). Displaying saved DB stock data.`
+                });
+            }
             return res.status(response.status).json({
                 success: false,
                 message: `Failed to fetch from external API: Server returned ${response.statusText}`
@@ -314,6 +343,16 @@ const getModelGroupStockInfoController = async (req, res) => {
         const result = await response.json();
 
         if (result.StatusCode !== 0) {
+            const cached = await getStockCacheByModelGroup(modelGroup);
+            if (cached) {
+                return res.status(200).json({
+                    success: true,
+                    data: cached.data,
+                    isCached: true,
+                    updatedAt: cached.updatedAt,
+                    warning: `APX API Error: ${result.StatusMessage || 'Unknown error'}. Displaying saved DB stock data.`
+                });
+            }
             return res.status(400).json({
                 success: false,
                 message: `External API Error: ${result.StatusMessage || 'Unknown error'}`
@@ -322,23 +361,19 @@ const getModelGroupStockInfoController = async (req, res) => {
 
         const rawItems = result.Data || [];
 
-        // 3. Filter stock data strictly to devices belonging to this model group
+        // 4. Filter stock data strictly to devices belonging to this model group
         let filteredItems = rawItems;
         if (modelGroupItemCodes.size > 0) {
             filteredItems = rawItems.filter(item => {
                 const itemCode = String(item.ITEM_CODE || "").trim().toLowerCase();
                 const itemName = String(item.ITEM_NAME || "").trim().toLowerCase();
 
-                // Match exact item_code
                 if (modelGroupItemCodes.has(itemCode)) return true;
-
-                // Or match if item_name contains any model name of this model group
                 if (modelNames.some(mn => mn && mn.length > 2 && itemName.includes(mn))) return true;
 
                 return false;
             });
         } else {
-            // Fallback substring filter if model_group_name isn't in item_model_master
             const groupLower = String(modelGroup).trim().toLowerCase();
             filteredItems = rawItems.filter(item => {
                 const itemName = String(item.ITEM_NAME || "").trim().toLowerCase();
@@ -346,12 +381,45 @@ const getModelGroupStockInfoController = async (req, res) => {
             });
         }
 
+        // Calculate metrics
+        const validItems = filteredItems.filter(i => Number(i.SALEABLE_STOCK || 0) >= 1);
+        const uniqueBranches = new Set(validItems.map(i => (i.BRANCH_NAME || i.BRANCH_CODE || "").trim()));
+        const totalStockSum = validItems.reduce((acc, i) => acc + Number(i.SALEABLE_STOCK || 0), 0);
+
+        // 5. Save to database cache
+        try {
+            await saveStockCache(modelGroup, filteredItems, uniqueBranches.size, totalStockSum);
+        } catch (e) {
+            console.error("Failed to save stock cache to database:", e.message);
+        }
+
         return res.status(200).json({
             success: true,
-            data: filteredItems
+            data: filteredItems,
+            isCached: false,
+            updatedAt: new Date(),
+            totalLocations: uniqueBranches.size,
+            totalStock: totalStockSum
         });
     } catch (error) {
         console.error('Error in getModelGroupStockInfoController:', error);
+        try {
+            const { modelGroup } = req.query;
+            if (modelGroup) {
+                const cached = await getStockCacheByModelGroup(modelGroup);
+                if (cached) {
+                    return res.status(200).json({
+                        success: true,
+                        data: cached.data,
+                        isCached: true,
+                        updatedAt: cached.updatedAt,
+                        warning: `Connection issue: ${error.message}. Displaying saved DB stock data.`
+                    });
+                }
+            }
+        } catch (e) {
+            // Ignore fallback error
+        }
         return res.status(500).json({ success: false, message: error.message || 'Internal server error' });
     }
 };

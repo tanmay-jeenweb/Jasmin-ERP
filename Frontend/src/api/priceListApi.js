@@ -12,9 +12,9 @@ export const getPriceListReport = async (variationId) => {
     return apiClient.get(`/price-lists/report/${variationId}`);
 };
 
-export const getModelGroupStockInfo = async (modelGroup) => {
+export const getModelGroupStockInfo = async (modelGroup, sync = false) => {
     return apiClient.get(`/price-lists/stock-info`, {
-        params: { modelGroup }
+        params: { modelGroup, sync: sync ? 'true' : 'false' }
     });
 };
 

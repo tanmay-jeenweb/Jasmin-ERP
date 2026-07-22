@@ -5,13 +5,13 @@ const {
     importTargetVsAchievementsController,
     syncTargetVsAchievementsController
 } = require('../controllers/targetVsAchievementController.js');
-const { verifyToken } = require('../middleware/authMiddleware.js');
+const { verifyToken, verifyPermission } = require('../middleware/authMiddleware.js');
 
 const router = express.Router();
 
-router.get('/all', verifyToken, getAllTargetVsAchievementsController);
-router.get('/abm-wise', verifyToken, getABMWiseTargetVsAchievementsController);
-router.post('/import', verifyToken, importTargetVsAchievementsController);
-router.post('/sync', verifyToken, syncTargetVsAchievementsController);
+router.get('/all', verifyToken, verifyPermission('target_vs_achievement', 'read'), getAllTargetVsAchievementsController);
+router.get('/abm-wise', verifyToken, verifyPermission('target_vs_achievement', 'read'), getABMWiseTargetVsAchievementsController);
+router.post('/import', verifyToken, verifyPermission('target_vs_achievement', 'write'), importTargetVsAchievementsController);
+router.post('/sync', verifyToken, verifyPermission('target_vs_achievement', 'write'), syncTargetVsAchievementsController);
 
 module.exports = router;

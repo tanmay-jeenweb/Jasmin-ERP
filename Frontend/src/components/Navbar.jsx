@@ -267,7 +267,18 @@ export default function Navbar() {
         }
     ];
 
-    const availableReports = allReports.filter(r => isAdmin);
+    const availableReports = allReports.filter(r => {
+        if (r.path === "/admin/target-vs-achievement" || r.path === "/admin/abm-wise-tva") {
+            return isAdmin || hasPermission("target_vs_achievement", "read");
+        }
+        if (r.path === "/admin/stock-vs-cash-deposit") {
+            return isAdmin || hasPermission("stock_vs_cash_deposit", "read");
+        }
+        if (r.path === "/admin/finance-brand-mapping") {
+            return isAdmin;
+        }
+        return true;
+    });
 
     let marqueeText = runningOffers.length > 0
         ? runningOffers.map(o => `🔥 [${o.brand_name}] ${o.offer_type} (Valid: ${new Date(o.from_date).toLocaleDateString()} to ${new Date(o.to_date).toLocaleDateString()})`).join("   |   ")
@@ -665,7 +676,7 @@ export default function Navbar() {
                                 </button>
 
                                 {isOffersOpen && (
-                                    <div className="absolute left-0 top-full mt-1.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="absolute right-0 top-full mt-1.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top-right animate-in fade-in slide-in-from-top-2 duration-200">
                                         <div className="flex flex-col gap-1">
                                             {[
                                                 {
@@ -716,7 +727,7 @@ export default function Navbar() {
                             </div>
                         )}
                         {/* Reports Dropdown */}
-                        {isAdmin && (
+                        {availableReports.length > 0 && (
                             <div className="relative" id="reports-dropdown">
                                 <button
                                     onClick={() => setIsReportsOpen(!isReportsOpen)}
@@ -741,7 +752,7 @@ export default function Navbar() {
                                 </button>
 
                                 {isReportsOpen && (
-                                    <div className="absolute left-0 top-full mt-1.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="absolute right-0 top-full mt-1.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top-right animate-in fade-in slide-in-from-top-2 duration-200">
                                         <div className="flex flex-col gap-1">
                                             {availableReports.map((r, idx) => {
                                                 const isActive = location.pathname === r.path;
