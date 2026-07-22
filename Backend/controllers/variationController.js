@@ -6,6 +6,7 @@ const {
     deleteVariation
 } = require('../models/variationModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
+const { checkUserStateAccess } = require('../utils/userStateHelper.js');
 
 const addVariationController = async (req, res) => {
     try {
@@ -95,10 +96,20 @@ const addVariationController = async (req, res) => {
 const getAllVariationsController = async (req, res) => {
     try {
         const variations = await getAllVariations();
+
+        // Filter variations based on user state access permissions
+        const accessibleVariations = [];
+        for (const v of variations) {
+            const hasAccess = await checkUserStateAccess(req.user, v.state_id, v.state_name);
+            if (hasAccess) {
+                accessibleVariations.push(v);
+            }
+        }
+
         res.status(200).json({
             success: true,
             message: 'Variation rules retrieved successfully',
-            data: variations
+            data: accessibleVariations
         });
     } catch (error) {
         console.error('Error retrieving variation rules:', error);
@@ -116,6 +127,15 @@ const getVariationByIdController = async (req, res) => {
         if (!variation) {
             return res.status(404).json({ success: false, message: 'Variation rule not found' });
         }
+
+        const hasAccess = await checkUserStateAccess(req.user, variation.state_id, variation.state_name);
+        if (!hasAccess) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied: You are not authorized to view price lists for this state.'
+            });
+        }
+
         res.status(200).json({
             success: true,
             message: 'Variation rule retrieved successfully',

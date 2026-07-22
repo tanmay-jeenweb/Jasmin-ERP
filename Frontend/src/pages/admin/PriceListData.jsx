@@ -100,7 +100,11 @@ export default function PriceListData() {
       }
     } catch (err) {
       console.error("Failed to load price list:", err);
-      toast.error("Failed to load price list data.");
+      const errMsg = err.response?.data?.message || "Failed to load price list data.";
+      toast.error(errMsg);
+      if (err.response?.status === 403) {
+        navigate("/");
+      }
     } finally {
       setLoading(false);
     }

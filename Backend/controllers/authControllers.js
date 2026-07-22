@@ -65,6 +65,11 @@ const login = async (req, res) => {
         }
         if (!userLandingType) userLandingType = ["All"];
 
+        let userState = user.state;
+        if (typeof userState === 'string') {
+            try { userState = JSON.parse(userState); } catch (e) { userState = [userState]; }
+        }
+
         // ================= ADMIN LOGIN =================
         if (user.role === "admin" && (user.device_verification_required === 0 || user.device_verification_required === false)) {
             const token = jwt.sign(
@@ -85,7 +90,8 @@ const login = async (req, res) => {
                     role: user.role,
                     mob_no: user.mob_no,
                     modules: user.modules || [],
-                    landing_type: userLandingType
+                    landing_type: userLandingType,
+                    state: userState
                 }
             });
         }
@@ -110,7 +116,8 @@ const login = async (req, res) => {
                     role: user.role,
                     mob_no: user.mob_no,
                     modules: user.modules || [],
-                    landing_type: userLandingType
+                    landing_type: userLandingType,
+                    state: userState
                 }
             });
         }
@@ -138,7 +145,8 @@ const login = async (req, res) => {
                         role: user.role,
                         mob_no: user.mob_no,
                         modules: user.modules || [],
-                        landing_type: userLandingType
+                        landing_type: userLandingType,
+                        state: userState
                     }
                 });
             } else {

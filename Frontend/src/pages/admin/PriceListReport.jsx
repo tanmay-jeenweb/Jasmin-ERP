@@ -80,7 +80,11 @@ export default function PriceListReport() {
       }
     } catch (err) {
       console.error("Failed to load price list report:", err);
-      toast.error("Failed to load price list report data.");
+      const errMsg = err.response?.data?.message || "Failed to load price list report data.";
+      toast.error(errMsg);
+      if (err.response?.status === 403) {
+        navigate("/");
+      }
     } finally {
       setLoading(false);
     }
