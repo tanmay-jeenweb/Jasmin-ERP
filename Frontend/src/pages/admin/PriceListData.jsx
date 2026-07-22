@@ -145,7 +145,7 @@ export default function PriceListData() {
         label: c.column_name,
         render: (row) => {
           const val = row[c.column_name];
-          if (val === undefined || val === null || val === '') return "—";
+          if (val === undefined || val === null || val === '' || val === '-' || val === '—') return "—";
           return <span className="font-medium text-slate-800">{val}</span>;
         }
       });
