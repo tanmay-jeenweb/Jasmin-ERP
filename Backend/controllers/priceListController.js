@@ -1,6 +1,7 @@
 const { getVariationById } = require('../models/variationModel.js');
 const { getPriceListData, upsertPriceListData, getPriceListReportData } = require('../models/priceListModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
+const { checkUserStateAccess } = require('../utils/userStateHelper.js');
 const db = require('../config/db.js');
 
 const getPriceListDataController = async (req, res) => {
@@ -11,6 +12,14 @@ const getPriceListDataController = async (req, res) => {
         const variation = await getVariationById(variationId);
         if (!variation) {
             return res.status(404).json({ success: false, message: 'Price List format not found' });
+        }
+
+        const hasAccess = await checkUserStateAccess(req.user, variation.state_id, variation.state_name);
+        if (!hasAccess) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied: You are not authorized to view price lists for this state.'
+            });
         }
 
         // Parse columns configuration
@@ -205,6 +214,14 @@ const importPriceListController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Price List format not found' });
         }
 
+        const hasAccess = await checkUserStateAccess(req.user, variation.state_id, variation.state_name);
+        if (!hasAccess) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied: You are not authorized to import price lists for this state.'
+            });
+        }
+
         const columnsList = Array.isArray(variation.columns)
             ? variation.columns
             : typeof variation.columns === 'string'
@@ -254,6 +271,14 @@ const getPriceListReportController = async (req, res) => {
         const variation = await getVariationById(variationId);
         if (!variation) {
             return res.status(404).json({ success: false, message: 'Price List format not found' });
+        }
+
+        const hasAccess = await checkUserStateAccess(req.user, variation.state_id, variation.state_name);
+        if (!hasAccess) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied: You are not authorized to view price list reports for this state.'
+            });
         }
 
         // Parse columns configuration
