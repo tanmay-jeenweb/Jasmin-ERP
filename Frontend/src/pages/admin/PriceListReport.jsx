@@ -3,7 +3,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import DataTable from "../../components/DataTable";
 import { getPriceListReport, getModelGroupStockInfo } from "../../api/priceListApi";
-import ExcelJS from "exceljs";
 import toast from "react-hot-toast";
 
 const canUserViewColumn = (col, user) => {
@@ -44,6 +43,10 @@ export default function PriceListReport() {
   const [loading, setLoading] = useState(false);
   const [selectedOfferModal, setSelectedOfferModal] = useState(null);
   
+  // Date filter state
+  const [reportDate, setReportDate] = useState("");
+  const [isHistoricalView, setIsHistoricalView] = useState(false);
+
   // Dynamic Stock Modal state
   const [stockModalData, setStockModalData] = useState(null);
   const [stockSearchQuery, setStockSearchQuery] = useState("");
@@ -65,14 +68,15 @@ export default function PriceListReport() {
     });
   }, [dynamicColumns, currentUser]);
 
-  const loadReportData = async () => {
+  const loadReportData = async (targetDate = reportDate) => {
     setLoading(true);
     try {
-      const res = await getPriceListReport(variationId);
+      const res = await getPriceListReport(variationId, targetDate);
       if (res.data?.success) {
         setData(res.data.data || []);
         setFormatName(res.data.formatName || "Price List Report");
         setDynamicColumns(res.data.columns || []);
+        setIsHistoricalView(Boolean(targetDate && targetDate.trim() !== ""));
       }
     } catch (err) {
       console.error("Failed to load price list report:", err);
@@ -85,6 +89,17 @@ export default function PriceListReport() {
   useEffect(() => {
     loadReportData();
   }, [variationId]);
+
+  const handleDateChange = (e) => {
+    const selected = e.target.value;
+    setReportDate(selected);
+    loadReportData(selected);
+  };
+
+  const handleResetDate = () => {
+    setReportDate("");
+    loadReportData("");
+  };
 
   const handleOpenStockModal = async (row, forceSync = false) => {
     const modelGroup = row.model_group_name || stockModalData?.modelGroup;
@@ -272,91 +287,6 @@ export default function PriceListReport() {
     return cols;
   }, [visibleDynamicColumns]);
 
-  const handleExportReport = async () => {
-    const loadToastId = toast.loading("Generating report sheet...");
-    try {
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet("Price List Report");
-
-      const fixedHeaders = [
-        { header: "Brand", key: "brand", width: 18 },
-        { header: "Product Name", key: "product_name", width: 25 },
-        { header: "Model Group", key: "model_group_name", width: 28 },
-      ];
-
-      const customHeaders = visibleDynamicColumns.map(col => ({
-        header: col.column_name,
-        key: col.column_name,
-        width: 20
-      }));
-
-      const endHeaders = [
-        { header: "Active Offers", key: "active_offers", width: 35 },
-      ];
-
-      worksheet.columns = [...fixedHeaders, ...customHeaders, ...endHeaders];
-
-      // Style header
-      const headerRow = worksheet.getRow(1);
-      headerRow.eachCell((cell) => {
-        cell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FF4F46E5" }, // Indigo
-        };
-        cell.font = { name: "Segoe UI", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
-        cell.alignment = { vertical: "middle", horizontal: "center" };
-      });
-      headerRow.height = 25;
-
-      data.forEach(row => {
-        const rowData = {
-          brand: row.brand || "",
-          product_name: row.product_name || row.icat_name || "",
-          model_group_name: row.model_group_name,
-        };
-
-        visibleDynamicColumns.forEach(c => {
-          rowData[c.column_name] = row[c.column_name] !== undefined && row[c.column_name] !== null ? row[c.column_name] : "";
-        });
-
-        const activeOffersText = (row.active_offers || [])
-          .map(o => `${o.offer_type} (${new Date(o.from_date).toLocaleDateString()} - ${new Date(o.to_date).toLocaleDateString()})`)
-          .join("; ");
-
-        rowData["active_offers"] = activeOffersText || "None";
-
-        worksheet.addRow(rowData);
-      });
-
-      worksheet.eachRow({ includeHeader: false }, (row) => {
-        row.eachCell({ includeEmpty: true }, (cell) => {
-          cell.font = { name: "Segoe UI", size: 10 };
-          cell.border = {
-            top: { style: "thin", color: { argb: "FFE2E8F0" } },
-            bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
-            left: { style: "thin", color: { argb: "FFE2E8F0" } },
-            right: { style: "thin", color: { argb: "FFE2E8F0" } },
-          };
-        });
-      });
-
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `Price_List_Report_${formatName.replace(/\s+/g, "_")}.xlsx`;
-      link.click();
-      window.URL.revokeObjectURL(url);
-
-      toast.success("Price List Report exported!", { id: loadToastId });
-    } catch (err) {
-      console.error("Export report error:", err);
-      toast.error("Failed to export report.", { id: loadToastId });
-    }
-  };
-
   return (
     <div className="flex flex-col flex-1 bg-slate-50 font-sans min-h-screen">
       <Navbar title="Price List Report" />
@@ -370,7 +300,38 @@ export default function PriceListReport() {
           loading={loading}
           searchPlaceholder="Search Brand, Product Name, Model Group, or prices..."
           actionButton={
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-[9px] px-3 py-1.5 shadow-xs">
+                <i className="fa-solid fa-calendar-days text-indigo-600 text-xs"></i>
+                <label htmlFor="report-date" className="text-xs font-semibold text-slate-700 whitespace-nowrap">
+                  Report Date:
+                </label>
+                <input
+                  id="report-date"
+                  type="date"
+                  value={reportDate}
+                  onChange={handleDateChange}
+                  max={new Date().toISOString().split("T")[0]}
+                  className="text-xs text-slate-800 font-semibold bg-transparent focus:outline-hidden cursor-pointer"
+                />
+                {reportDate && (
+                  <button
+                    onClick={handleResetDate}
+                    className="text-slate-400 hover:text-slate-600 text-xs cursor-pointer ml-1 p-0.5"
+                    title="Reset to live data"
+                  >
+                    <i className="fa-solid fa-xmark"></i>
+                  </button>
+                )}
+              </div>
+
+              {isHistoricalView && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[9px] text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
+                  <i className="fa-solid fa-clock-rotate-left text-amber-600"></i>
+                  <span>Historical Data ({reportDate})</span>
+                </div>
+              )}
+
               <button
                 onClick={() => navigate(`/admin/price-list/${variationId}`)}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-[9px] text-slate-700 bg-white border border-slate-300 font-semibold text-[13px] hover:bg-slate-50 transition-all cursor-pointer shadow-xs"
@@ -378,15 +339,6 @@ export default function PriceListReport() {
               >
                 <i className="fa-solid fa-table-list text-indigo-600 text-xs"></i>
                 <span>Price List Data</span>
-              </button>
-
-              <button
-                onClick={handleExportReport}
-                disabled={loading || data.length === 0}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-[9px] text-white border-none cursor-pointer font-semibold text-[13px] bg-gradient-to-br from-indigo-600 to-indigo-700 shadow-[0_2px_8px_rgba(104,4,161,0.35)] disabled:bg-slate-400 disabled:cursor-not-allowed disabled:shadow-none hover:opacity-95 transition-all"
-              >
-                <i className="fa-solid fa-file-excel text-xs"></i>
-                <span>Export Report</span>
               </button>
             </div>
           }
@@ -472,11 +424,10 @@ export default function PriceListReport() {
                       {stockModalData.productName}
                     </span>
                     {stockModalData.updatedAt && (
-                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 border ${
-                        stockModalData.isCached 
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 border ${stockModalData.isCached
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                           : "bg-indigo-50 text-indigo-700 border-indigo-200"
-                      }`}>
+                        }`}>
                         <i className={`fa-solid ${stockModalData.isCached ? "fa-database" : "fa-bolt"} text-[10px]`}></i>
                         <span>{stockModalData.isCached ? "DB Stored" : "Live Synced"}</span>
                       </span>
@@ -489,7 +440,7 @@ export default function PriceListReport() {
                   )}
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleOpenStockModal({ model_group_name: stockModalData.modelGroup, product_name: stockModalData.productName }, true)}

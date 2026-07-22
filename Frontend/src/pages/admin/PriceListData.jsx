@@ -298,11 +298,23 @@ export default function PriceListData() {
                 formula: mapFormulaForRow(formulaToUse, rowIndex)
               };
             } else {
-              rowData[col.column_name] = "";
+              const existingVal = existingRow ? existingRow[col.column_name] : undefined;
+              if (existingVal !== undefined && existingVal !== null && String(existingVal).trim() !== "" && String(existingVal).trim() !== "-") {
+                const num = Number(existingVal);
+                rowData[col.column_name] = !isNaN(num) && String(existingVal).trim() !== "" ? num : existingVal;
+              } else {
+                rowData[col.column_name] = "-";
+              }
             }
           } else {
-            // Set initial placeholder to '-' for user input columns in exported template
-            rowData[col.column_name] = "-";
+            // Include already filled data if present; otherwise default to '-'
+            const existingVal = existingRow ? existingRow[col.column_name] : undefined;
+            if (existingVal !== undefined && existingVal !== null && String(existingVal).trim() !== "" && String(existingVal).trim() !== "-") {
+              const num = Number(existingVal);
+              rowData[col.column_name] = !isNaN(num) && String(existingVal).trim() !== "" ? num : existingVal;
+            } else {
+              rowData[col.column_name] = "-";
+            }
           }
         });
 

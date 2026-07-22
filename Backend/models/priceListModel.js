@@ -123,21 +123,65 @@ const getPriceListHistoryData = async (variationId, productCode = null) => {
     }
 };
 
-const getPriceListReportData = async (variationId) => {
-    const tableName = `price_list_format_${variationId}`;
+const getPriceListReportData = async (variationId, targetDate = null) => {
     let rawRows = [];
-    try {
-        const query = `
-            SELECT p.*, imm.product_name AS imm_product_name
-            FROM \`${tableName}\` p
-            LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
-            ORDER BY p.brand ASC, imm.product_name ASC, p.model_group_name ASC
-        `;
-        const [results] = await db.execute(query);
-        rawRows = results;
-    } catch (e) {
-        // Table may not exist yet
-        rawRows = [];
+    const todayStr = new Date().toISOString().split('T')[0];
+    const isHistorical = Boolean(targetDate && typeof targetDate === 'string' && targetDate.trim() !== '');
+
+    if (isHistorical) {
+        const historyTableName = `price_list_format_history_${variationId}`;
+        try {
+            const cutoffTimestamp = `${targetDate.trim()} 23:59:59`;
+            const query = `
+                SELECT p.*, imm.product_name AS imm_product_name
+                FROM \`${historyTableName}\` p
+                JOIN (
+                    SELECT product_code, MAX(id) as max_id
+                    FROM \`${historyTableName}\`
+                    WHERE timestamp <= ?
+                    GROUP BY product_code
+                ) latest ON p.id = latest.max_id
+                LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
+                ORDER BY p.brand ASC, imm.product_name ASC, p.model_group_name ASC
+            `;
+            const [results] = await db.execute(query, [cutoffTimestamp]);
+            rawRows = results;
+        } catch (e) {
+            console.warn(`Failed to fetch historical report data from ${historyTableName}:`, e.message);
+            rawRows = [];
+        }
+
+        // If targetDate is specified but no history records found (or table empty), fallback to current live table
+        if (rawRows.length === 0 && targetDate.trim() >= todayStr) {
+            const tableName = `price_list_format_${variationId}`;
+            try {
+                const query = `
+                    SELECT p.*, imm.product_name AS imm_product_name
+                    FROM \`${tableName}\` p
+                    LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
+                    ORDER BY p.brand ASC, imm.product_name ASC, p.model_group_name ASC
+                `;
+                const [results] = await db.execute(query);
+                rawRows = results;
+            } catch (e) {
+                rawRows = [];
+            }
+        }
+    } else {
+        const tableName = `price_list_format_${variationId}`;
+        try {
+            const query = `
+                SELECT p.*, imm.product_name AS imm_product_name
+                FROM \`${tableName}\` p
+                LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
+                ORDER BY p.brand ASC, imm.product_name ASC, p.model_group_name ASC
+            `;
+            const [results] = await db.execute(query);
+            rawRows = results;
+        } catch (e) {
+            // Table may not exist yet
+            rawRows = [];
+        }
     }
 
     // 1. Group rows by brand, product_name & model_group_name
@@ -163,7 +207,7 @@ const getPriceListReportData = async (variationId) => {
     // 2. Fetch active offers targeting model groups
     let offersByGroup = {};
     try {
-        const activeOffersQuery = `
+        let activeOffersQuery = `
             SELECT 
                 o.id,
                 o.brand_name,
@@ -180,9 +224,17 @@ const getPriceListReportData = async (variationId) => {
             FROM offers o
             JOIN offer_model_groups omg ON o.id = omg.offer_id
             LEFT JOIN offer_transactions ot ON o.id = ot.offer_id
-            WHERE o.from_date <= CURDATE() AND o.to_date >= CURDATE()
         `;
-        const [offerRows] = await db.execute(activeOffersQuery);
+        const offerParams = [];
+        if (targetDate && typeof targetDate === 'string' && targetDate.trim() !== '') {
+            const queryDate = targetDate.trim();
+            activeOffersQuery += ` WHERE o.from_date <= ? AND o.to_date >= ?`;
+            offerParams.push(queryDate, queryDate);
+        } else {
+            activeOffersQuery += ` WHERE o.from_date <= CURDATE() AND o.to_date >= CURDATE()`;
+        }
+
+        const [offerRows] = await db.execute(activeOffersQuery, offerParams);
 
         const offerMap = new Map();
         const groupOfferMap = new Map();
