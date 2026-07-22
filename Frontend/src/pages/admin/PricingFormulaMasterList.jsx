@@ -124,11 +124,12 @@ export default function PricingFormulaMasterList() {
                 return;
             }
 
-            const columnsList = Array.isArray(row.columns)
+            const rawColumnsList = Array.isArray(row.columns)
                 ? row.columns
                 : typeof row.columns === "string"
                     ? JSON.parse(row.columns)
                     : [];
+            const columnsList = rawColumnsList.filter(c => !c.is_deleted);
 
             const brandConfigsList = Array.isArray(row.brand_configs)
                 ? row.brand_configs
@@ -330,11 +331,12 @@ export default function PricingFormulaMasterList() {
                 label: "Configured Columns",
                 minWidth: "350px",
                 render: (row) => {
-                    const colsList = Array.isArray(row.columns)
+                    const rawColsList = Array.isArray(row.columns)
                         ? row.columns
                         : typeof row.columns === "string"
                             ? JSON.parse(row.columns)
                             : [];
+                    const colsList = rawColsList.filter(c => !c.is_deleted);
                     return (
                         <div className="flex flex-wrap gap-1.5 max-w-[450px]">
                             {colsList.map((col, idx) => (

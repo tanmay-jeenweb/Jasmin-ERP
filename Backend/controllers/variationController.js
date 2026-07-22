@@ -8,6 +8,49 @@ const {
 const { createAuditLog } = require('../models/auditLogModel.js');
 const { checkUserStateAccess } = require('../utils/userStateHelper.js');
 
+const validateColumnDependencies = (columns, brandConfigs) => {
+    if (!columns || !Array.isArray(columns)) return null;
+
+    const activeColIds = new Set(["A", "B", "C", "D", "E", ...columns.map(c => c.column_id)]);
+
+    // Validate formulas in default columns
+    for (const col of columns) {
+        if ((col.type === 'formulation' || col.type === 'default formulation') && col.formula) {
+            const formula = col.formula.trim().toUpperCase();
+            const matches = formula.match(/\b\$?[A-Z]+\$?\d+\b/gi) || [];
+            for (const m of matches) {
+                const colLetter = m.replace(/[\$\d]/g, "").toUpperCase();
+                if (colLetter && !activeColIds.has(colLetter)) {
+                    return `Cannot save formula: Column ${colLetter} referenced in Column ${col.column_id}${col.column_name ? ` (${col.column_name})` : ''} does not exist or was deleted.`;
+                }
+            }
+        }
+    }
+
+    // Validate formulas in brand override configurations
+    if (brandConfigs && Array.isArray(brandConfigs)) {
+        for (const cfg of brandConfigs) {
+            const brandStr = cfg.brands && cfg.brands.length > 0 ? cfg.brands.join(", ") : "Brand";
+            for (const col of (cfg.columns || [])) {
+                if (col.formula) {
+                    const formula = col.formula.trim().toUpperCase();
+                    const matches = formula.match(/\b\$?[A-Z]+\$?\d+\b/gi) || [];
+                    for (const m of matches) {
+                        const colLetter = m.replace(/[\$\d]/g, "").toUpperCase();
+                        if (colLetter && !activeColIds.has(colLetter)) {
+                            const mainCol = columns.find(c => c.column_id === col.column_id);
+                            const colLabel = mainCol ? `Column ${mainCol.column_id}${mainCol.column_name ? ` (${mainCol.column_name})` : ''}` : `Column ${col.column_id}`;
+                            return `Cannot save formula: Column ${colLetter} referenced in ${colLabel} (${brandStr} override) does not exist or was deleted.`;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return null;
+};
+
 const addVariationController = async (req, res) => {
     try {
         const { stateId, formatName, columns, brandConfigs } = req.body;
@@ -55,6 +98,12 @@ const addVariationController = async (req, res) => {
                     }
                 }
             }
+        }
+
+        // Validate column dependencies
+        const depError = validateColumnDependencies(columns, brandConfigs);
+        if (depError) {
+            return res.status(400).json({ success: false, message: depError });
         }
 
         const result = await createVariation(stateId, formatName, columns, brandConfigs, addedBy, deviceId);
@@ -197,6 +246,12 @@ const updateVariationController = async (req, res) => {
                     }
                 }
             }
+        }
+
+        // Validate column dependencies
+        const depError = validateColumnDependencies(columns, brandConfigs);
+        if (depError) {
+            return res.status(400).json({ success: false, message: depError });
         }
 
         const beforeData = await getVariationById(id);

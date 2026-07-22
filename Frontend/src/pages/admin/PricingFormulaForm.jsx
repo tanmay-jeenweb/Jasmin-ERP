@@ -76,7 +76,7 @@ export default function PricingFormulaForm() {
                             : [];
                     
                     const fixedIds = ["A", "B", "C", "D", "E"];
-                    const dynamicColumnsOnly = parsedColumns.filter(c => !fixedIds.includes(c.column_id));
+                    const dynamicColumnsOnly = parsedColumns.filter(c => !fixedIds.includes(c.column_id) && !c.is_deleted);
                     
                     const mappedColumns = dynamicColumnsOnly.map((col) => ({
                         ...col,
@@ -136,6 +136,58 @@ export default function PricingFormulaForm() {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [id]);
 
+    // Helper to find all columns depending on targetCol via formulas
+    const checkColumnDependencies = (targetCol, currentColumns, currentBrandConfigs) => {
+        if (!targetCol) return [];
+        const targetId = targetCol.column_id;
+        const targetName = targetCol.column_name ? targetCol.column_name.trim() : "";
+
+        const dependentCols = new Set();
+        const idRegex = targetId ? new RegExp(`\\b\\$?${targetId}\\$?(\\d+)?\\b`, "i") : null;
+
+        const formulaHasDependency = (formula) => {
+            if (!formula || typeof formula !== "string" || !formula.trim()) return false;
+            const upperFormula = formula.trim().toUpperCase();
+
+            if (idRegex && idRegex.test(upperFormula)) {
+                return true;
+            }
+            if (targetName && targetName.length > 0) {
+                const upperName = targetName.toUpperCase();
+                if (upperFormula.includes(upperName)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        // Check default column formulas
+        currentColumns.forEach((col) => {
+            if (col.column_id !== targetId) {
+                if (formulaHasDependency(col.formula)) {
+                    const label = `Column ${col.column_id}${col.column_name ? ` (${col.column_name})` : ""}`;
+                    dependentCols.add(label);
+                }
+            }
+        });
+
+        // Check brand override formulas
+        (currentBrandConfigs || []).forEach((cfg) => {
+            const brandNames = cfg.brands && cfg.brands.length > 0 ? cfg.brands.join(", ") : "Brand Override";
+            (cfg.columns || []).forEach((col) => {
+                if (col.column_id !== targetId) {
+                    if (formulaHasDependency(col.formula)) {
+                        const mainCol = currentColumns.find((c) => c.column_id === col.column_id);
+                        const colLabel = mainCol ? `Column ${mainCol.column_id}${mainCol.column_name ? ` (${mainCol.column_name})` : ""}` : `Column ${col.column_id}`;
+                        dependentCols.add(`${colLabel} (in ${brandNames} config)`);
+                    }
+                }
+            });
+        });
+
+        return Array.from(dependentCols);
+    };
+
     // Dynamic Column Handlers
     const handleAddColumn = () => {
         const nextIndex = columns.length;
@@ -151,6 +203,19 @@ export default function PricingFormulaForm() {
             toast.error("At least one column is required.");
             return;
         }
+
+        const colToRemove = columns[indexToRemove];
+        const dependents = checkColumnDependencies(colToRemove, columns, brandConfigs);
+
+        if (dependents.length > 0) {
+            const colLabel = `Column ${colToRemove.column_id}${colToRemove.column_name ? ` (${colToRemove.column_name})` : ""}`;
+            toast.error(
+                `Cannot delete ${colLabel} because ${dependents.join(", ")} depends on it in its formula. Please update or remove those formulas first.`,
+                { duration: 6000 }
+            );
+            return;
+        }
+
         const updated = columns
             .filter((_, idx) => idx !== indexToRemove)
             .map((col, idx) => ({

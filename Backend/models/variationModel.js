@@ -214,15 +214,8 @@ const syncFormatTableSchema = async (variationId, oldColumns, newColumns) => {
             }
         }
 
-        // 2. Columns to Drop
-        for (const [colId, oldName] of oldColsMap.entries()) {
-            if (!newColsMap.has(colId)) {
-                const safeOldName = sanitize(oldName);
-                const query = `ALTER TABLE \`${target}\` DROP COLUMN \`${safeOldName}\``;
-                await db.execute(query);
-                console.log(`Dropped column from ${target}: ${oldName}`);
-            }
-        }
+        // SOFT DELETE: We strictly DO NOT execute ALTER TABLE DROP COLUMN.
+        // Columns remain permanently in the database table so historical data is NEVER lost!
     }
 };
 
@@ -295,12 +288,26 @@ const getVariationById = async (id) => {
     return rows[0] || null;
 };
 
-const updateVariation = async (id, stateId, formatName, columns, brandConfigs) => {
-    // Get old columns to perform schema sync
+const updateVariation = async (id, stateId, formatName, newColumns, brandConfigs) => {
+    // Get old columns to preserve soft deleted columns
     const [rows] = await db.execute("SELECT columns FROM variation_master WHERE id = ?", [id]);
     const oldColumns = rows[0] && rows[0].columns
         ? (typeof rows[0].columns === "string" ? JSON.parse(rows[0].columns) : rows[0].columns)
         : [];
+
+    const newColIds = new Set(newColumns.map(c => c.column_id));
+    const mergedColumns = [...newColumns];
+
+    // Preserve old columns missing from current request by marking them soft-deleted
+    oldColumns.forEach(oldCol => {
+        if (!newColIds.has(oldCol.column_id)) {
+            mergedColumns.push({
+                ...oldCol,
+                is_deleted: true,
+                deleted_at: oldCol.deleted_at || new Date().toISOString()
+            });
+        }
+    });
 
     const query = `
         UPDATE variation_master
@@ -310,18 +317,18 @@ const updateVariation = async (id, stateId, formatName, columns, brandConfigs) =
     const [result] = await db.execute(query, [
         stateId,
         formatName,
-        JSON.stringify(columns),
+        JSON.stringify(mergedColumns),
         brandConfigs ? JSON.stringify(brandConfigs) : null,
         id
     ]);
 
-    // Sync table schema
+    // Sync table schema (Add new columns, rename columns, BUT NEVER DROP COLUMNS)
     const tableName = `price_list_format_${id}`;
     const exists = await checkTableExists(tableName);
     if (exists) {
-        await syncFormatTableSchema(id, oldColumns, columns);
+        await syncFormatTableSchema(id, oldColumns, mergedColumns);
     } else {
-        await createFormatTable(id, columns);
+        await createFormatTable(id, mergedColumns);
     }
 
     return result;

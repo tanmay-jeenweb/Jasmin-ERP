@@ -23,11 +23,12 @@ const getPriceListDataController = async (req, res) => {
         }
 
         // Parse columns configuration
-        const columns = Array.isArray(variation.columns)
+        const rawColumns = Array.isArray(variation.columns)
             ? variation.columns
             : typeof variation.columns === 'string'
                 ? JSON.parse(variation.columns)
                 : [];
+        const columns = rawColumns.filter(c => !c.is_deleted);
 
         const brandConfigs = Array.isArray(variation.brand_configs)
             ? variation.brand_configs
@@ -222,11 +223,12 @@ const importPriceListController = async (req, res) => {
             });
         }
 
-        const columnsList = Array.isArray(variation.columns)
+        const rawColumnsList = Array.isArray(variation.columns)
             ? variation.columns
             : typeof variation.columns === 'string'
                 ? JSON.parse(variation.columns)
                 : [];
+        const columnsList = rawColumnsList.filter(c => !c.is_deleted);
 
         const brandConfigs = Array.isArray(variation.brand_configs)
             ? variation.brand_configs
@@ -282,11 +284,12 @@ const getPriceListReportController = async (req, res) => {
         }
 
         // Parse columns configuration
-        const columns = Array.isArray(variation.columns)
+        const rawColumns = Array.isArray(variation.columns)
             ? variation.columns
             : typeof variation.columns === 'string'
                 ? JSON.parse(variation.columns)
                 : [];
+        const columns = rawColumns.filter(c => !c.is_deleted);
 
         const brandConfigs = Array.isArray(variation.brand_configs)
             ? variation.brand_configs
