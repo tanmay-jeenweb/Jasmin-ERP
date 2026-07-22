@@ -20,10 +20,19 @@ const getPriceListDataController = async (req, res) => {
                 ? JSON.parse(variation.columns)
                 : [];
 
+        const brandConfigs = Array.isArray(variation.brand_configs)
+            ? variation.brand_configs
+            : typeof variation.brand_configs === 'string'
+                ? JSON.parse(variation.brand_configs)
+                : [];
+
         // 2. Fetch data from dynamic table
         let data = [];
         try {
             data = await getPriceListData(variationId);
+            if (data.length > 0) {
+                data = await evaluateFormulasForRecords(variationId, columns, brandConfigs, data);
+            }
         } catch (err) {
             console.warn(`Dynamic table for format ${variationId} fetch error:`, err.message);
         }
@@ -83,12 +92,16 @@ const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs
 
             let val = rec[colName];
             if (val === undefined || val === null || val === "") {
-                val = 0;
+                val = NaN;
             } else if (typeof val === 'string') {
                 const cleanedVal = val.replace(/,/g, '').trim();
-                val = !isNaN(Number(cleanedVal)) ? Number(cleanedVal) : 0;
+                if (cleanedVal === '-' || cleanedVal === '' || cleanedVal === '—') {
+                    val = NaN;
+                } else {
+                    val = !isNaN(Number(cleanedVal)) ? Number(cleanedVal) : NaN;
+                }
             } else if (typeof val !== 'number') {
-                val = 0;
+                val = NaN;
             }
 
             // Replace cell references like F2, F12, F (case-insensitive word boundaries)
@@ -121,7 +134,10 @@ const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs
             if (typeof safeResult === 'number' && !isNaN(safeResult) && isFinite(safeResult)) {
                 return Math.round(safeResult * 10000) / 10000;
             }
-            return safeResult !== undefined && safeResult !== null ? String(safeResult) : "";
+            if (typeof safeResult === 'number' && (isNaN(safeResult) || !isFinite(safeResult))) {
+                return "";
+            }
+            return safeResult !== undefined && safeResult !== null && safeResult !== "NaN" ? String(safeResult) : "";
         } catch (e) {
             return "";
         }
@@ -165,9 +181,7 @@ const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs
                 const formulaToUse = brandOverrideMap.get(col.column_id) || col.formula;
                 if (formulaToUse) {
                     const computedVal = evaluateSingleFormula(formulaToUse, rec);
-                    if (computedVal !== "" && computedVal !== null && computedVal !== undefined) {
-                        rec[col.column_name] = computedVal;
-                    }
+                    rec[col.column_name] = computedVal !== undefined && computedVal !== null ? computedVal : "";
                 }
             }
         }
@@ -249,10 +263,19 @@ const getPriceListReportController = async (req, res) => {
                 ? JSON.parse(variation.columns)
                 : [];
 
+        const brandConfigs = Array.isArray(variation.brand_configs)
+            ? variation.brand_configs
+            : typeof variation.brand_configs === 'string'
+                ? JSON.parse(variation.brand_configs)
+                : [];
+
         // 2. Fetch report data (grouped by model_group_name + active offers)
         let data = [];
         try {
             data = await getPriceListReportData(variationId, date);
+            if (data.length > 0) {
+                data = await evaluateFormulasForRecords(variationId, columns, brandConfigs, data);
+            }
         } catch (err) {
             console.warn(`Dynamic table for format ${variationId} report error:`, err.message);
         }
