@@ -210,7 +210,7 @@ export default function Navbar() {
             name: "Landing Type Master",
             path: "/admin/landing-types",
             masterKey: "landing_type_master",
-            icon: "fa-solid fa-plane-landing",
+            icon: "fa-solid fa-location-arrow",
             color: "bg-teal-50 text-teal-600 border border-teal-100/50",
             activeColor: "bg-teal-100 text-teal-700",
             desc: "Manage user landing types"
