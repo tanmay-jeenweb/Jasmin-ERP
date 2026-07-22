@@ -204,6 +204,31 @@ const checkConflictingBranchMappings = async (userId, branchIds, oldUserId = nul
     return rows;
 };
 
+const getUserBranchCodes = async (userId) => {
+    if (userId) {
+        const query = `
+            SELECT DISTINCT bm.code 
+            FROM user_branch_mappings ubm
+            JOIN branch_master bm ON ubm.branch_id = bm.id
+            WHERE ubm.user_id = ? AND bm.status = 'active' AND bm.code IS NOT NULL AND TRIM(bm.code) != ''
+        `;
+        const [rows] = await db.execute(query, [userId]);
+        const codes = rows.map(r => String(r.code).trim()).filter(Boolean);
+        if (codes.length > 0) {
+            return codes;
+        }
+    }
+
+    // If no specific user branch mapping exists or no userId, return all active branch codes
+    const allBranchesQuery = `
+        SELECT DISTINCT code 
+        FROM branch_master 
+        WHERE status = 'active' AND code IS NOT NULL AND TRIM(code) != ''
+    `;
+    const [allRows] = await db.execute(allBranchesQuery);
+    return allRows.map(r => String(r.code).trim()).filter(Boolean);
+};
+
 module.exports = {
     createUserBranchMappingsTable,
     getEligibleUsers,
@@ -213,5 +238,7 @@ module.exports = {
     getUserMappingById,
     saveUserBranchMapping,
     deleteUserMapping,
-    checkConflictingBranchMappings
+    checkConflictingBranchMappings,
+    getUserBranchCodes
 };
+

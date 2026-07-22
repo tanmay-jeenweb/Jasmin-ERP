@@ -319,6 +319,7 @@ const getPriceListReportController = async (req, res) => {
 };
 
 const { getStockCacheByModelGroup, saveStockCache } = require('../models/stockCacheModel.js');
+const { getUserBranchCodes } = require('../models/userBranchMappingModel.js');
 
 const getModelGroupStockInfoController = async (req, res) => {
     try {
@@ -360,56 +361,82 @@ const getModelGroupStockInfoController = async (req, res) => {
             console.warn("Could not query item_model_master for model group stock filtering:", e.message);
         }
 
-        // 3. Fetch external stock data from APX API
+        // 3. Fetch external stock data from APX API for permitted branches
         const encodedMg = encodeURIComponent(modelGroup);
-        const apiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetStockInfo?CompanyCode=JITPL&ItemClassificationValue=${encodedMg}`;
+        const userBranchCodes = await getUserBranchCodes(req.user?.id);
+        const headers = {
+            'userid': process.env.MODEL_API_USERID || 'WebSite',
+            'Securitycode': process.env.MODEL_API_SECURITYCODE || '1151-8111-6444-4166',
+            'Accept': 'application/json'
+        };
 
-        const response = await fetch(apiUrl, {
-            method: 'GET',
-            headers: {
-                'userid': process.env.MODEL_API_USERID || 'WebSite',
-                'Securitycode': process.env.MODEL_API_SECURITYCODE || '1151-8111-6444-4166',
-                'Accept': 'application/json'
-            }
-        });
+        let rawItems = [];
 
-        if (!response.ok) {
-            const cached = await getStockCacheByModelGroup(modelGroup);
-            if (cached) {
-                return res.status(200).json({
-                    success: true,
-                    data: cached.data,
-                    isCached: true,
-                    updatedAt: cached.updatedAt,
-                    warning: `APX API failed (${response.statusText}). Displaying saved DB stock data.`
-                });
-            }
-            return res.status(response.status).json({
-                success: false,
-                message: `Failed to fetch from external API: Server returned ${response.statusText}`
+        if (userBranchCodes && userBranchCodes.length > 0) {
+            // Execute parallel requests for each permitted BranchCode
+            const branchPromises = userBranchCodes.map(async (branchCode) => {
+                const apiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetStockInfo?CompanyCode=JITPL&ItemClassificationValue=${encodedMg}&BranchCode=${encodeURIComponent(branchCode)}`;
+                try {
+                    const response = await fetch(apiUrl, { method: 'GET', headers });
+                    if (!response.ok) return [];
+                    const result = await response.json();
+                    if (result && result.StatusCode === 0 && Array.isArray(result.Data)) {
+                        return result.Data;
+                    }
+                } catch (e) {
+                    console.warn(`Failed to fetch APX stock for branch ${branchCode}:`, e.message);
+                }
+                return [];
             });
+
+            const branchResults = await Promise.all(branchPromises);
+            rawItems = branchResults.flat();
         }
 
-        const result = await response.json();
+        // Fallback: If rawItems is empty, perform a single general query
+        if (rawItems.length === 0) {
+            const apiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetStockInfo?CompanyCode=JITPL&ItemClassificationValue=${encodedMg}`;
+            const response = await fetch(apiUrl, { method: 'GET', headers });
 
-        if (result.StatusCode !== 0) {
-            const cached = await getStockCacheByModelGroup(modelGroup);
-            if (cached) {
-                return res.status(200).json({
-                    success: true,
-                    data: cached.data,
-                    isCached: true,
-                    updatedAt: cached.updatedAt,
-                    warning: `APX API Error: ${result.StatusMessage || 'Unknown error'}. Displaying saved DB stock data.`
+            if (!response.ok) {
+                const cached = await getStockCacheByModelGroup(modelGroup);
+                if (cached) {
+                    return res.status(200).json({
+                        success: true,
+                        data: cached.data,
+                        isCached: true,
+                        updatedAt: cached.updatedAt,
+                        warning: `APX API failed (${response.statusText}). Displaying saved DB stock data.`
+                    });
+                }
+                return res.status(response.status).json({
+                    success: false,
+                    message: `Failed to fetch from external API: Server returned ${response.statusText}`
                 });
             }
-            return res.status(400).json({
-                success: false,
-                message: `External API Error: ${result.StatusMessage || 'Unknown error'}`
-            });
+
+            const result = await response.json();
+
+            if (result.StatusCode !== 0) {
+                const cached = await getStockCacheByModelGroup(modelGroup);
+                if (cached) {
+                    return res.status(200).json({
+                        success: true,
+                        data: cached.data,
+                        isCached: true,
+                        updatedAt: cached.updatedAt,
+                        warning: `APX API Error: ${result.StatusMessage || 'Unknown error'}. Displaying saved DB stock data.`
+                    });
+                }
+                return res.status(400).json({
+                    success: false,
+                    message: `External API Error: ${result.StatusMessage || 'Unknown error'}`
+                });
+            }
+
+            rawItems = result.Data || [];
         }
 
-        const rawItems = result.Data || [];
 
         // 4. Filter stock data strictly to devices belonging to this model group
         let filteredItems = rawItems;
