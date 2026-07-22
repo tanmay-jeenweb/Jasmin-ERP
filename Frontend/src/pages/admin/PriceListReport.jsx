@@ -273,15 +273,24 @@ export default function PriceListReport() {
     cols.push({
       key: "view_stock",
       label: "Stock Status",
-      render: (row) => (
-        <button
-          onClick={() => handleOpenStockModal(row)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xs hover:from-teal-700 hover:to-emerald-700 transition-all cursor-pointer"
-        >
-          <i className="fa-solid fa-boxes-stacked text-[11px]"></i>
-          <span>View Stock</span>
-        </button>
-      )
+      render: (row) => {
+        const mgName = (row.model_group_name || "").trim();
+        const mgClean = mgName.toLowerCase().replace(/^\*/, "").trim();
+
+        if (!mgClean || mgClean === "general" || mgClean === "—") {
+          return <span className="text-slate-400 text-xs italic">—</span>;
+        }
+
+        return (
+          <button
+            onClick={() => handleOpenStockModal(row)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-xs hover:from-teal-700 hover:to-emerald-700 transition-all cursor-pointer"
+          >
+            <i className="fa-solid fa-boxes-stacked text-[11px]"></i>
+            <span>View Stock</span>
+          </button>
+        );
+      }
     });
 
     return cols;
