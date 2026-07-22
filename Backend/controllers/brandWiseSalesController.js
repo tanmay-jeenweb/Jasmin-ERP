@@ -17,6 +17,37 @@ const formatToDbDateStr = (d) => {
     return `${year}-${month}-${day}`;
 };
 
+const getUserAllowedBranchCodes = async (user) => {
+    if (!user || !user.id) return [];
+
+    // Fetch user details & user_type to check for admin privileges
+    const [userRows] = await db.execute(
+        `SELECT u.id, u.role, ut.user_role, ut.type_name
+         FROM users u
+         LEFT JOIN user_types ut ON u.user_type_id = ut.id
+         WHERE u.id = ?`,
+        [user.id]
+    );
+
+    if (userRows.length > 0) {
+        const u = userRows[0];
+        if (u.role === 'admin' || u.role === 'super admin' || u.user_role === 'Admin' || u.type_name === 'Admin') {
+            return null; // Admin has access to all branches
+        }
+    }
+
+    // Fetch mapped branch codes for non-admin user from user_branch_mappings
+    const [mappingRows] = await db.execute(
+        `SELECT bm.code AS branch_code
+         FROM user_branch_mappings ubm
+         JOIN branch_master bm ON ubm.branch_id = bm.id
+         WHERE ubm.user_id = ? AND bm.code IS NOT NULL AND bm.code != ''`,
+        [user.id]
+    );
+
+    return mappingRows.map(r => String(r.branch_code).trim());
+};
+
 const syncBrandWiseSalesController = async (req, res) => {
     try {
         const addedBy = req.user.id;
@@ -336,42 +367,97 @@ const getBrandWiseSalesController = async (req, res) => {
         };
 
         // 3. Query local cache range: firstDayLastMonth to targetDate, excluding internal stock transfers (ISBS)
-        let dbRows, dbSrnRows;
-        if (req.query.state && req.query.state !== 'All') {
-            [dbRows] = await db.execute(
-                `SELECT inv.invoice_date, inv.item_code, inv.item_description, inv.qty, inv.net_amount 
-                 FROM synced_invoice_items inv
-                 INNER JOIN branch_master bm ON inv.branch_code = bm.code
-                 INNER JOIN state_master sm ON bm.state_id = sm.id
-                 WHERE inv.invoice_date BETWEEN ? AND ? 
-                   AND inv.invoice_no NOT LIKE 'ISBS%'
-                   AND sm.name = ?`,
-                [firstDayLastMonthStr, targetDateStr, req.query.state]
-            );
+        const allowedBranchCodes = await getUserAllowedBranchCodes(req.user);
 
-            [dbSrnRows] = await db.execute(
-                `SELECT srn.sales_return_date, srn.item_code, srn.item_description, srn.qty, srn.net_amount 
-                 FROM synced_sales_return_items srn
-                 INNER JOIN branch_master bm ON srn.branch_code = bm.code
-                 INNER JOIN state_master sm ON bm.state_id = sm.id
-                 WHERE srn.sales_return_date BETWEEN ? AND ?
-                   AND sm.name = ?`,
-                [firstDayLastMonthStr, targetDateStr, req.query.state]
-            );
+        let dbRows = [], dbSrnRows = [];
+
+        if (Array.isArray(allowedBranchCodes) && allowedBranchCodes.length === 0) {
+            // Non-admin user with NO mapped branches -> empty rows
+            dbRows = [];
+            dbSrnRows = [];
+        } else if (allowedBranchCodes !== null) {
+            // Non-admin user with specific mapped branches
+            const placeholders = allowedBranchCodes.map(() => '?').join(',');
+
+            if (req.query.state && req.query.state !== 'All') {
+                [dbRows] = await db.execute(
+                    `SELECT inv.invoice_date, inv.item_code, inv.item_description, inv.qty, inv.net_amount 
+                     FROM synced_invoice_items inv
+                     INNER JOIN branch_master bm ON inv.branch_code = bm.code
+                     INNER JOIN state_master sm ON bm.state_id = sm.id
+                     WHERE inv.invoice_date BETWEEN ? AND ? 
+                       AND inv.invoice_no NOT LIKE 'ISBS%'
+                       AND sm.name = ?
+                       AND inv.branch_code IN (${placeholders})`,
+                    [firstDayLastMonthStr, targetDateStr, req.query.state, ...allowedBranchCodes]
+                );
+
+                [dbSrnRows] = await db.execute(
+                    `SELECT srn.sales_return_date, srn.item_code, srn.item_description, srn.qty, srn.net_amount 
+                     FROM synced_sales_return_items srn
+                     INNER JOIN branch_master bm ON srn.branch_code = bm.code
+                     INNER JOIN state_master sm ON bm.state_id = sm.id
+                     WHERE srn.sales_return_date BETWEEN ? AND ?
+                       AND sm.name = ?
+                       AND srn.branch_code IN (${placeholders})`,
+                    [firstDayLastMonthStr, targetDateStr, req.query.state, ...allowedBranchCodes]
+                );
+            } else {
+                [dbRows] = await db.execute(
+                    `SELECT invoice_date, item_code, item_description, qty, net_amount 
+                     FROM synced_invoice_items 
+                     WHERE invoice_date BETWEEN ? AND ? 
+                       AND invoice_no NOT LIKE 'ISBS%'
+                       AND branch_code IN (${placeholders})`,
+                    [firstDayLastMonthStr, targetDateStr, ...allowedBranchCodes]
+                );
+
+                [dbSrnRows] = await db.execute(
+                    `SELECT sales_return_date, item_code, item_description, qty, net_amount 
+                     FROM synced_sales_return_items 
+                     WHERE sales_return_date BETWEEN ? AND ?
+                       AND branch_code IN (${placeholders})`,
+                    [firstDayLastMonthStr, targetDateStr, ...allowedBranchCodes]
+                );
+            }
         } else {
-            [dbRows] = await db.execute(
-                `SELECT invoice_date, item_code, item_description, qty, net_amount 
-                 FROM synced_invoice_items 
-                 WHERE invoice_date BETWEEN ? AND ? AND invoice_no NOT LIKE 'ISBS%'`,
-                [firstDayLastMonthStr, targetDateStr]
-            );
+            // Admin role: query all branches
+            if (req.query.state && req.query.state !== 'All') {
+                [dbRows] = await db.execute(
+                    `SELECT inv.invoice_date, inv.item_code, inv.item_description, inv.qty, inv.net_amount 
+                     FROM synced_invoice_items inv
+                     INNER JOIN branch_master bm ON inv.branch_code = bm.code
+                     INNER JOIN state_master sm ON bm.state_id = sm.id
+                     WHERE inv.invoice_date BETWEEN ? AND ? 
+                       AND inv.invoice_no NOT LIKE 'ISBS%'
+                       AND sm.name = ?`,
+                    [firstDayLastMonthStr, targetDateStr, req.query.state]
+                );
 
-            [dbSrnRows] = await db.execute(
-                `SELECT sales_return_date, item_code, item_description, qty, net_amount 
-                 FROM synced_sales_return_items 
-                 WHERE sales_return_date BETWEEN ? AND ?`,
-                [firstDayLastMonthStr, targetDateStr]
-            );
+                [dbSrnRows] = await db.execute(
+                    `SELECT srn.sales_return_date, srn.item_code, srn.item_description, srn.qty, srn.net_amount 
+                     FROM synced_sales_return_items srn
+                     INNER JOIN branch_master bm ON srn.branch_code = bm.code
+                     INNER JOIN state_master sm ON bm.state_id = sm.id
+                     WHERE srn.sales_return_date BETWEEN ? AND ?
+                       AND sm.name = ?`,
+                    [firstDayLastMonthStr, targetDateStr, req.query.state]
+                );
+            } else {
+                [dbRows] = await db.execute(
+                    `SELECT invoice_date, item_code, item_description, qty, net_amount 
+                     FROM synced_invoice_items 
+                     WHERE invoice_date BETWEEN ? AND ? AND invoice_no NOT LIKE 'ISBS%'`,
+                    [firstDayLastMonthStr, targetDateStr]
+                );
+
+                [dbSrnRows] = await db.execute(
+                    `SELECT sales_return_date, item_code, item_description, qty, net_amount 
+                     FROM synced_sales_return_items 
+                     WHERE sales_return_date BETWEEN ? AND ?`,
+                    [firstDayLastMonthStr, targetDateStr]
+                );
+            }
         }
 
         // Initialize brand aggregation map with standard brands
