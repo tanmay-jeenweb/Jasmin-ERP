@@ -9,10 +9,10 @@ const { verifyToken, verifyPermission } = require('../middleware/authMiddleware.
 
 const router = express.Router();
 
-router.get('/stock-info', verifyToken, verifyPermission('variation_master', 'read'), getModelGroupStockInfoController);
-router.get('/report/:variationId', verifyToken, verifyPermission('variation_master', 'read'), getPriceListReportController);
-router.get('/:variationId', verifyToken, verifyPermission('variation_master', 'read'), getPriceListDataController);
-router.post('/import/:variationId', verifyToken, verifyPermission('variation_master', 'update'), importPriceListController);
+router.get('/stock-info', verifyToken, verifyPermission('price_list_report', 'read'), getModelGroupStockInfoController);
+router.get('/report/:variationId', verifyToken, verifyPermission('price_list_report', 'read'), getPriceListReportController);
+router.get('/:variationId', verifyToken, verifyPermission('price_list', 'read'), getPriceListDataController);
+router.post('/import/:variationId', verifyToken, verifyPermission('price_list', 'write'), importPriceListController);
 
 module.exports = router;
 

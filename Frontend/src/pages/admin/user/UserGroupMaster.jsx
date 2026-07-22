@@ -38,7 +38,9 @@ const MASTER_GROUPS = [
     masters: [
       { key: "bank_master", label: "Finance Company Master" },
       { key: "finance_machine_master", label: "Finance Machine Master" },
-      { key: "variation_master", label: "Pricing Formula Master", note: "Write = Price List Import/Export" },
+      { key: "variation_master", label: "Pricing Formula Master" },
+      { key: "price_list", label: "Price List", note: "Write = Price List Import/Export" },
+      { key: "price_list_report", label: "Price List Report" },
       { key: "landing_type_master", label: "Landing Type Master" },
     ]
   },

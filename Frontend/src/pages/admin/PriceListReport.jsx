@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import DataTable from "../../components/DataTable";
 import { getPriceListReport, getModelGroupStockInfo } from "../../api/priceListApi";
+import { usePermission } from "../../context/PermissionContext";
 import toast from "react-hot-toast";
 
 const canUserViewColumn = (col, user) => {
@@ -37,6 +38,9 @@ const canUserViewColumn = (col, user) => {
 export default function PriceListReport() {
   const { variationId } = useParams();
   const navigate = useNavigate();
+  const { hasPermission, isAdmin } = usePermission();
+  const canViewPriceListData = isAdmin || hasPermission("price_list", "read");
+
   const [data, setData] = useState([]);
   const [dynamicColumns, setDynamicColumns] = useState([]);
   const [formatName, setFormatName] = useState("");
@@ -345,14 +349,16 @@ export default function PriceListReport() {
                 </div>
               )}
 
-              <button
-                onClick={() => navigate(`/admin/price-list/${variationId}`)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-[9px] text-slate-700 bg-white border border-slate-300 font-semibold text-[13px] hover:bg-slate-50 transition-all cursor-pointer shadow-xs"
-                title="Switch to raw Price List Table view"
-              >
-                <i className="fa-solid fa-table-list text-indigo-600 text-xs"></i>
-                <span>Price List Data</span>
-              </button>
+              {canViewPriceListData && (
+                <button
+                  onClick={() => navigate(`/admin/price-list/${variationId}`)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-[9px] text-slate-700 bg-white border border-slate-300 font-semibold text-[13px] hover:bg-slate-50 transition-all cursor-pointer shadow-xs"
+                  title="Switch to raw Price List Table view"
+                >
+                  <i className="fa-solid fa-table-list text-indigo-600 text-xs"></i>
+                  <span>Price List Data</span>
+                </button>
+              )}
             </div>
           }
         />

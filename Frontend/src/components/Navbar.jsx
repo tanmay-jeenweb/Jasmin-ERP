@@ -22,6 +22,46 @@ export default function Navbar() {
     const { hasPermission } = usePermission();
     const [runningOffers, setRunningOffers] = useState([]);
 
+    const toggleMastersMenu = () => {
+        setIsOpen(prev => !prev);
+        setIsPriceListOpen(false);
+        setIsOffersOpen(false);
+        setIsReportsOpen(false);
+        setIsProfileOpen(false);
+    };
+
+    const togglePriceListMenu = () => {
+        setIsPriceListOpen(prev => !prev);
+        setIsOpen(false);
+        setIsOffersOpen(false);
+        setIsReportsOpen(false);
+        setIsProfileOpen(false);
+    };
+
+    const toggleOffersMenu = () => {
+        setIsOffersOpen(prev => !prev);
+        setIsOpen(false);
+        setIsPriceListOpen(false);
+        setIsReportsOpen(false);
+        setIsProfileOpen(false);
+    };
+
+    const toggleReportsMenu = () => {
+        setIsReportsOpen(prev => !prev);
+        setIsOpen(false);
+        setIsPriceListOpen(false);
+        setIsOffersOpen(false);
+        setIsProfileOpen(false);
+    };
+
+    const toggleProfileMenu = () => {
+        setIsProfileOpen(prev => !prev);
+        setIsOpen(false);
+        setIsPriceListOpen(false);
+        setIsOffersOpen(false);
+        setIsReportsOpen(false);
+    };
+
     useEffect(() => {
         const fetchRunningOffers = async () => {
             try {
@@ -53,7 +93,10 @@ export default function Navbar() {
                 console.error("Failed to fetch price formats:", err);
             }
         };
-        if (isAdmin || hasPermission("variation_master", "read")) {
+        const canViewPriceList = isAdmin || hasPermission("price_list", "read");
+        const canViewPriceReport = isAdmin || hasPermission("price_list_report", "read");
+
+        if (canViewPriceList || canViewPriceReport) {
             fetchPriceFormats();
         }
     }, [isAdmin, hasPermission, location.pathname]);
@@ -79,6 +122,18 @@ export default function Navbar() {
         document.addEventListener("click", handleOutsideClick);
         return () => document.removeEventListener("click", handleOutsideClick);
     }, [isOpen, isProfileOpen, isReportsOpen, isOffersOpen, isPriceListOpen]);
+
+    useEffect(() => {
+        setIsOpen(false);
+        setIsProfileOpen(false);
+        setIsReportsOpen(false);
+        setIsOffersOpen(false);
+        setIsPriceListOpen(false);
+    }, [location.pathname]);
+
+    const canSeePriceListTab = isAdmin || hasPermission("price_list", "read") || hasPermission("price_list_report", "read");
+    const canSeePriceListTables = isAdmin || hasPermission("price_list", "read");
+    const canSeePriceListReports = isAdmin || hasPermission("price_list_report", "read");
 
     const handleLogout = async () => {
         try {
@@ -155,7 +210,7 @@ export default function Navbar() {
             name: "Landing Type Master",
             path: "/admin/landing-types",
             masterKey: "landing_type_master",
-            icon: "fa-solid fa-plane-landing",
+            icon: "fa-solid fa-location-arrow",
             color: "bg-teal-50 text-teal-600 border border-teal-100/50",
             activeColor: "bg-teal-100 text-teal-700",
             desc: "Manage user landing types"
@@ -342,7 +397,7 @@ export default function Navbar() {
                     {/* Profile Dropdown */}
                     <div className="relative" id="profile-dropdown">
                         <button
-                            onClick={() => setIsProfileOpen(!isProfileOpen)}
+                            onClick={toggleProfileMenu}
                             className="flex items-center gap-2.5 px-3 py-1.5 rounded-full hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all duration-200 cursor-pointer focus:outline-none"
                             title="User menu"
                         >
@@ -452,7 +507,7 @@ export default function Navbar() {
                         {availableMasters.length > 0 && (
                             <div className="relative">
                                 <button
-                                    onClick={() => setIsOpen(!isOpen)}
+                                    onClick={toggleMastersMenu}
                                     className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isOpen ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
                                 >
@@ -513,10 +568,10 @@ export default function Navbar() {
                         )}
 
                         {/* Price List Dropdown */}
-                        {(isAdmin || hasPermission("variation_master", "read")) && (
+                        {canSeePriceListTab && (
                             <div className="relative" id="price-list-dropdown">
                                 <button
-                                    onClick={() => setIsPriceListOpen(!isPriceListOpen)}
+                                    onClick={togglePriceListMenu}
                                     className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isPriceListOpen || location.pathname.startsWith("/admin/price-list")
                                         ? "bg-white/15"
                                         : "bg-[#6804a1] hover:bg-white/5"
@@ -538,15 +593,15 @@ export default function Navbar() {
                                 </button>
 
                                 {isPriceListOpen && (
-                                    <div className="absolute left-0 top-full mt-1.5 w-88 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
-                                        <div className="flex flex-col gap-3 max-h-96 overflow-y-auto">
-                                            {priceFormats.length === 0 ? (
-                                                <p className="text-slate-500 text-xs text-center py-2">No formats configured</p>
-                                            ) : (
-                                                <>
-                                                    {/* Section 1: Price List Data */}
-                                                    <div>
-                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1.5 flex items-center gap-1.5">
+                                    <div className={`absolute left-0 top-full mt-1.5 ${canSeePriceListTables && canSeePriceListReports ? "w-[640px]" : "w-80"} bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200`}>
+                                        {priceFormats.length === 0 ? (
+                                            <p className="text-slate-500 text-xs text-center py-2">No formats configured</p>
+                                        ) : (
+                                            <div className={`grid ${canSeePriceListTables && canSeePriceListReports ? "grid-cols-2 divide-x divide-slate-100 gap-4" : "grid-cols-1 gap-3"} max-h-96 overflow-y-auto`}>
+                                                {/* Section 1: Price List Data */}
+                                                {canSeePriceListTables && (
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1 flex items-center gap-1.5">
                                                             <i className="fa-solid fa-table-list text-indigo-500"></i>
                                                             Price List Tables
                                                         </p>
@@ -584,10 +639,12 @@ export default function Navbar() {
                                                             })}
                                                         </div>
                                                     </div>
+                                                )}
 
-                                                    {/* Section 2: Price List Reports */}
-                                                    <div className="border-t border-slate-100 pt-2">
-                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1.5 flex items-center gap-1.5">
+                                                {/* Section 2: Price List Reports */}
+                                                {canSeePriceListReports && (
+                                                    <div className={`flex flex-col gap-1.5 ${canSeePriceListTables ? "pl-4" : ""}`}>
+                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1 flex items-center gap-1.5">
                                                             <i className="fa-solid fa-chart-pie text-emerald-500"></i>
                                                             Price List Reports
                                                         </p>
@@ -625,9 +682,9 @@ export default function Navbar() {
                                                             })}
                                                         </div>
                                                     </div>
-                                                </>
-                                            )}
-                                        </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -654,7 +711,7 @@ export default function Navbar() {
                         {isAdmin && (
                             <div className="relative" id="offers-dropdown">
                                 <button
-                                    onClick={() => setIsOffersOpen(!isOffersOpen)}
+                                    onClick={toggleOffersMenu}
                                     className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isOffersOpen || location.pathname.startsWith("/admin/offers")
                                         ? "bg-white/15"
                                         : "bg-[#6804a1] hover:bg-white/5"
@@ -730,7 +787,7 @@ export default function Navbar() {
                         {availableReports.length > 0 && (
                             <div className="relative" id="reports-dropdown">
                                 <button
-                                    onClick={() => setIsReportsOpen(!isReportsOpen)}
+                                    onClick={toggleReportsMenu}
                                     className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/abm-wise-tva") || location.pathname.startsWith("/admin/stock-vs-cash-deposit") || location.pathname.startsWith("/admin/finance-brand-mapping") || location.pathname.startsWith("/admin/finance-brand-report")
                                         ? "bg-white/15"
                                         : "bg-[#6804a1] hover:bg-white/5"

@@ -5,6 +5,7 @@ import DataTable from "../../components/DataTable";
 import { getPriceListData, importPriceListData } from "../../api/priceListApi";
 import { getPricingFormulas as getVariations } from "../../api/pricingFormulaApi";
 import { getItemModels } from "../../api/itemModelApi";
+import { usePermission } from "../../context/PermissionContext";
 import ExcelJS from "exceljs";
 import toast from "react-hot-toast";
 
@@ -66,6 +67,11 @@ const canUserViewColumn = (col, user) => {
 export default function PriceListData() {
   const { variationId } = useParams();
   const navigate = useNavigate();
+  const { hasPermission, isAdmin } = usePermission();
+
+  const canImportExport = isAdmin || hasPermission("price_list", "write") || hasPermission("price_list", "update");
+  const canViewReport = isAdmin || hasPermission("price_list_report", "read");
+
   const [data, setData] = useState([]);
   const [dynamicColumns, setDynamicColumns] = useState([]);
   const [formatName, setFormatName] = useState("");
@@ -186,6 +192,10 @@ export default function PriceListData() {
   }, [visibleDynamicColumns]);
 
   const handleExportTemplate = async () => {
+    if (!canImportExport) {
+      toast.error("Access Denied. You do not have permission to export/import price lists.");
+      return;
+    }
     setExporting(true);
     const loadToastId = toast.loading("Generating template...");
     try {
@@ -361,6 +371,11 @@ export default function PriceListData() {
     const file = e.target.files[0];
     if (!file) return;
 
+    if (!canImportExport) {
+      toast.error("Access Denied. You do not have permission to export/import price lists.");
+      return;
+    }
+
     setImporting(true);
     const loadToastId = toast.loading("Reading spreadsheet...");
     try {
@@ -528,39 +543,45 @@ export default function PriceListData() {
           searchPlaceholder="Search products or prices..."
           actionButton={
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => navigate(`/admin/price-list-report/${variationId}`)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-[9px] text-emerald-800 bg-emerald-50 border border-emerald-200 font-semibold text-[13px] hover:bg-emerald-100/80 transition-all cursor-pointer shadow-xs"
-                title="View Price List Report"
-              >
-                <i className="fa-solid fa-square-poll-vertical text-emerald-600 text-xs"></i>
-                <span>View Price Report</span>
-              </button>
+              {canViewReport && (
+                <button
+                  onClick={() => navigate(`/admin/price-list-report/${variationId}`)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-[9px] text-emerald-800 bg-emerald-50 border border-emerald-200 font-semibold text-[13px] hover:bg-emerald-100/80 transition-all cursor-pointer shadow-xs"
+                  title="View Price List Report"
+                >
+                  <i className="fa-solid fa-square-poll-vertical text-emerald-600 text-xs"></i>
+                  <span>View Price Report</span>
+                </button>
+              )}
 
-              <button
-                onClick={handleExportTemplate}
-                disabled={exporting || loading}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-[9px] text-white border-none cursor-pointer font-semibold text-[13px] bg-gradient-to-br from-indigo-600 to-indigo-700 shadow-[0_2px_8px_rgba(104,4,161,0.35)] disabled:bg-slate-400 disabled:cursor-not-allowed disabled:shadow-none hover:opacity-95 transition-all"
-                title="Download Excel Template"
-              >
-                <i className="fa-solid fa-file-export text-xs"></i>
-                {exporting ? "Generating..." : "Export Template"}
-              </button>
+              {canImportExport && (
+                <>
+                  <button
+                    onClick={handleExportTemplate}
+                    disabled={exporting || loading}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-[9px] text-white border-none cursor-pointer font-semibold text-[13px] bg-gradient-to-br from-indigo-600 to-indigo-700 shadow-[0_2px_8px_rgba(104,4,161,0.35)] disabled:bg-slate-400 disabled:cursor-not-allowed disabled:shadow-none hover:opacity-95 transition-all"
+                    title="Download Excel Template"
+                  >
+                    <i className="fa-solid fa-file-export text-xs"></i>
+                    {exporting ? "Generating..." : "Export Template"}
+                  </button>
 
-              <label
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-[9px] text-emerald-700 border border-emerald-200 cursor-pointer font-semibold text-[13px] bg-emerald-50 hover:bg-emerald-100/70 transition-all ${importing || loading ? "opacity-50 cursor-not-allowed" : ""}`}
-                title="Upload filled Excel sheet"
-              >
-                <i className="fa-solid fa-file-import text-xs"></i>
-                {importing ? "Importing..." : "Import Template"}
-                <input
-                  type="file"
-                  accept=".xlsx"
-                  onChange={handleImportTemplate}
-                  disabled={importing || loading}
-                  className="hidden"
-                />
-              </label>
+                  <label
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-[9px] text-emerald-700 border border-emerald-200 cursor-pointer font-semibold text-[13px] bg-emerald-50 hover:bg-emerald-100/70 transition-all ${importing || loading ? "opacity-50 cursor-not-allowed" : ""}`}
+                    title="Upload filled Excel sheet"
+                  >
+                    <i className="fa-solid fa-file-import text-xs"></i>
+                    {importing ? "Importing..." : "Import Template"}
+                    <input
+                      type="file"
+                      accept=".xlsx"
+                      onChange={handleImportTemplate}
+                      disabled={importing || loading}
+                      className="hidden"
+                    />
+                  </label>
+                </>
+              )}
             </div>
           }
         />
