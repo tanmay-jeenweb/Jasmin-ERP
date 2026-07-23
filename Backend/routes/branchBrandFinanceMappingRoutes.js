@@ -7,7 +7,7 @@ const { verifyToken, verifyPermission } = require('../middleware/authMiddleware.
 
 const router = express.Router();
 
-router.get('/:branchId', verifyToken, verifyPermission('branch_master', 'read'), getBranchMappingsController);
-router.post('/:branchId', verifyToken, verifyPermission('branch_master', 'write'), saveBranchMappingsController);
+router.get('/:branchId', verifyToken, verifyPermission('finance_brand_mapping', 'read'), getBranchMappingsController);
+router.post('/:branchId', verifyToken, verifyPermission('finance_brand_mapping', 'write'), saveBranchMappingsController);
 
 module.exports = router;

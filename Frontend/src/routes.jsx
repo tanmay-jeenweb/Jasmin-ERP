@@ -72,7 +72,7 @@ export default function AppRoutes() {
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMasters={["user_master", "device_approval"]} requiredAction="read" />}>
+            <Route element={<ProtectedRoute requiredMasters={["user_master", "device_approval"]} requiredAction="read" />}>
                 <Route
                     path="/admin/dashboard"
                     element={<AdminDashboard />}
@@ -84,6 +84,9 @@ export default function AppRoutes() {
                     path="/admin/home"
                     element={<Home />}
                 />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredMaster="offer_master" requiredAction="read" />}>
                 <Route
                     path="/admin/offers"
                     element={<Offers showExpired={false} />}
@@ -92,6 +95,9 @@ export default function AppRoutes() {
                     path="/admin/offers/expired"
                     element={<Offers showExpired={true} />}
                 />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredMaster="offer_master" requiredAction="write" />}>
                 <Route
                     path="/admin/offers/create"
                     element={<OfferForm />}
@@ -102,7 +108,7 @@ export default function AppRoutes() {
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="alert_master" requiredAction="read" />}>
+            <Route element={<ProtectedRoute requiredMaster="alert_master" requiredAction="read" />}>
                 <Route
                     path="/admin/alerts"
                     element={<AlertMaster />}
@@ -127,18 +133,21 @@ export default function AppRoutes() {
                 />
             </Route>
 
-            <Route element={<ProtectedRoute />}>
+            <Route element={<ProtectedRoute requiredMaster="activity_report" requiredAction="read" />}>
                 <Route
                     path="/admin/report"
                     element={<ActivityReport />}
                 />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredMaster="finance_brand_report" requiredAction="read" />}>
                 <Route
                     path="/admin/finance-brand-report"
                     element={<FinanceBrandReport />}
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" />}>
+            <Route element={<ProtectedRoute requiredMaster="finance_brand_mapping" requiredAction="read" />}>
                 <Route
                     path="/admin/finance-brand-mapping"
                     element={<FinanceBrandMappingList />}
@@ -149,105 +158,105 @@ export default function AppRoutes() {
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="user_master" requiredAction="write" />}>
+            <Route element={<ProtectedRoute requiredMaster="user_master" requiredAction="write" />}>
                 <Route
                     path="/admin/users/create"
                     element={<CreateUser />}
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="user_type" requiredAction="read" />}>
+            <Route element={<ProtectedRoute requiredMaster="user_type" requiredAction="read" />}>
                 <Route
                     path="/admin/user-types"
                     element={<UserGroupMaster />}
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="user_type" requiredAction="write" />}>
+            <Route element={<ProtectedRoute requiredMaster="user_type" requiredAction="write" />}>
                 <Route
                     path="/admin/user-types/create"
                     element={<CreateUserType />}
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="mobile_brand_master" requiredAction="read" />}>
+            <Route element={<ProtectedRoute requiredMaster="mobile_brand_master" requiredAction="read" />}>
                 <Route
                     path="/admin/mobile-brands"
                     element={<MobileBrandMaster />}
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="bank_master" requiredAction="read" />}>
+            <Route element={<ProtectedRoute requiredMaster="bank_master" requiredAction="read" />}>
                 <Route
                     path="/admin/banks"
                     element={<BankMaster />}
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="finance_machine_master" requiredAction="read" />}>
+            <Route element={<ProtectedRoute requiredMaster="finance_machine_master" requiredAction="read" />}>
                 <Route
                     path="/admin/finance-machines"
                     element={<FinanceMachineMaster />}
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="state_master" requiredAction="read" />}>
+            <Route element={<ProtectedRoute requiredMaster="state_master" requiredAction="read" />}>
                 <Route
                     path="/admin/states"
                     element={<StateMaster />}
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="landing_type_master" requiredAction="read" />}>
+            <Route element={<ProtectedRoute requiredMaster="landing_type_master" requiredAction="read" />}>
                 <Route
                     path="/admin/landing-types"
                     element={<LandingTypeMaster />}
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="support_master" requiredAction="read" />}>
+            <Route element={<ProtectedRoute requiredMaster="support_master" requiredAction="read" />}>
                 <Route
                     path="/admin/support"
                     element={<SupportMaster />}
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="product_type_master" requiredAction="read" />}>
+            <Route element={<ProtectedRoute requiredMaster="product_type_master" requiredAction="read" />}>
                 <Route
                     path="/admin/product-types"
                     element={<ProductTypeMaster />}
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="item_model_master" requiredAction="read" />}>
+            <Route element={<ProtectedRoute requiredMaster="item_model_master" requiredAction="read" />}>
                 <Route
                     path="/admin/item-models"
                     element={<ItemModelMaster />}
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="model_group_master" requiredAction="read" />}>
+            <Route element={<ProtectedRoute requiredMaster="model_group_master" requiredAction="read" />}>
                 <Route
                     path="/admin/model-groups"
                     element={<ModelGroupMaster />}
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="branch_master" requiredAction="read" />}>
+            <Route element={<ProtectedRoute requiredMaster="branch_master" requiredAction="read" />}>
                 <Route
                     path="/admin/branches"
                     element={<BranchMaster />}
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="user_branch_mapping" requiredAction="read" />}>
+            <Route element={<ProtectedRoute requiredMaster="user_branch_mapping" requiredAction="read" />}>
                 <Route
                     path="/admin/user-branch-mapping"
                     element={<UserBranchMappingMaster />}
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="branch_master" requiredAction="write" />}>
+            <Route element={<ProtectedRoute requiredMaster="branch_master" requiredAction="write" />}>
                 <Route
                     path="/admin/branches/create"
                     element={<CreateBranch />}
@@ -255,14 +264,14 @@ export default function AppRoutes() {
             </Route>
 
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="branch_master" requiredAction="write" />}>
+            <Route element={<ProtectedRoute requiredMaster="branch_master" requiredAction="write" />}>
                 <Route
                     path="/admin/branches/code/:id"
                     element={<BranchFinanceCode />}
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="variation_master" requiredAction="read" />}>
+            <Route element={<ProtectedRoute requiredMaster="variation_master" requiredAction="read" />}>
                 <Route
                     path="/admin/pricing-formulas"
                     element={<PricingFormulaMasterList />}
@@ -273,21 +282,21 @@ export default function AppRoutes() {
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="price_list" requiredAction="read" />}>
+            <Route element={<ProtectedRoute requiredMaster="price_list" requiredAction="read" />}>
                 <Route
                     path="/admin/price-list/:variationId"
                     element={<PriceListData />}
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="price_list_report" requiredAction="read" />}>
+            <Route element={<ProtectedRoute requiredMaster="price_list_report" requiredAction="read" />}>
                 <Route
                     path="/admin/price-list-report/:variationId"
                     element={<PriceListReport />}
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRole="admin" requiredMaster="variation_master" requiredAction="write" />}>
+            <Route element={<ProtectedRoute requiredMaster="variation_master" requiredAction="write" />}>
                 <Route
                     path="/admin/pricing-formulas/add"
                     element={<PricingFormulaForm />}

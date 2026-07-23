@@ -330,7 +330,13 @@ export default function Navbar() {
             return isAdmin || hasPermission("stock_vs_cash_deposit", "read");
         }
         if (r.path === "/admin/finance-brand-mapping") {
-            return isAdmin;
+            return isAdmin || hasPermission("finance_brand_mapping", "read");
+        }
+        if (r.path === "/admin/finance-brand-report") {
+            return isAdmin || hasPermission("finance_brand_report", "read");
+        }
+        if (r.path === "/admin/report") {
+            return isAdmin || hasPermission("activity_report", "read");
         }
         return true;
     });
@@ -708,7 +714,7 @@ export default function Navbar() {
                         )}
 
                         {/* Offers Dropdown */}
-                        {isAdmin && (
+                        {(isAdmin || hasPermission("offer_master", "read")) && (
                             <div className="relative" id="offers-dropdown">
                                 <button
                                     onClick={toggleOffersMenu}

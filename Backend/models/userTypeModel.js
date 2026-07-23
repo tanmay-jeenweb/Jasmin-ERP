@@ -21,6 +21,10 @@ const MASTERS = [
     { key: 'price_list_report', label: 'Price List Report' },
     { key: 'landing_type_master', label: 'Landing Type Master' },
     { key: 'target_vs_achievement', label: 'Target vs Achievement' },
+    { key: 'offer_master', label: 'Offers Master' },
+    { key: 'finance_brand_mapping', label: 'Finance Brand Mapping' },
+    { key: 'finance_brand_report', label: 'Finance Brand Report' },
+    { key: 'activity_report', label: 'Activity Log Report' },
 ];
 
 // ─── Table creation ──────────────────────────────────────────────────────────
