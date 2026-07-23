@@ -25,6 +25,6 @@ router.put("/revoke-device/:userId", verifyToken, verifyPermission("device_appro
 
 router.get("/audit-logs", verifyToken, verifyPermission("device_approval", "read"), fetchAuditLogs);
 router.get("/audit-logs/:userId", verifyToken, verifyPermission("device_approval", "read"), fetchUserAuditLogs);
-router.get('/activity-logs', verifyToken, verifyAdmin, fetchActivityLogs);
+router.get('/activity-logs', verifyToken, verifyPermission("activity_report", "read"), fetchActivityLogs);
 
 module.exports = router;    

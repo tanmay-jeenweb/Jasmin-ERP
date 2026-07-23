@@ -42,6 +42,7 @@ const MASTER_GROUPS = [
       { key: "price_list", label: "Price List", note: "Write = Price List Import/Export" },
       { key: "price_list_report", label: "Price List Report" },
       { key: "landing_type_master", label: "Landing Type Master" },
+      { key: "finance_brand_mapping", label: "Finance Brand Mapping" },
     ]
   },
   {
@@ -49,6 +50,8 @@ const MASTER_GROUPS = [
     masters: [
       { key: "target_vs_achievement", label: "Target vs Achievement", note: "Write = Import/Export Template & Sync" },
       { key: "stock_vs_cash_deposit", label: "Stock vs Cash Deposit", note: "Write = Import/Export Template" },
+      { key: "finance_brand_report", label: "Finance Brand Report" },
+      { key: "activity_report", label: "Activity Log Report" },
     ]
   },
   {
@@ -56,6 +59,7 @@ const MASTER_GROUPS = [
     masters: [
       { key: "support_master", label: "Support Master" },
       { key: "alert_master", label: "Alert Master" },
+      { key: "offer_master", label: "Offers Master" },
     ]
   }
 ];
