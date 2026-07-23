@@ -1,6 +1,15 @@
-require("dotenv").config();
-const db = require("./config/db.js");
-const { syncTargetVsAchievementsController } = require("./controllers/targetVsAchievementController.js");
+/**
+ * Jasmin ERP - Historical Cache Population Script
+ * 
+ * Usage from terminal or cPanel:
+ *   node scripts/populateCache.js
+ */
+
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
+
+const db = require("../config/db.js");
+const { syncTargetVsAchievementsController } = require("../controllers/targetVsAchievementController.js");
 
 const allowedProductTypes = ['SMARTPHONE', 'FETURE PHONE', 'FEATURE PHONE', 'TABLET', 'I PAD', 'EOL MODEL'];
 
@@ -99,103 +108,85 @@ async function populate() {
                         for (const item of invoice.invoiceItemData) {
                             const itemDesc = item.ItemDescription || '';
                             const parts = itemDesc.split(':');
-                            const lastPart = parts[parts.length - 1]?.trim().toUpperCase();
+                            if (parts.length < 2) continue;
 
-                            if (parts.length > 1 && allowedProductTypes.includes(lastPart)) {
-                                insertValues.push([
-                                    invoiceNo,
-                                    invoiceDbDate,
-                                    branchCode || '',
-                                    branchName || '',
-                                    item.ItemCode || '',
-                                    itemDesc,
-                                    parseFloat(item.Qty) || 0,
-                                    parseFloat(item.NetAmount) || 0,
-                                    lastPart
-                                ]);
-                            }
+                            const rawType = parts[0].trim().toUpperCase();
+                            if (!allowedProductTypes.includes(rawType)) continue;
+
+                            const itemModelName = parts.slice(1).join(':').trim();
+                            const qty = parseFloat(item.SalesQty) || 0;
+                            const amount = parseFloat(item.TotalAmount) || 0;
+
+                            insertValues.push([
+                                invoiceNo,
+                                invoiceDbDate,
+                                branchCode,
+                                branchName,
+                                itemModelName,
+                                qty,
+                                amount,
+                                'INVOICE'
+                            ]);
                         }
                     }
                 }
             }
 
-            const srnInsertValues = [];
             if (salesReturns && salesReturns.length > 0) {
                 for (const srn of salesReturns) {
-                    const srnNo = srn.SRNPrimaryData?.SalesReturnNo;
-                    const srnDateStr = srn.SRNPrimaryData?.SalesReturnDate; // "DD/MM/YYYY"
-                    const branchCode = srn.SRNPrimaryData?.BranchCode;
-                    const branchName = srn.SRNPrimaryData?.BranchName;
+                    const srnNo = srn.srnPrimaryData?.SRNNo || srn.srnPrimaryData?.InvoiceNo;
+                    const srnDateStr = srn.srnPrimaryData?.SRNDate || srn.srnPrimaryData?.InvoiceDate;
+                    const branchCode = srn.srnPrimaryData?.BranchCode;
+                    const branchName = srn.srnPrimaryData?.BranchName;
                     if (!srnNo || !srnDateStr) continue;
 
                     const [sd, sm, sy] = srnDateStr.split('/');
                     const srnDbDate = `${sy}-${sm.padStart(2, '0')}-${sd.padStart(2, '0')}`;
 
-                    if (Array.isArray(srn.SRNItemData)) {
-                        for (const item of srn.SRNItemData) {
+                    if (Array.isArray(srn.srnItemData)) {
+                        for (const item of srn.srnItemData) {
                             const itemDesc = item.ItemDescription || '';
                             const parts = itemDesc.split(':');
-                            const lastPart = parts[parts.length - 1]?.trim().toUpperCase();
+                            if (parts.length < 2) continue;
 
-                            if (parts.length > 1 && allowedProductTypes.includes(lastPart)) {
-                                srnInsertValues.push([
-                                    srnNo,
-                                    srnDbDate,
-                                    branchCode || '',
-                                    branchName || '',
-                                    item.ItemCode || '',
-                                    itemDesc,
-                                    parseFloat(item.Qty) || 0,
-                                    parseFloat(item.NetAmount) || 0,
-                                    lastPart
-                                ]);
-                            }
+                            const rawType = parts[0].trim().toUpperCase();
+                            if (!allowedProductTypes.includes(rawType)) continue;
+
+                            const itemModelName = parts.slice(1).join(':').trim();
+                            const qty = parseFloat(item.SRNQty || item.SalesQty) || 0;
+                            const amount = parseFloat(item.TotalAmount) || 0;
+
+                            insertValues.push([
+                                srnNo,
+                                srnDbDate,
+                                branchCode,
+                                branchName,
+                                itemModelName,
+                                qty,
+                                amount,
+                                'RETURN'
+                            ]);
                         }
                     }
                 }
             }
 
-            const connection = await db.getConnection();
-            try {
-                await connection.beginTransaction();
-
-                console.log(`Deleting local database entries for range ${startDbStr} to ${endDbStr}...`);
-                await connection.execute(
-                    `DELETE FROM synced_invoice_items WHERE invoice_date BETWEEN ? AND ?`,
-                    [startDbStr, endDbStr]
-                );
-                await connection.execute(
-                    `DELETE FROM synced_sales_return_items WHERE sales_return_date BETWEEN ? AND ?`,
-                    [startDbStr, endDbStr]
-                );
-
-                if (insertValues.length > 0) {
-                    console.log(`Inserting ${insertValues.length} invoice items into synced_invoice_items...`);
-                    const insertQuery = `
-                        INSERT INTO synced_invoice_items (
-                            invoice_no, invoice_date, branch_code, branch_name, item_code, item_description, qty, net_amount, product_type
-                        ) VALUES ?
-                    `;
-                    await connection.query(insertQuery, [insertValues]);
-                }
-
-                if (srnInsertValues.length > 0) {
-                    console.log(`Inserting ${srnInsertValues.length} return items into synced_sales_return_items...`);
-                    const insertQuery = `
-                        INSERT INTO synced_sales_return_items (
-                            sales_return_no, sales_return_date, branch_code, branch_name, item_code, item_description, qty, net_amount, product_type
-                        ) VALUES ?
-                    `;
-                    await connection.query(insertQuery, [srnInsertValues]);
-                }
-
-                await connection.commit();
-                console.log(`Completed database updates for range ${startDbStr} to ${endDbStr}.`);
-            } catch (dbErr) {
-                await connection.rollback();
-                console.error("Database transaction error for chunk:", dbErr.message);
-            } finally {
-                connection.release();
+            if (insertValues.length > 0) {
+                const insertQuery = `
+                    INSERT INTO sales_invoice_cache 
+                    (invoice_no, invoice_date, branch_code, branch_name, item_model_name, qty, amount, record_type)
+                    VALUES ?
+                    ON DUPLICATE KEY UPDATE
+                        invoice_date = VALUES(invoice_date),
+                        branch_code = VALUES(branch_code),
+                        branch_name = VALUES(branch_name),
+                        item_model_name = VALUES(item_model_name),
+                        qty = VALUES(qty),
+                        amount = VALUES(amount),
+                        record_type = VALUES(record_type)
+                `;
+                await db.query(insertQuery, [insertValues]);
+                console.log(`Upserted ${insertValues.length} records into sales_invoice_cache.`);
             }
 
         } catch (fetchErr) {
