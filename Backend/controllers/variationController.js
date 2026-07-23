@@ -3,7 +3,8 @@ const {
     getAllVariations,
     getVariationById,
     updateVariation,
-    deleteVariation
+    deleteVariation,
+    checkFormatNameExists
 } = require('../models/variationModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
 const { checkUserStateAccess } = require('../utils/userStateHelper.js');
@@ -65,6 +66,15 @@ const addVariationController = async (req, res) => {
         }
         if (!columns || !Array.isArray(columns) || columns.length === 0) {
             return res.status(400).json({ success: false, message: 'At least one Column definition is required' });
+        }
+
+        // Check format_name uniqueness
+        const isDuplicate = await checkFormatNameExists(formatName);
+        if (isDuplicate) {
+            return res.status(400).json({
+                success: false,
+                message: `Format Name "${formatName.trim()}" already exists. Please choose a unique Format Name.`
+            });
         }
 
         // Validate columns
@@ -213,6 +223,15 @@ const updateVariationController = async (req, res) => {
         }
         if (!columns || !Array.isArray(columns) || columns.length === 0) {
             return res.status(400).json({ success: false, message: 'At least one Column definition is required' });
+        }
+
+        // Check format_name uniqueness excluding current id
+        const isDuplicate = await checkFormatNameExists(formatName, id);
+        if (isDuplicate) {
+            return res.status(400).json({
+                success: false,
+                message: `Format Name "${formatName.trim()}" already exists. Please choose a unique Format Name.`
+            });
         }
 
         // Validate columns

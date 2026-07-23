@@ -341,11 +341,24 @@ const deleteVariation = async (id) => {
     return result;
 };
 
+const checkFormatNameExists = async (formatName, excludeId = null) => {
+    if (!formatName || !formatName.trim()) return false;
+    let query = `SELECT id FROM variation_master WHERE LOWER(TRIM(format_name)) = LOWER(TRIM(?))`;
+    const params = [formatName.trim()];
+    if (excludeId) {
+        query += ` AND id != ?`;
+        params.push(excludeId);
+    }
+    const [rows] = await db.execute(query, params);
+    return rows.length > 0;
+};
+
 module.exports = {
     createVariationTable,
     createVariation,
     getAllVariations,
     getVariationById,
     updateVariation,
-    deleteVariation
+    deleteVariation,
+    checkFormatNameExists
 };

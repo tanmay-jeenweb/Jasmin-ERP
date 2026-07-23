@@ -297,6 +297,10 @@ export default function AppRoutes() {
                     element={<PricingFormulaForm />}
                 />
                 <Route
+                    path="/admin/pricing-formulas/copy/:copyId"
+                    element={<PricingFormulaForm />}
+                />
+                <Route
                     path="/admin/variations/add"
                     element={<Navigate to="/admin/pricing-formulas/add" replace />}
                 />
