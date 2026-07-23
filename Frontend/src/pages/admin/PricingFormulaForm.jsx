@@ -29,9 +29,11 @@ const getExcelColumnLabel = (index) => {
 };
 
 export default function PricingFormulaForm() {
-    const { id } = useParams();
+    const { id, copyId } = useParams();
     const navigate = useNavigate();
     const isEdit = !!id;
+    const isCopy = !!copyId;
+    const targetId = id || copyId;
 
     // Master lists options
     const [statesList, setStatesList] = useState([]);
@@ -62,12 +64,12 @@ export default function PricingFormulaForm() {
             setAllBrands(brandRes.data?.data || []);
             setLandingTypesList((ltRes.data?.data || []).filter((lt) => lt.live === "Yes"));
 
-            if (isEdit) {
-                const varRes = await getPricingFormulaById(id);
+            if (targetId) {
+                const varRes = await getPricingFormulaById(targetId);
                 if (varRes.data?.success && varRes.data.data) {
                     const detail = varRes.data.data;
-                    setSelectedState(detail.state_id.toString());
-                    setFormatName(detail.format_name || "");
+                    setSelectedState(detail.state_id ? detail.state_id.toString() : "");
+                    setFormatName(isCopy ? `${detail.format_name || ""} (Copy)`.trim() : (detail.format_name || ""));
 
                     const parsedColumns = Array.isArray(detail.columns)
                         ? detail.columns
@@ -76,7 +78,7 @@ export default function PricingFormulaForm() {
                             : [];
                     
                     const fixedIds = ["A", "B", "C", "D", "E"];
-                    const dynamicColumnsOnly = parsedColumns.filter(c => !fixedIds.includes(c.column_id));
+                    const dynamicColumnsOnly = parsedColumns.filter(c => !fixedIds.includes(c.column_id) && !c.is_deleted);
                     
                     const mappedColumns = dynamicColumnsOnly.map((col) => ({
                         ...col,
@@ -134,7 +136,59 @@ export default function PricingFormulaForm() {
         };
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [id]);
+    }, [id, copyId]);
+
+    // Helper to find all columns depending on targetCol via formulas
+    const checkColumnDependencies = (targetCol, currentColumns, currentBrandConfigs) => {
+        if (!targetCol) return [];
+        const targetId = targetCol.column_id;
+        const targetName = targetCol.column_name ? targetCol.column_name.trim() : "";
+
+        const dependentCols = new Set();
+        const idRegex = targetId ? new RegExp(`\\b\\$?${targetId}\\$?(\\d+)?\\b`, "i") : null;
+
+        const formulaHasDependency = (formula) => {
+            if (!formula || typeof formula !== "string" || !formula.trim()) return false;
+            const upperFormula = formula.trim().toUpperCase();
+
+            if (idRegex && idRegex.test(upperFormula)) {
+                return true;
+            }
+            if (targetName && targetName.length > 0) {
+                const upperName = targetName.toUpperCase();
+                if (upperFormula.includes(upperName)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        // Check default column formulas
+        currentColumns.forEach((col) => {
+            if (col.column_id !== targetId) {
+                if (formulaHasDependency(col.formula)) {
+                    const label = `Column ${col.column_id}${col.column_name ? ` (${col.column_name})` : ""}`;
+                    dependentCols.add(label);
+                }
+            }
+        });
+
+        // Check brand override formulas
+        (currentBrandConfigs || []).forEach((cfg) => {
+            const brandNames = cfg.brands && cfg.brands.length > 0 ? cfg.brands.join(", ") : "Brand Override";
+            (cfg.columns || []).forEach((col) => {
+                if (col.column_id !== targetId) {
+                    if (formulaHasDependency(col.formula)) {
+                        const mainCol = currentColumns.find((c) => c.column_id === col.column_id);
+                        const colLabel = mainCol ? `Column ${mainCol.column_id}${mainCol.column_name ? ` (${mainCol.column_name})` : ""}` : `Column ${col.column_id}`;
+                        dependentCols.add(`${colLabel} (in ${brandNames} config)`);
+                    }
+                }
+            });
+        });
+
+        return Array.from(dependentCols);
+    };
 
     // Dynamic Column Handlers
     const handleAddColumn = () => {
@@ -151,6 +205,19 @@ export default function PricingFormulaForm() {
             toast.error("At least one column is required.");
             return;
         }
+
+        const colToRemove = columns[indexToRemove];
+        const dependents = checkColumnDependencies(colToRemove, columns, brandConfigs);
+
+        if (dependents.length > 0) {
+            const colLabel = `Column ${colToRemove.column_id}${colToRemove.column_name ? ` (${colToRemove.column_name})` : ""}`;
+            toast.error(
+                `Cannot delete ${colLabel} because ${dependents.join(", ")} depends on it in its formula. Please update or remove those formulas first.`,
+                { duration: 6000 }
+            );
+            return;
+        }
+
         const updated = columns
             .filter((_, idx) => idx !== indexToRemove)
             .map((col, idx) => ({
@@ -393,10 +460,10 @@ export default function PricingFormulaForm() {
             } else {
                 const res = await createPricingFormula(payload);
                 if (res.data?.success) {
-                    toast.success("Pricing formula rule created successfully.");
+                    toast.success(isCopy ? "Pricing formula rule copied successfully." : "Pricing formula rule created successfully.");
                     navigate("/admin/pricing-formulas");
                 } else {
-                    toast.error(res.data?.message || "Failed to create pricing formula rule.");
+                    toast.error(res.data?.message || (isCopy ? "Failed to copy pricing formula rule." : "Failed to create pricing formula rule."));
                 }
             }
         } catch (err) {
@@ -426,12 +493,14 @@ export default function PricingFormulaForm() {
                 <div className="mb-6 flex items-center justify-between">
                     <div>
                         <h1 className="text-2xl font-bold text-slate-900">
-                            {isEdit ? "Edit Pricing Formula Rule" : "Create Pricing Formula Rule"}
+                            {isEdit ? "Edit Pricing Formula Rule" : isCopy ? "Copy Pricing Formula Rule" : "Create Pricing Formula Rule"}
                         </h1>
                         <p className="text-slate-500 mt-1">
                             {isEdit
                                 ? "Update Excel pricing formula column output rules and state mappings."
-                                : "Setup new pricing formula column outputs for reports."}
+                                : isCopy
+                                    ? "Clone an existing pricing formula rule to setup a new format or state output."
+                                    : "Setup new pricing formula column outputs for reports."}
                         </p>
                     </div>
                     <button
@@ -883,7 +952,7 @@ export default function PricingFormulaForm() {
                                 disabled={saving}
                                 className="px-7 py-2.5 rounded-lg border-none text-white font-bold text-sm bg-gradient-to-br from-indigo-650 to-indigo-750 hover:opacity-95 shadow-[0_2px_8px_rgba(104,4,161,0.3)] disabled:bg-slate-400 disabled:cursor-not-allowed disabled:shadow-none cursor-pointer transition-all flex items-center justify-center"
                             >
-                                {saving ? (isEdit ? "Saving Changes..." : "Creating...") : isEdit ? "Save Changes" : "Create Pricing Formula Rule"}
+                                {saving ? (isEdit ? "Saving Changes..." : isCopy ? "Creating Copy..." : "Creating...") : isEdit ? "Save Changes" : isCopy ? "Create Copy" : "Create Pricing Formula Rule"}
                             </button>
                         </div>
                     </form>

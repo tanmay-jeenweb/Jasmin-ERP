@@ -3,10 +3,55 @@ const {
     getAllVariations,
     getVariationById,
     updateVariation,
-    deleteVariation
+    deleteVariation,
+    restoreVariation,
+    checkFormatNameExists
 } = require('../models/variationModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
 const { checkUserStateAccess } = require('../utils/userStateHelper.js');
+
+const validateColumnDependencies = (columns, brandConfigs) => {
+    if (!columns || !Array.isArray(columns)) return null;
+
+    const activeColIds = new Set(["A", "B", "C", "D", "E", ...columns.map(c => c.column_id)]);
+
+    // Validate formulas in default columns
+    for (const col of columns) {
+        if ((col.type === 'formulation' || col.type === 'default formulation') && col.formula) {
+            const formula = col.formula.trim().toUpperCase();
+            const matches = formula.match(/\b\$?[A-Z]+\$?\d+\b/gi) || [];
+            for (const m of matches) {
+                const colLetter = m.replace(/[\$\d]/g, "").toUpperCase();
+                if (colLetter && !activeColIds.has(colLetter)) {
+                    return `Cannot save formula: Column ${colLetter} referenced in Column ${col.column_id}${col.column_name ? ` (${col.column_name})` : ''} does not exist or was deleted.`;
+                }
+            }
+        }
+    }
+
+    // Validate formulas in brand override configurations
+    if (brandConfigs && Array.isArray(brandConfigs)) {
+        for (const cfg of brandConfigs) {
+            const brandStr = cfg.brands && cfg.brands.length > 0 ? cfg.brands.join(", ") : "Brand";
+            for (const col of (cfg.columns || [])) {
+                if (col.formula) {
+                    const formula = col.formula.trim().toUpperCase();
+                    const matches = formula.match(/\b\$?[A-Z]+\$?\d+\b/gi) || [];
+                    for (const m of matches) {
+                        const colLetter = m.replace(/[\$\d]/g, "").toUpperCase();
+                        if (colLetter && !activeColIds.has(colLetter)) {
+                            const mainCol = columns.find(c => c.column_id === col.column_id);
+                            const colLabel = mainCol ? `Column ${mainCol.column_id}${mainCol.column_name ? ` (${mainCol.column_name})` : ''}` : `Column ${col.column_id}`;
+                            return `Cannot save formula: Column ${colLetter} referenced in ${colLabel} (${brandStr} override) does not exist or was deleted.`;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return null;
+};
 
 const addVariationController = async (req, res) => {
     try {
@@ -22,6 +67,15 @@ const addVariationController = async (req, res) => {
         }
         if (!columns || !Array.isArray(columns) || columns.length === 0) {
             return res.status(400).json({ success: false, message: 'At least one Column definition is required' });
+        }
+
+        // Check format_name uniqueness
+        const isDuplicate = await checkFormatNameExists(formatName);
+        if (isDuplicate) {
+            return res.status(400).json({
+                success: false,
+                message: `Format Name "${formatName.trim()}" already exists. Please choose a unique Format Name.`
+            });
         }
 
         // Validate columns
@@ -55,6 +109,12 @@ const addVariationController = async (req, res) => {
                     }
                 }
             }
+        }
+
+        // Validate column dependencies
+        const depError = validateColumnDependencies(columns, brandConfigs);
+        if (depError) {
+            return res.status(400).json({ success: false, message: depError });
         }
 
         const result = await createVariation(stateId, formatName, columns, brandConfigs, addedBy, deviceId);
@@ -95,7 +155,8 @@ const addVariationController = async (req, res) => {
 
 const getAllVariationsController = async (req, res) => {
     try {
-        const variations = await getAllVariations();
+        const includeDeleted = req.query.includeDeleted === 'true' ? true : (req.query.includeDeleted === 'all' ? 'all' : false);
+        const variations = await getAllVariations(includeDeleted);
 
         // Filter variations based on user state access permissions
         const accessibleVariations = [];
@@ -166,6 +227,15 @@ const updateVariationController = async (req, res) => {
             return res.status(400).json({ success: false, message: 'At least one Column definition is required' });
         }
 
+        // Check format_name uniqueness excluding current id
+        const isDuplicate = await checkFormatNameExists(formatName, id);
+        if (isDuplicate) {
+            return res.status(400).json({
+                success: false,
+                message: `Format Name "${formatName.trim()}" already exists. Please choose a unique Format Name.`
+            });
+        }
+
         // Validate columns
         for (const col of columns) {
             if (!col.column_id || !col.column_name || !col.column_name.trim()) {
@@ -197,6 +267,12 @@ const updateVariationController = async (req, res) => {
                     }
                 }
             }
+        }
+
+        // Validate column dependencies
+        const depError = validateColumnDependencies(columns, brandConfigs);
+        if (depError) {
+            return res.status(400).json({ success: false, message: depError });
         }
 
         const beforeData = await getVariationById(id);
@@ -261,10 +337,48 @@ const deleteVariationController = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: 'Variation rule deleted successfully'
+            message: 'Variation rule soft-deleted successfully'
         });
     } catch (error) {
         console.error('Error deleting variation rule:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+
+const restoreVariationController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+
+        const beforeData = await getVariationById(id);
+        if (!beforeData) {
+            return res.status(404).json({ success: false, message: 'Variation rule not found' });
+        }
+
+        await restoreVariation(id);
+
+        const restoredData = await getVariationById(id);
+
+        await createAuditLog(
+            req.user?.id,
+            req.user?.name || req.user?.username || 'Unknown',
+            deviceId,
+            'Variation Master',
+            'updated',
+            beforeData,
+            restoredData
+        );
+
+        res.status(200).json({
+            success: true,
+            message: 'Variation rule restored successfully',
+            data: restoredData
+        });
+    } catch (error) {
+        console.error('Error restoring variation rule:', error);
         res.status(500).json({
             success: false,
             message: 'Internal server error'
@@ -277,5 +391,6 @@ module.exports = {
     getAllVariationsController,
     getVariationByIdController,
     updateVariationController,
-    deleteVariationController
+    deleteVariationController,
+    restoreVariationController
 };
