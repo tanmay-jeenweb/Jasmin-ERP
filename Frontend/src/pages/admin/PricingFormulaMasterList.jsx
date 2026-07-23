@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
-import { getPricingFormulas, deletePricingFormula } from "../../api/pricingFormulaApi";
+import { getPricingFormulas, deletePricingFormula, restorePricingFormula } from "../../api/pricingFormulaApi";
 import { getBranches } from "../../api/branchApi";
 import { getDistinctBrands, getItemModels } from "../../api/itemModelApi";
 import DataTable from "../../components/DataTable";
@@ -42,14 +42,15 @@ export default function PricingFormulaMasterList() {
     const [itemModels, setItemModels] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const [showDeleted, setShowDeleted] = useState(false);
     const navigate = useNavigate();
     const { hasPermission } = usePermission();
 
-    const loadFormulas = async () => {
+    const loadFormulas = async (isDeletedMode = showDeleted) => {
         setLoading(true);
         setError("");
         try {
-            const response = await getPricingFormulas();
+            const response = await getPricingFormulas(isDeletedMode);
             if (response.data?.success) {
                 setFormulas(response.data.data || []);
             } else {
@@ -251,18 +252,34 @@ export default function PricingFormulaMasterList() {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm("Are you sure you want to delete this pricing formula rule?")) return;
+        if (!window.confirm("Are you sure you want to delete this pricing formula rule? (It will be soft-deleted and can be restored later)")) return;
         try {
             const response = await deletePricingFormula(id);
             if (response.data?.success) {
-                toast.success("Pricing formula rule deleted successfully");
-                await loadFormulas();
+                toast.success("Pricing formula rule soft-deleted successfully");
+                await loadFormulas(showDeleted);
             } else {
                 toast.error(response.data?.message || "Unable to delete pricing formula rule.");
             }
         } catch (err) {
             console.error("Failed to delete pricing formula rule", err);
             toast.error(err?.response?.data?.message || "Unable to delete pricing formula rule.");
+        }
+    };
+
+    const handleRestore = async (id) => {
+        if (!window.confirm("Are you sure you want to restore this soft-deleted pricing formula rule?")) return;
+        try {
+            const response = await restorePricingFormula(id);
+            if (response.data?.success) {
+                toast.success("Pricing formula rule restored successfully!");
+                await loadFormulas(showDeleted);
+            } else {
+                toast.error(response.data?.message || "Unable to restore pricing formula rule.");
+            }
+        } catch (err) {
+            console.error("Failed to restore pricing formula rule", err);
+            toast.error(err?.response?.data?.message || "Unable to restore pricing formula rule.");
         }
     };
 
@@ -284,7 +301,16 @@ export default function PricingFormulaMasterList() {
                 label: "Format Name",
                 render: (row) => {
                     if (row.format_name) {
-                        return <span className="font-bold text-slate-800">{row.format_name}</span>;
+                        return (
+                            <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-800">{row.format_name}</span>
+                                {row.is_deleted ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
+                                        Soft Deleted
+                                    </span>
+                                ) : null}
+                            </div>
+                        );
                     }
                     const brandList = Array.isArray(row.brands)
                         ? row.brands
@@ -389,79 +415,103 @@ export default function PricingFormulaMasterList() {
                         </svg>
                     </button>
 
-                    {canWrite && (
-                        <button
-                            onClick={() => navigate(`/admin/pricing-formulas/copy/${row.id}`)}
-                            className="flex w-8 h-8 items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-700 cursor-pointer hover:bg-sky-100 transition-colors"
-                            title="Copy / Replica"
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                strokeWidth={1.8}
-                                stroke="currentColor"
-                                className="w-[15px] h-[15px]"
+                    {showDeleted ? (
+                        canWrite && (
+                            <button
+                                onClick={() => handleRestore(row.id)}
+                                className="flex h-8 px-2.5 items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 cursor-pointer hover:bg-indigo-100 transition-colors text-xs font-bold"
+                                title="Restore Soft-Deleted Rule"
                             >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25c0-.621.504-1.125 1.125-1.125h6.375c.621 0 1.125.504 1.125 1.125v9.25c0 .621-.504 1.125-1.125 1.125Z"
-                                />
-                            </svg>
-                        </button>
-                    )}
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    strokeWidth={2}
+                                    stroke="currentColor"
+                                    className="w-3.5 h-3.5"
+                                >
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                                </svg>
+                                Restore
+                            </button>
+                        )
+                    ) : (
+                        <>
+                            {canWrite && (
+                                <button
+                                    onClick={() => navigate(`/admin/pricing-formulas/copy/${row.id}`)}
+                                    className="flex w-8 h-8 items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-700 cursor-pointer hover:bg-sky-100 transition-colors"
+                                    title="Copy / Replica"
+                                >
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        strokeWidth={1.8}
+                                        stroke="currentColor"
+                                        className="w-[15px] h-[15px]"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25c0-.621.504-1.125 1.125-1.125h6.375c.621 0 1.125.504 1.125 1.125v9.25c0 .621-.504 1.125-1.125 1.125Z"
+                                        />
+                                    </svg>
+                                </button>
+                            )}
 
-                    {canUpdate && (
-                        <button
-                            onClick={() => navigate(`/admin/pricing-formulas/edit/${row.id}`)}
-                            className="flex w-8 h-8 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-indigo-650 cursor-pointer hover:bg-purple-100 transition-colors"
-                            title="Edit"
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                strokeWidth={1.8}
-                                stroke="currentColor"
-                                className="w-[15px] h-[15px]"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931Z"
-                                />
-                            </svg>
-                        </button>
-                    )}
-                    {canDelete && (
-                        <button
-                            onClick={() => handleDelete(row.id)}
-                            className="flex w-8 h-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 cursor-pointer hover:bg-rose-100 transition-colors"
-                            title="Delete"
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                strokeWidth={1.8}
-                                stroke="currentColor"
-                                className="w-[15px] h-[15px]"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="M6 7.5h12m-1.5 0-.563 12.375A2.25 2.25 0 0113.693 21H10.307a2.25 2.25 0 01-2.244-2.125L7.5 7.5m3-3h3A1.5 1.5 0 0115 6v1.5H9V6a1.5 1.5 0 011.5-1.5Z"
-                                />
-                            </svg>
-                        </button>
+                            {canUpdate && (
+                                <button
+                                    onClick={() => navigate(`/admin/pricing-formulas/edit/${row.id}`)}
+                                    className="flex w-8 h-8 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-indigo-650 cursor-pointer hover:bg-purple-100 transition-colors"
+                                    title="Edit"
+                                >
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        strokeWidth={1.8}
+                                        stroke="currentColor"
+                                        className="w-[15px] h-[15px]"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931Z"
+                                        />
+                                    </svg>
+                                </button>
+                            )}
+                            {canDelete && (
+                                <button
+                                    onClick={() => handleDelete(row.id)}
+                                    className="flex w-8 h-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 cursor-pointer hover:bg-rose-100 transition-colors"
+                                    title="Delete (Soft Delete)"
+                                >
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        strokeWidth={1.8}
+                                        stroke="currentColor"
+                                        className="w-[15px] h-[15px]"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            d="M6 7.5h12m-1.5 0-.563 12.375A2.25 2.25 0 0113.693 21H10.307a2.25 2.25 0 01-2.244-2.125L7.5 7.5m3-3h3A1.5 1.5 0 0115 6v1.5H9V6a1.5 1.5 0 011.5-1.5Z"
+                                        />
+                                    </svg>
+                                </button>
+                            )}
+                        </>
                     )}
                 </div>
             )
         });
 
         return cols;
-    }, [hasPermission, navigate, itemModels, handleExport]);
+    }, [hasPermission, navigate, itemModels, handleExport, showDeleted]);
 
     return (
         <div className="flex flex-col flex-1 bg-slate-50 font-sans">
@@ -473,9 +523,29 @@ export default function PricingFormulaMasterList() {
                         {error}
                     </div>
                 )}
+                <div className="flex items-center gap-2 mb-4">
+                    <button
+                        onClick={() => {
+                            setShowDeleted(false);
+                            loadFormulas(false);
+                        }}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${!showDeleted ? "bg-indigo-650 text-white shadow-sm" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                    >
+                        Active Rules
+                    </button>
+                    <button
+                        onClick={() => {
+                            setShowDeleted(true);
+                            loadFormulas(true);
+                        }}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${showDeleted ? "bg-rose-600 text-white shadow-sm" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                    >
+                        Soft-Deleted Rules
+                    </button>
+                </div>
                 <DataTable
                     tableId="variation_master"
-                    title="Pricing Formula Master"
+                    title={showDeleted ? "Soft-Deleted Pricing Formulas" : "Pricing Formula Master"}
                     data={formulas}
                     columns={columns}
                     loading={loading}

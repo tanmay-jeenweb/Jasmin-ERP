@@ -4,6 +4,7 @@ const {
     getVariationById,
     updateVariation,
     deleteVariation,
+    restoreVariation,
     checkFormatNameExists
 } = require('../models/variationModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
@@ -154,7 +155,8 @@ const addVariationController = async (req, res) => {
 
 const getAllVariationsController = async (req, res) => {
     try {
-        const variations = await getAllVariations();
+        const includeDeleted = req.query.includeDeleted === 'true' ? true : (req.query.includeDeleted === 'all' ? 'all' : false);
+        const variations = await getAllVariations(includeDeleted);
 
         // Filter variations based on user state access permissions
         const accessibleVariations = [];
@@ -335,10 +337,48 @@ const deleteVariationController = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: 'Variation rule deleted successfully'
+            message: 'Variation rule soft-deleted successfully'
         });
     } catch (error) {
         console.error('Error deleting variation rule:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+
+const restoreVariationController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+
+        const beforeData = await getVariationById(id);
+        if (!beforeData) {
+            return res.status(404).json({ success: false, message: 'Variation rule not found' });
+        }
+
+        await restoreVariation(id);
+
+        const restoredData = await getVariationById(id);
+
+        await createAuditLog(
+            req.user?.id,
+            req.user?.name || req.user?.username || 'Unknown',
+            deviceId,
+            'Variation Master',
+            'updated',
+            beforeData,
+            restoredData
+        );
+
+        res.status(200).json({
+            success: true,
+            message: 'Variation rule restored successfully',
+            data: restoredData
+        });
+    } catch (error) {
+        console.error('Error restoring variation rule:', error);
         res.status(500).json({
             success: false,
             message: 'Internal server error'
@@ -351,5 +391,6 @@ module.exports = {
     getAllVariationsController,
     getVariationByIdController,
     updateVariationController,
-    deleteVariationController
+    deleteVariationController,
+    restoreVariationController
 };

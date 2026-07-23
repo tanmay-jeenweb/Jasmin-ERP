@@ -31,6 +31,17 @@ const createVariationTable = async () => {
 
     // Migration logic
     try {
+        const [isDeletedCol] = await db.execute(`SHOW COLUMNS FROM variation_master LIKE 'is_deleted'`);
+        if (!isDeletedCol || isDeletedCol.length === 0) {
+            console.log("Migrating variation_master schema: adding is_deleted column...");
+            await db.execute(`ALTER TABLE variation_master ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE`);
+        }
+        const [deletedAtCol] = await db.execute(`SHOW COLUMNS FROM variation_master LIKE 'deleted_at'`);
+        if (!deletedAtCol || deletedAtCol.length === 0) {
+            console.log("Migrating variation_master schema: adding deleted_at column...");
+            await db.execute(`ALTER TABLE variation_master ADD COLUMN deleted_at TIMESTAMP NULL DEFAULT NULL`);
+        }
+
         const [columnsInfo] = await db.execute(`SHOW COLUMNS FROM variation_master LIKE 'brands'`);
         if (columnsInfo && columnsInfo.length > 0) {
             console.log("Migrating variation_master schema: converting brands to format_name and brand_configs...");
@@ -247,7 +258,14 @@ const createVariation = async (stateId, formatName, columns, brandConfigs, added
     return result;
 };
 
-const getAllVariations = async () => {
+const getAllVariations = async (includeDeleted = false) => {
+    let whereClause = `WHERE (vm.is_deleted IS NULL OR vm.is_deleted = FALSE)`;
+    if (includeDeleted === true || includeDeleted === 'true') {
+        whereClause = `WHERE vm.is_deleted = TRUE`;
+    } else if (includeDeleted === 'all') {
+        whereClause = ``;
+    }
+
     const query = `
         SELECT
             vm.id,
@@ -258,10 +276,13 @@ const getAllVariations = async () => {
             vm.columns,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             vm.device_id,
-            vm.timestamp
+            vm.timestamp,
+            vm.is_deleted,
+            vm.deleted_at
         FROM variation_master vm
         LEFT JOIN state_master sm ON vm.state_id = sm.id
         LEFT JOIN users u ON vm.added_by = u.id
+        ${whereClause}
         ORDER BY vm.timestamp DESC
     `;
     const [results] = await db.execute(query);
@@ -279,7 +300,9 @@ const getVariationById = async (id) => {
             vm.columns,
             vm.added_by,
             vm.device_id,
-            vm.timestamp
+            vm.timestamp,
+            vm.is_deleted,
+            vm.deleted_at
         FROM variation_master vm
         LEFT JOIN state_master sm ON vm.state_id = sm.id
         WHERE vm.id = ?
@@ -335,15 +358,22 @@ const updateVariation = async (id, stateId, formatName, newColumns, brandConfigs
 };
 
 const deleteVariation = async (id) => {
-    await dropFormatTable(id);
-    const query = `DELETE FROM variation_master WHERE id = ?`;
+    // Soft delete: Mark is_deleted = TRUE and record deleted_at timestamp
+    const query = `UPDATE variation_master SET is_deleted = TRUE, deleted_at = CURRENT_TIMESTAMP WHERE id = ?`;
+    const [result] = await db.execute(query, [id]);
+    return result;
+};
+
+const restoreVariation = async (id) => {
+    // Restore soft-deleted variation rule
+    const query = `UPDATE variation_master SET is_deleted = FALSE, deleted_at = NULL WHERE id = ?`;
     const [result] = await db.execute(query, [id]);
     return result;
 };
 
 const checkFormatNameExists = async (formatName, excludeId = null) => {
     if (!formatName || !formatName.trim()) return false;
-    let query = `SELECT id FROM variation_master WHERE LOWER(TRIM(format_name)) = LOWER(TRIM(?))`;
+    let query = `SELECT id FROM variation_master WHERE LOWER(TRIM(format_name)) = LOWER(TRIM(?)) AND (is_deleted IS NULL OR is_deleted = FALSE)`;
     const params = [formatName.trim()];
     if (excludeId) {
         query += ` AND id != ?`;
@@ -360,5 +390,6 @@ module.exports = {
     getVariationById,
     updateVariation,
     deleteVariation,
+    restoreVariation,
     checkFormatNameExists
 };
