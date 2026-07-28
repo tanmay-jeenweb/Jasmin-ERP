@@ -21,7 +21,7 @@ const upsertPriceListData = async (variationId, columnsList = [], records = [], 
     const tableName = `price_list_format_${variationId}`;
     const historyTableName = `price_list_format_history_${variationId}`;
     const connection = await db.getConnection();
-    
+
     try {
         // Ensure device_id column exists on current table
         try {
@@ -38,19 +38,19 @@ const upsertPriceListData = async (variationId, columnsList = [], records = [], 
         }
 
         await connection.beginTransaction();
-        
+
         const customFields = (Array.isArray(columnsList) ? columnsList : [])
             .map(c => sanitize(c))
             .filter(f => f !== '');
-        
+
         const insertFields = [
             'product_code', 'brand', 'icat_name', 'model_group_name', 'model_name',
             ...customFields,
             'added_by', 'device_id'
         ];
-        
+
         const placeholders = insertFields.map(() => '?').join(', ');
-        
+
         const updateClause = [
             'brand = VALUES(brand)',
             'icat_name = VALUES(icat_name)',
@@ -60,7 +60,7 @@ const upsertPriceListData = async (variationId, columnsList = [], records = [], 
             'added_by = VALUES(added_by)',
             'device_id = VALUES(device_id)'
         ].join(', ');
-        
+
         const currentSql = `
             INSERT INTO \`${tableName}\` (${insertFields.map(f => `\`${f}\``).join(', ')})
             VALUES (${placeholders})
@@ -71,7 +71,7 @@ const upsertPriceListData = async (variationId, columnsList = [], records = [], 
             INSERT INTO \`${historyTableName}\` (${insertFields.map(f => `\`${f}\``).join(', ')})
             VALUES (${placeholders})
         `;
-        
+
         for (const rec of records) {
             const params = [
                 rec.product_code,
@@ -94,7 +94,7 @@ const upsertPriceListData = async (variationId, columnsList = [], records = [], 
                 console.warn(`Failed to log record into history table ${historyTableName}:`, hErr.message);
             }
         }
-        
+
         await connection.commit();
     } catch (err) {
         await connection.rollback();
@@ -123,6 +123,26 @@ const getPriceListHistoryData = async (variationId, productCode = null) => {
     }
 };
 
+const getHistoryTimestamps = async (variationId) => {
+    const historyTableName = `price_list_format_history_${variationId}`;
+    try {
+        const query = `
+            SELECT 
+                DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') AS full_timestamp,
+                DATE_FORMAT(timestamp, '%Y-%m-%d') AS date_part,
+                DATE_FORMAT(timestamp, '%h:%i:%s %p') AS time_part,
+                COUNT(*) AS record_count
+            FROM \`${historyTableName}\`
+            GROUP BY DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s')
+            ORDER BY full_timestamp DESC
+        `;
+        const [results] = await db.execute(query);
+        return results;
+    } catch (e) {
+        return [];
+    }
+};
+
 const getPriceListReportData = async (variationId, targetDate = null) => {
     let rawRows = [];
     const todayStr = new Date().toISOString().split('T')[0];
@@ -131,28 +151,56 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
     if (isHistorical) {
         const historyTableName = `price_list_format_history_${variationId}`;
         try {
-            const cutoffTimestamp = `${targetDate.trim()} 23:59:59`;
-            const query = `
-                SELECT p.*, imm.product_name AS imm_product_name
-                FROM \`${historyTableName}\` p
-                JOIN (
-                    SELECT product_code, MAX(id) as max_id
-                    FROM \`${historyTableName}\`
-                    WHERE timestamp <= ?
-                    GROUP BY product_code
-                ) latest ON p.id = latest.max_id
-                LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
-                ORDER BY p.brand ASC, imm.product_name ASC, p.model_group_name ASC
-            `;
-            const [results] = await db.execute(query, [cutoffTimestamp]);
+            const trimmedDate = targetDate.trim();
+            let query = "";
+            let queryParams = [];
+
+            if (trimmedDate.includes(':')) {
+                const formattedTs = trimmedDate.replace('T', ' ');
+                query = `
+                    SELECT p.*, imm.product_name AS imm_product_name
+                    FROM \`${historyTableName}\` p
+                    LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
+                    WHERE DATE_FORMAT(p.timestamp, '%Y-%m-%d %H:%i:%s') = ?
+                    ORDER BY p.timestamp DESC, p.brand ASC, imm.product_name ASC, p.model_group_name ASC
+                `;
+                queryParams = [formattedTs];
+            } else {
+                query = `
+                    SELECT p.*, imm.product_name AS imm_product_name
+                    FROM \`${historyTableName}\` p
+                    LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
+                    WHERE DATE_FORMAT(p.timestamp, '%Y-%m-%d') = ?
+                    ORDER BY p.timestamp DESC, p.brand ASC, imm.product_name ASC, p.model_group_name ASC
+                `;
+                queryParams = [trimmedDate];
+            }
+
+            const [results] = await db.execute(query, queryParams);
             rawRows = results;
+
+            // Fallback: If no exact date match, query all records up to cutoff timestamp
+            if (rawRows.length === 0) {
+                const cutoffTimestamp = trimmedDate.includes(':') 
+                    ? trimmedDate.replace('T', ' ') 
+                    : `${trimmedDate} 23:59:59`;
+                const fallbackQuery = `
+                    SELECT p.*, imm.product_name AS imm_product_name
+                    FROM \`${historyTableName}\` p
+                    LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
+                    WHERE p.timestamp <= ?
+                    ORDER BY p.timestamp DESC, p.brand ASC, imm.product_name ASC, p.model_group_name ASC
+                `;
+                const [fallbackResults] = await db.execute(fallbackQuery, [cutoffTimestamp]);
+                rawRows = fallbackResults;
+            }
         } catch (e) {
             console.warn(`Failed to fetch historical report data from ${historyTableName}:`, e.message);
             rawRows = [];
         }
 
         // If targetDate is specified but no history records found (or table empty), fallback to current live table
-        if (rawRows.length === 0 && targetDate.trim() >= todayStr) {
+        if (rawRows.length === 0 && targetDate.trim().split(' ')[0].split('T')[0] >= todayStr) {
             const tableName = `price_list_format_${variationId}`;
             try {
                 const query = `
@@ -184,13 +232,14 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
         }
     }
 
-    // 1. Group rows by brand, product_name & model_group_name
+    // 1. Group rows by brand, product_name & model_group_name (including timestamp for historical view to keep all update rows)
     const groupMap = new Map();
     for (const row of rawRows) {
         const brand = row.brand || row.brand_name || "—";
         const prodName = row.imm_product_name || row.product_name || row.icat_name || "—";
         const group = row.model_group_name || "—";
-        const key = `${brand}|||${prodName}|||${group}`;
+        const tsKey = isHistorical && row.timestamp ? `|||${row.timestamp}` : "";
+        const key = `${brand}|||${prodName}|||${group}${tsKey}`;
 
         if (!groupMap.has(key)) {
             const { product_code, model_name, imm_product_name, ...groupData } = row;
@@ -227,7 +276,7 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
         `;
         const offerParams = [];
         if (targetDate && typeof targetDate === 'string' && targetDate.trim() !== '') {
-            const queryDate = targetDate.trim();
+            const queryDate = targetDate.trim().split(' ')[0].split('T')[0];
             activeOffersQuery += ` WHERE o.from_date <= ? AND o.to_date >= ?`;
             offerParams.push(queryDate, queryDate);
         } else {
@@ -288,5 +337,7 @@ module.exports = {
     getPriceListData,
     upsertPriceListData,
     getPriceListHistoryData,
+    getHistoryTimestamps,
     getPriceListReportData
 };
+

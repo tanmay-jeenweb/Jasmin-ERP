@@ -20,3 +20,8 @@ export const getModelGroupStockInfo = async (modelGroup, sync = false) => {
     });
 };
 
+export const getHistoryTimestamps = async (variationId) => {
+    return apiClient.get(`/price-lists/history-timestamps/${variationId}`);
+};
+
+

@@ -1,5 +1,5 @@
 const { getVariationById } = require('../models/variationModel.js');
-const { getPriceListData, upsertPriceListData, getPriceListReportData } = require('../models/priceListModel.js');
+const { getPriceListData, upsertPriceListData, getPriceListReportData, getHistoryTimestamps } = require('../models/priceListModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
 const { checkUserStateAccess } = require('../utils/userStateHelper.js');
 const db = require('../config/db.js');
@@ -504,9 +504,40 @@ const getModelGroupStockInfoController = async (req, res) => {
     }
 };
 
+const getHistoryTimestampsController = async (req, res) => {
+    try {
+        const { variationId } = req.params;
+
+        const variation = await getVariationById(variationId);
+        if (!variation) {
+            return res.status(404).json({ success: false, message: 'Price List format not found' });
+        }
+
+        const hasAccess = await checkUserStateAccess(req.user, variation.state_id, variation.state_name);
+        if (!hasAccess) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied: You are not authorized to view price list reports for this state.'
+            });
+        }
+
+        const timestamps = await getHistoryTimestamps(variationId);
+
+        res.status(200).json({
+            success: true,
+            timestamps
+        });
+    } catch (error) {
+        console.error('Error fetching history timestamps:', error);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+};
+
 module.exports = {
     getPriceListDataController,
     importPriceListController,
     getPriceListReportController,
-    getModelGroupStockInfoController
+    getModelGroupStockInfoController,
+    getHistoryTimestampsController
 };
+
