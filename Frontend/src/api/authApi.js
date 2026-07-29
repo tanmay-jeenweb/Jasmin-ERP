@@ -1,8 +1,17 @@
 import axios from "axios";
 import { getDeviceId } from "../utils/device";
 
+const getBaseURL = () => {
+    const envUrl = import.meta.env.VITE_API_URL;
+    if (!envUrl) return "http://localhost:5000/api";
+    if (typeof window !== "undefined" && window.location) {
+        return envUrl.replace(/^https?:/, window.location.protocol);
+    }
+    return envUrl;
+};
+
 const apiClient = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
+    baseURL: getBaseURL(),
     withCredentials: true
 });
 
