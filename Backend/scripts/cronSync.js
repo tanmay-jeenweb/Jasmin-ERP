@@ -10,6 +10,31 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
+// Patch global.fetch to support HTTP fallback along with HTTPS for controller requests
+const originalFetch = global.fetch;
+if (originalFetch) {
+    global.fetch = async function (url, options = {}) {
+        try {
+            const response = await originalFetch(url, options);
+            if (response.ok) return response;
+            throw new Error(`HTTP error! status: ${response.status}`);
+        } catch (err) {
+            if (typeof url === "string" && url.startsWith("https://")) {
+                const httpUrl = url.replace("https://", "http://");
+                console.warn(`HTTPS sync request failed, retrying with HTTP fallback: ${httpUrl}`);
+                try {
+                    const response = await originalFetch(httpUrl, options);
+                    if (response.ok) return response;
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                } catch (httpErr) {
+                    throw new Error(`Both HTTPS and HTTP failed. HTTPS error: ${err.message}. HTTP error: ${httpErr.message}`);
+                }
+            }
+            throw err;
+        }
+    };
+}
+
 const db = require('../config/db.js');
 
 // Import controllers

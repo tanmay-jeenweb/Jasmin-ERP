@@ -72,7 +72,13 @@ const allowedOrigins = [
     "http://erp.jasminmobile.com",
     "https://www.erp.jasminmobile.com",
     "http://www.erp.jasminmobile.com",
-    process.env.FRONTEND_URL
+    "https://interlink.jasminmobile.com",
+    "http://interlink.jasminmobile.com",
+    "https://www.interlink.jasminmobile.com",
+    "http://www.interlink.jasminmobile.com",
+    process.env.FRONTEND_URL,
+    process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/^https:/, "http:") : null,
+    process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/^http:/, "https:") : null
 ].filter(Boolean);
 
 app.use(cors({

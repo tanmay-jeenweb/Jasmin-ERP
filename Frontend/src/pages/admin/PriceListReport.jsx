@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import DataTable from "../../components/DataTable";
-import { getPriceListReport, getModelGroupStockInfo } from "../../api/priceListApi";
+import { getPriceListReport, getModelGroupStockInfo, getHistoryTimestamps } from "../../api/priceListApi";
 import { usePermission } from "../../context/PermissionContext";
 import toast from "react-hot-toast";
 
@@ -46,9 +46,11 @@ export default function PriceListReport() {
   const [formatName, setFormatName] = useState("");
   const [loading, setLoading] = useState(false);
   const [selectedOfferModal, setSelectedOfferModal] = useState(null);
-  
-  // Date filter state
+
+  // Date & Time filter state
   const [reportDate, setReportDate] = useState("");
+  const [reportTime, setReportTime] = useState("");
+  const [historyTimestamps, setHistoryTimestamps] = useState([]);
   const [isHistoricalView, setIsHistoricalView] = useState(false);
 
   // Dynamic Stock Modal state
@@ -72,7 +74,7 @@ export default function PriceListReport() {
     });
   }, [dynamicColumns, currentUser]);
 
-  const loadReportData = async (targetDate = reportDate) => {
+  const loadReportData = async (targetDate = reportTime || reportDate) => {
     setLoading(true);
     try {
       const res = await getPriceListReport(variationId, targetDate);
@@ -80,7 +82,7 @@ export default function PriceListReport() {
         setData(res.data.data || []);
         setFormatName(res.data.formatName || "Price List Report");
         setDynamicColumns(res.data.columns || []);
-        setIsHistoricalView(Boolean(targetDate && targetDate.trim() !== ""));
+        setIsHistoricalView(Boolean(targetDate && String(targetDate).trim() !== ""));
       }
     } catch (err) {
       console.error("Failed to load price list report:", err);
@@ -94,20 +96,66 @@ export default function PriceListReport() {
     }
   };
 
+  const fetchTimestamps = async () => {
+    try {
+      const res = await getHistoryTimestamps(variationId);
+      if (res.data?.success) {
+        setHistoryTimestamps(res.data.timestamps || []);
+      }
+    } catch (e) {
+      console.warn("Failed to fetch history timestamps:", e.message);
+    }
+  };
+
   useEffect(() => {
+    fetchTimestamps();
     loadReportData();
   }, [variationId]);
+
+  const availableTimesForDate = useMemo(() => {
+    if (!reportDate) return [];
+    return historyTimestamps.filter(ts => ts.date_part === reportDate);
+  }, [historyTimestamps, reportDate]);
+
+  const displayHistoricalLabel = useMemo(() => {
+    if (!reportDate && !reportTime) return "";
+    if (reportTime) {
+      const matchingTs = historyTimestamps.find(ts => ts.full_timestamp === reportTime);
+      if (matchingTs) {
+        return `${matchingTs.date_part} ${matchingTs.time_part}`;
+      }
+      return reportTime;
+    }
+    return reportDate;
+  }, [reportDate, reportTime, historyTimestamps]);
 
   const handleDateChange = (e) => {
     const selected = e.target.value;
     setReportDate(selected);
-    loadReportData(selected);
+    setReportTime("");
+
+    const timesForSelected = historyTimestamps.filter(ts => ts.date_part === selected);
+    if (timesForSelected.length > 0) {
+      const latestTs = timesForSelected[0].full_timestamp;
+      setReportTime(latestTs);
+      loadReportData(latestTs);
+    } else {
+      loadReportData(selected);
+    }
+  };
+
+  const handleTimeChange = (e) => {
+    const selectedTs = e.target.value;
+    setReportTime(selectedTs);
+    loadReportData(selectedTs || reportDate);
   };
 
   const handleResetDate = () => {
     setReportDate("");
+    setReportTime("");
     loadReportData("");
   };
+
 
   const handleOpenStockModal = async (row, forceSync = false) => {
     const modelGroup = row.model_group_name || stockModalData?.modelGroup;
@@ -301,8 +349,24 @@ export default function PriceListReport() {
       }
     });
 
+    if (isHistoricalView) {
+      cols.push({
+        key: "history_timestamp",
+        label: "Update Time",
+        render: (row) => {
+          if (!row.timestamp) return "—";
+          const d = new Date(row.timestamp);
+          return (
+            <span className="font-mono text-xs text-indigo-700 font-semibold bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100">
+              {d.toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'medium' })}
+            </span>
+          );
+        }
+      });
+    }
+
     return cols;
-  }, [visibleDynamicColumns]);
+  }, [visibleDynamicColumns, isHistoricalView]);
 
   return (
     <div className="flex flex-col flex-1 bg-slate-50 font-sans min-h-screen">
@@ -444,8 +508,8 @@ export default function PriceListReport() {
                     </span>
                     {stockModalData.updatedAt && (
                       <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 border ${stockModalData.isCached
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : "bg-indigo-50 text-indigo-700 border-indigo-200"
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : "bg-indigo-50 text-indigo-700 border-indigo-200"
                         }`}>
                         <i className={`fa-solid ${stockModalData.isCached ? "fa-database" : "fa-bolt"} text-[10px]`}></i>
                         <span>{stockModalData.isCached ? "DB Stored" : "Live Synced"}</span>
