@@ -22,6 +22,30 @@ const createTargetVsAchievementsTable = async () => {
     await db.execute(createInvoicesQuery);
     console.log("Synced Invoice Items table ready");
 
+    // Create sales_invoice_cache table if it doesn't exist
+    const createCacheQuery = `
+        CREATE TABLE IF NOT EXISTS sales_invoice_cache (
+            id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            invoice_no      VARCHAR(50)  NOT NULL,
+            invoice_date    DATE         NOT NULL,
+            branch_code     VARCHAR(20)  DEFAULT NULL,
+            branch_name     VARCHAR(100) DEFAULT NULL,
+            item_code       VARCHAR(100) DEFAULT NULL,
+            item_model_name VARCHAR(255) DEFAULT NULL,
+            qty             DECIMAL(10,2) NOT NULL DEFAULT 0,
+            amount          DECIMAL(14,2) NOT NULL DEFAULT 0,
+            record_type     ENUM('INVOICE','RETURN') NOT NULL DEFAULT 'INVOICE',
+            created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_invoice_item (invoice_no, item_model_name, record_type),
+            INDEX idx_invoice_date (invoice_date),
+            INDEX idx_branch_code  (branch_code),
+            INDEX idx_record_type  (record_type)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `;
+    await db.execute(createCacheQuery);
+    console.log("sales_invoice_cache table ready");
+
     // Create synced_sales_return_items table if it doesn't exist
     const createReturnsQuery = `
         CREATE TABLE IF NOT EXISTS synced_sales_return_items (

@@ -1,6 +1,6 @@
 /**
  * Jasmin ERP - Historical Cache Population Script
- * 
+ *
  * Usage from terminal or cPanel:
  *   node scripts/populateCache.js
  */
@@ -8,29 +8,76 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-// Patch global.fetch to support HTTP fallback along with HTTPS for API requests
-const originalFetch = global.fetch;
-if (originalFetch) {
-    global.fetch = async function (url, options = {}) {
-        try {
-            const response = await originalFetch(url, options);
-            if (response.ok) return response;
-            throw new Error(`HTTP error! status: ${response.status}`);
-        } catch (err) {
-            if (typeof url === "string" && url.startsWith("https://")) {
-                const httpUrl = url.replace("https://", "http://");
-                console.warn(`HTTPS sync request failed, retrying with HTTP fallback: ${httpUrl}`);
-                try {
-                    const response = await originalFetch(httpUrl, options);
-                    if (response.ok) return response;
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                } catch (httpErr) {
-                    throw new Error(`Both HTTPS and HTTP failed. HTTPS error: ${err.message}. HTTP error: ${httpErr.message}`);
+// Use native Node.js https/http modules to avoid undici's WebAssembly dependency
+// which causes "Out of memory: Cannot allocate Wasm memory" on LVE-limited servers.
+const https = require('https');
+const http = require('http');
+
+/**
+ * Make an HTTP/HTTPS GET request using native Node.js modules (no WebAssembly).
+ * Falls back from HTTPS to HTTP automatically if HTTPS fails.
+ * Returns a promise that resolves with { ok, status, statusText, json() }.
+ */
+function nativeFetch(url, options = {}) {
+    return new Promise((resolve, reject) => {
+        const doRequest = (requestUrl, isRetry) => {
+            const parsedUrl = new URL(requestUrl);
+            const requester = parsedUrl.protocol === 'https:' ? https : http;
+
+            const reqOptions = {
+                hostname: parsedUrl.hostname,
+                port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+                path: parsedUrl.pathname + parsedUrl.search,
+                method: options.method || 'GET',
+                headers: options.headers || {},
+                // Allow self-signed / untrusted certs on the external API
+                rejectUnauthorized: false,
+                timeout: 60000
+            };
+
+            const req = requester.request(reqOptions, (res) => {
+                let data = '';
+                res.setEncoding('utf8');
+                res.on('data', (chunk) => { data += chunk; });
+                res.on('end', () => {
+                    const status = res.statusCode;
+                    const ok = status >= 200 && status < 300;
+                    resolve({
+                        ok,
+                        status,
+                        statusText: res.statusMessage || String(status),
+                        json: () => Promise.resolve(JSON.parse(data)),
+                        text: () => Promise.resolve(data)
+                    });
+                });
+            });
+
+            req.on('timeout', () => {
+                req.destroy();
+                if (!isRetry && requestUrl.startsWith('https://')) {
+                    const httpUrl = requestUrl.replace('https://', 'http://');
+                    console.warn(`HTTPS request timed out, retrying with HTTP fallback: ${httpUrl}`);
+                    doRequest(httpUrl, true);
+                } else {
+                    reject(new Error(`Request timed out: ${requestUrl}`));
                 }
-            }
-            throw err;
-        }
-    };
+            });
+
+            req.on('error', (err) => {
+                if (!isRetry && requestUrl.startsWith('https://')) {
+                    const httpUrl = requestUrl.replace('https://', 'http://');
+                    console.warn(`HTTPS request failed (${err.message}), retrying with HTTP fallback: ${httpUrl}`);
+                    doRequest(httpUrl, true);
+                } else {
+                    reject(new Error(`Request failed: ${err.message}`));
+                }
+            });
+
+            req.end();
+        };
+
+        doRequest(url, false);
+    });
 }
 
 const db = require("../config/db.js");
@@ -57,9 +104,24 @@ async function sleep(ms) {
 }
 
 async function populate() {
+    console.log("Checking database schema...");
+    try {
+        const [cols] = await db.execute("SHOW COLUMNS FROM sales_invoice_cache LIKE 'item_code'");
+        if (cols.length === 0) {
+            console.log("Migrating: Adding item_code to sales_invoice_cache...");
+            await db.execute("ALTER TABLE sales_invoice_cache ADD COLUMN item_code VARCHAR(100) DEFAULT NULL AFTER branch_name");
+            console.log("✅ Migrated: item_code column added.");
+        } else {
+            console.log("✅ Database schema is up to date.");
+        }
+    } catch (migrationError) {
+        console.error("Migration check failed:", migrationError.message);
+    }
+
     console.log("Starting historical cache population...");
     const startDate = new Date("2026-04-01");
     const endDate = new Date(); // dynamic: today
+
 
     let currentStart = new Date(startDate);
     while (currentStart <= endDate) {
@@ -68,6 +130,7 @@ async function populate() {
         if (currentEnd > endDate) {
             currentEnd = new Date(endDate);
         }
+
 
         const startStr = formatToYYYYMMDD(currentStart);
         const endStr = formatToYYYYMMDD(currentEnd);
@@ -80,7 +143,7 @@ async function populate() {
 
         try {
             const apiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetExtendedInvoiceDetails?CompanyCode=JITPL&InvoiceStartDate=${startStr}&InvoiceEndDate=${endStr}&SalespersonCode=0`;
-            const response = await fetch(apiUrl, {
+            const response = await nativeFetch(apiUrl, {
                 method: 'GET',
                 headers: {
                     'userid': process.env.MODEL_API_USERID || 'WebSite',
@@ -99,7 +162,7 @@ async function populate() {
             console.log(`Fetched ${invoices.length || 0} invoices from external API.`);
 
             const srnApiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetExtendedSalesReturnDetails?CompanyCode=JITPL&SRNStartDate=${startStr}&SRNEndDate=${endStr}&BranchCode=0&SalespersonCode=0`;
-            const srnResponse = await fetch(srnApiUrl, {
+            const srnResponse = await nativeFetch(srnApiUrl, {
                 method: 'GET',
                 headers: {
                     'userid': process.env.MODEL_API_USERID || 'WebSite',
@@ -135,18 +198,31 @@ async function populate() {
                             const parts = itemDesc.split(':');
                             if (parts.length < 2) continue;
 
-                            const rawType = parts[0].trim().toUpperCase();
-                            if (!allowedProductTypes.includes(rawType)) continue;
+                            // Product type may be first OR last segment depending on API version
+                            const firstPart = parts[0].trim().toUpperCase();
+                            const lastPart = parts[parts.length - 1].trim().toUpperCase();
+                            let productType = null;
+                            let itemModelName = '';
+                            if (allowedProductTypes.includes(lastPart)) {
+                                productType = lastPart;
+                                itemModelName = parts.slice(0, parts.length - 1).join(':').trim();
+                            } else if (allowedProductTypes.includes(firstPart)) {
+                                productType = firstPart;
+                                itemModelName = parts.slice(1).join(':').trim();
+                            } else {
+                                continue;
+                            }
 
-                            const itemModelName = parts.slice(1).join(':').trim();
-                            const qty = parseFloat(item.SalesQty) || 0;
-                            const amount = parseFloat(item.TotalAmount) || 0;
+                            const qty = parseFloat(item.Qty || item.SalesQty) || 0;
+                            const amount = parseFloat(item.NetAmount || item.TotalAmount) || 0;
+                            const itemCode = item.ItemCode || '';
 
                             insertValues.push([
                                 invoiceNo,
                                 invoiceDbDate,
                                 branchCode,
                                 branchName,
+                                itemCode,
                                 itemModelName,
                                 qty,
                                 amount,
@@ -174,18 +250,31 @@ async function populate() {
                             const parts = itemDesc.split(':');
                             if (parts.length < 2) continue;
 
-                            const rawType = parts[0].trim().toUpperCase();
-                            if (!allowedProductTypes.includes(rawType)) continue;
+                            // Product type may be first OR last segment
+                            const firstPart = parts[0].trim().toUpperCase();
+                            const lastPart = parts[parts.length - 1].trim().toUpperCase();
+                            let productType = null;
+                            let itemModelName = '';
+                            if (allowedProductTypes.includes(lastPart)) {
+                                productType = lastPart;
+                                itemModelName = parts.slice(0, parts.length - 1).join(':').trim();
+                            } else if (allowedProductTypes.includes(firstPart)) {
+                                productType = firstPart;
+                                itemModelName = parts.slice(1).join(':').trim();
+                            } else {
+                                continue;
+                            }
 
-                            const itemModelName = parts.slice(1).join(':').trim();
-                            const qty = parseFloat(item.SRNQty || item.SalesQty) || 0;
-                            const amount = parseFloat(item.TotalAmount) || 0;
+                            const qty = parseFloat(item.Qty || item.SRNQty) || 0;
+                            const amount = parseFloat(item.NetAmount || item.TotalAmount) || 0;
+                            const itemCode = item.ItemCode || '';
 
                             insertValues.push([
                                 srnNo,
                                 srnDbDate,
                                 branchCode,
                                 branchName,
+                                itemCode,
                                 itemModelName,
                                 qty,
                                 amount,
@@ -196,15 +285,25 @@ async function populate() {
                 }
             }
 
+            console.log(`Prepared ${insertValues.length} items for insertion into sales_invoice_cache.`);
+            if (insertValues.length === 0 && invoices.length > 0) {
+                // Log a sample description to help diagnose format issues
+                const sampleInvoice = invoices.find(inv => Array.isArray(inv.invoiceItemData) && inv.invoiceItemData.length > 0);
+                if (sampleInvoice) {
+                    console.warn(`  [DEBUG] Sample ItemDescription: "${sampleInvoice.invoiceItemData[0]?.ItemDescription}"`);
+                }
+            }
+
             if (insertValues.length > 0) {
                 const insertQuery = `
-                    INSERT INTO sales_invoice_cache 
-                    (invoice_no, invoice_date, branch_code, branch_name, item_model_name, qty, amount, record_type)
+                    INSERT INTO sales_invoice_cache
+                    (invoice_no, invoice_date, branch_code, branch_name, item_code, item_model_name, qty, amount, record_type)
                     VALUES ?
                     ON DUPLICATE KEY UPDATE
                         invoice_date = VALUES(invoice_date),
                         branch_code = VALUES(branch_code),
                         branch_name = VALUES(branch_name),
+                        item_code = VALUES(item_code),
                         item_model_name = VALUES(item_model_name),
                         qty = VALUES(qty),
                         amount = VALUES(amount),

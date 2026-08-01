@@ -1,5 +1,54 @@
 const db = require('../config/db.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
+const https = require('https');
+const http = require('http');
+
+// Native fetch — avoids undici WebAssembly crash on CloudLinux/LVE shared hosting
+function nativeFetch(url, options = {}) {
+    return new Promise((resolve, reject) => {
+        const doRequest = (requestUrl, isRetry) => {
+            const parsedUrl = new URL(requestUrl);
+            const requester = parsedUrl.protocol === 'https:' ? https : http;
+            const reqOptions = {
+                hostname: parsedUrl.hostname,
+                port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+                path: parsedUrl.pathname + parsedUrl.search,
+                method: options.method || 'GET',
+                headers: options.headers || {},
+                rejectUnauthorized: false,
+                timeout: 60000
+            };
+            const req = requester.request(reqOptions, (res) => {
+                let data = '';
+                res.setEncoding('utf8');
+                res.on('data', (chunk) => { data += chunk; });
+                res.on('end', () => {
+                    const status = res.statusCode;
+                    resolve({
+                        ok: status >= 200 && status < 300,
+                        status,
+                        statusText: res.statusMessage || String(status),
+                        json: () => Promise.resolve(JSON.parse(data)),
+                        text: () => Promise.resolve(data)
+                    });
+                });
+            });
+            req.on('timeout', () => {
+                req.destroy();
+                if (!isRetry && requestUrl.startsWith('https://')) {
+                    doRequest(requestUrl.replace('https://', 'http://'), true);
+                } else { reject(new Error(`Timed out: ${requestUrl}`)); }
+            });
+            req.on('error', (err) => {
+                if (!isRetry && requestUrl.startsWith('https://')) {
+                    doRequest(requestUrl.replace('https://', 'http://'), true);
+                } else { reject(new Error(`Request failed: ${err.message}`)); }
+            });
+            req.end();
+        };
+        doRequest(url, false);
+    });
+}
 
 const allowedProductTypes = ['SMARTPHONE', 'FETURE PHONE', 'FEATURE PHONE', 'TABLET', 'I PAD', 'EOL MODEL'];
 
@@ -109,7 +158,7 @@ const syncBrandWiseSalesController = async (req, res) => {
             const invoiceUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetExtendedInvoiceDetails?CompanyCode=JITPL&InvoiceStartDate=${chunkStartStr}&InvoiceEndDate=${chunkEndStr}&SalespersonCode=0`;
             let invoices = [];
             try {
-                const response = await fetch(invoiceUrl, {
+                const response = await nativeFetch(invoiceUrl, {
                     method: 'GET',
                     headers: {
                         'userid': userId,
@@ -130,7 +179,7 @@ const syncBrandWiseSalesController = async (req, res) => {
             const returnUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetExtendedSalesReturnDetails?CompanyCode=JITPL&SRNStartDate=${chunkStartStr}&SRNEndDate=${chunkEndStr}&BranchCode=0&SalespersonCode=0`;
             let salesReturns = [];
             try {
-                const response = await fetch(returnUrl, {
+                const response = await nativeFetch(returnUrl, {
                     method: 'GET',
                     headers: {
                         'userid': userId,
@@ -340,12 +389,22 @@ const getBrandWiseSalesController = async (req, res) => {
 
         // Helper to resolve brand name
         const getBrandName = (itemCode, itemDescription) => {
+            // 1. Try exact item_code lookup in model master
             const code = (itemCode || '').trim();
-            if (modelMap[code]) {
+            if (code && modelMap[code]) {
                 return modelMap[code];
             }
-            const desc = itemDescription || '';
-            const parts = desc.split(':');
+            // 2. Keyword match on item_description / item_model_name
+            const desc = (itemDescription || '').toLowerCase();
+            if (desc.includes('samsung')) return 'Samsung';
+            if (desc.includes('vivo')) return 'Vivo';
+            if (desc.includes('oppo')) return 'Oppo';
+            if (desc.includes('realme')) return 'Realme';
+            if (desc.includes('apple') || desc.includes('iphone') || desc.includes('ipad')) return 'Apple';
+            if (desc.includes('oneplus')) return 'OnePlus';
+            if (desc.includes('xiaomi') || desc.includes('redmi') || desc.includes(' mi ')) return 'Xiaomi';
+            // 3. Try the old colon-split fallback for synced_invoice_items data
+            const parts = (itemDescription || '').split(':');
             if (parts.length > 2) {
                 return parts[parts.length - 2].trim();
             }
@@ -366,95 +425,99 @@ const getBrandWiseSalesController = async (req, res) => {
             return brand.trim().charAt(0).toUpperCase() + brand.trim().slice(1).toLowerCase();
         };
 
-        // 3. Query local cache range: firstDayLastMonth to targetDate, excluding internal stock transfers (ISBS)
+        // 3. Query sales_invoice_cache (full history) for MTD/LMTD range
+        // synced_invoice_items only has 5 days; sales_invoice_cache has full history from populate script.
         const allowedBranchCodes = await getUserAllowedBranchCodes(req.user);
 
         let dbRows = [], dbSrnRows = [];
 
         if (Array.isArray(allowedBranchCodes) && allowedBranchCodes.length === 0) {
-            // Non-admin user with NO mapped branches -> empty rows
             dbRows = [];
             dbSrnRows = [];
         } else if (allowedBranchCodes !== null) {
-            // Non-admin user with specific mapped branches
             const placeholders = allowedBranchCodes.map(() => '?').join(',');
 
             if (req.query.state && req.query.state !== 'All') {
                 [dbRows] = await db.execute(
-                    `SELECT inv.invoice_date, inv.item_code, inv.item_description, inv.qty, inv.net_amount 
-                     FROM synced_invoice_items inv
-                     INNER JOIN branch_master bm ON inv.branch_code = bm.code
+                    `SELECT sic.invoice_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
+                     FROM sales_invoice_cache sic
+                     INNER JOIN branch_master bm ON sic.branch_code = bm.code
                      INNER JOIN state_master sm ON bm.state_id = sm.id
-                     WHERE inv.invoice_date BETWEEN ? AND ? 
-                       AND inv.invoice_no NOT LIKE 'ISBS%'
+                     WHERE sic.invoice_date BETWEEN ? AND ?
+                       AND sic.record_type = 'INVOICE'
+                       AND sic.invoice_no NOT LIKE 'ISBS%'
                        AND sm.name = ?
-                       AND inv.branch_code IN (${placeholders})`,
+                       AND sic.branch_code IN (${placeholders})`,
                     [firstDayLastMonthStr, targetDateStr, req.query.state, ...allowedBranchCodes]
                 );
-
                 [dbSrnRows] = await db.execute(
-                    `SELECT srn.sales_return_date, srn.item_code, srn.item_description, srn.qty, srn.net_amount 
-                     FROM synced_sales_return_items srn
-                     INNER JOIN branch_master bm ON srn.branch_code = bm.code
+                    `SELECT sic.invoice_date AS sales_return_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
+                     FROM sales_invoice_cache sic
+                     INNER JOIN branch_master bm ON sic.branch_code = bm.code
                      INNER JOIN state_master sm ON bm.state_id = sm.id
-                     WHERE srn.sales_return_date BETWEEN ? AND ?
+                     WHERE sic.invoice_date BETWEEN ? AND ?
+                       AND sic.record_type = 'RETURN'
                        AND sm.name = ?
-                       AND srn.branch_code IN (${placeholders})`,
+                       AND sic.branch_code IN (${placeholders})`,
                     [firstDayLastMonthStr, targetDateStr, req.query.state, ...allowedBranchCodes]
                 );
             } else {
                 [dbRows] = await db.execute(
-                    `SELECT invoice_date, item_code, item_description, qty, net_amount 
-                     FROM synced_invoice_items 
-                     WHERE invoice_date BETWEEN ? AND ? 
+                    `SELECT invoice_date, item_code, item_model_name AS item_description, qty, amount AS net_amount
+                     FROM sales_invoice_cache
+                     WHERE invoice_date BETWEEN ? AND ?
+                       AND record_type = 'INVOICE'
                        AND invoice_no NOT LIKE 'ISBS%'
                        AND branch_code IN (${placeholders})`,
                     [firstDayLastMonthStr, targetDateStr, ...allowedBranchCodes]
                 );
-
                 [dbSrnRows] = await db.execute(
-                    `SELECT sales_return_date, item_code, item_description, qty, net_amount 
-                     FROM synced_sales_return_items 
-                     WHERE sales_return_date BETWEEN ? AND ?
+                    `SELECT invoice_date AS sales_return_date, item_code, item_model_name AS item_description, qty, amount AS net_amount
+                     FROM sales_invoice_cache
+                     WHERE invoice_date BETWEEN ? AND ?
+                       AND record_type = 'RETURN'
                        AND branch_code IN (${placeholders})`,
                     [firstDayLastMonthStr, targetDateStr, ...allowedBranchCodes]
                 );
             }
         } else {
-            // Admin role: query all branches
+            // Admin: all branches
             if (req.query.state && req.query.state !== 'All') {
                 [dbRows] = await db.execute(
-                    `SELECT inv.invoice_date, inv.item_code, inv.item_description, inv.qty, inv.net_amount 
-                     FROM synced_invoice_items inv
-                     INNER JOIN branch_master bm ON inv.branch_code = bm.code
+                    `SELECT sic.invoice_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
+                     FROM sales_invoice_cache sic
+                     INNER JOIN branch_master bm ON sic.branch_code = bm.code
                      INNER JOIN state_master sm ON bm.state_id = sm.id
-                     WHERE inv.invoice_date BETWEEN ? AND ? 
-                       AND inv.invoice_no NOT LIKE 'ISBS%'
+                     WHERE sic.invoice_date BETWEEN ? AND ?
+                       AND sic.record_type = 'INVOICE'
+                       AND sic.invoice_no NOT LIKE 'ISBS%'
                        AND sm.name = ?`,
                     [firstDayLastMonthStr, targetDateStr, req.query.state]
                 );
-
                 [dbSrnRows] = await db.execute(
-                    `SELECT srn.sales_return_date, srn.item_code, srn.item_description, srn.qty, srn.net_amount 
-                     FROM synced_sales_return_items srn
-                     INNER JOIN branch_master bm ON srn.branch_code = bm.code
+                    `SELECT sic.invoice_date AS sales_return_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
+                     FROM sales_invoice_cache sic
+                     INNER JOIN branch_master bm ON sic.branch_code = bm.code
                      INNER JOIN state_master sm ON bm.state_id = sm.id
-                     WHERE srn.sales_return_date BETWEEN ? AND ?
+                     WHERE sic.invoice_date BETWEEN ? AND ?
+                       AND sic.record_type = 'RETURN'
                        AND sm.name = ?`,
                     [firstDayLastMonthStr, targetDateStr, req.query.state]
                 );
             } else {
                 [dbRows] = await db.execute(
-                    `SELECT invoice_date, item_code, item_description, qty, net_amount 
-                     FROM synced_invoice_items 
-                     WHERE invoice_date BETWEEN ? AND ? AND invoice_no NOT LIKE 'ISBS%'`,
+                    `SELECT invoice_date, item_code, item_model_name AS item_description, qty, amount AS net_amount
+                     FROM sales_invoice_cache
+                     WHERE invoice_date BETWEEN ? AND ?
+                       AND record_type = 'INVOICE'
+                       AND invoice_no NOT LIKE 'ISBS%'`,
                     [firstDayLastMonthStr, targetDateStr]
                 );
-
                 [dbSrnRows] = await db.execute(
-                    `SELECT sales_return_date, item_code, item_description, qty, net_amount 
-                     FROM synced_sales_return_items 
-                     WHERE sales_return_date BETWEEN ? AND ?`,
+                    `SELECT invoice_date AS sales_return_date, item_code, item_model_name AS item_description, qty, amount AS net_amount
+                     FROM sales_invoice_cache
+                     WHERE invoice_date BETWEEN ? AND ?
+                       AND record_type = 'RETURN'`,
                     [firstDayLastMonthStr, targetDateStr]
                 );
             }

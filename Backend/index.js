@@ -176,6 +176,7 @@ const startServer = async () => {
         await createStockCacheTable();
 
 
+
         console.log("All database tables are initialized and ready.");
 
         const PORT = process.env.PORT || 5000;
