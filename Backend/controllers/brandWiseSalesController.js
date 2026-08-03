@@ -287,6 +287,44 @@ const syncBrandWiseSalesController = async (req, res) => {
                         [invoiceInsertValues]
                     );
                     totalInvoicesSynced += invoiceInsertValues.length;
+
+                    // Also upsert the fresh data into sales_invoice_cache so MTD/LMTD/FTD stay current
+                    const cacheInvoiceValues = invoiceInsertValues.map(row => {
+                        const itemDesc = row[5] || '';
+                        const parts = itemDesc.split(':');
+                        let itemModelName = itemDesc;
+                        if (parts.length > 1) {
+                            const lastPart = parts[parts.length - 1].trim().toUpperCase();
+                            if (allowedProductTypes.includes(lastPart)) {
+                                itemModelName = parts.slice(0, parts.length - 1).join(':').trim();
+                            }
+                        }
+                        return [
+                            row[0], // invoice_no
+                            row[1], // invoice_date
+                            row[2], // branch_code
+                            row[3], // branch_name
+                            row[4], // item_code
+                            itemModelName,
+                            row[6], // qty
+                            row[7], // net_amount as amount
+                            'INVOICE'
+                        ];
+                    });
+                    await connection.query(`
+                        INSERT INTO sales_invoice_cache
+                            (invoice_no, invoice_date, branch_code, branch_name, item_code, item_model_name, qty, amount, record_type)
+                        VALUES ?
+                        ON DUPLICATE KEY UPDATE
+                            invoice_date = VALUES(invoice_date),
+                            branch_code = VALUES(branch_code),
+                            branch_name = VALUES(branch_name),
+                            item_code = VALUES(item_code),
+                            item_model_name = VALUES(item_model_name),
+                            qty = VALUES(qty),
+                            amount = VALUES(amount),
+                            record_type = VALUES(record_type)
+                    `, [cacheInvoiceValues]);
                 }
 
                 if (returnInsertValues.length > 0) {
@@ -297,6 +335,44 @@ const syncBrandWiseSalesController = async (req, res) => {
                         [returnInsertValues]
                     );
                     totalReturnsSynced += returnInsertValues.length;
+
+                    // Also upsert the fresh returns data into sales_invoice_cache
+                    const cacheReturnValues = returnInsertValues.map(row => {
+                        const itemDesc = row[5] || '';
+                        const parts = itemDesc.split(':');
+                        let itemModelName = itemDesc;
+                        if (parts.length > 1) {
+                            const lastPart = parts[parts.length - 1].trim().toUpperCase();
+                            if (allowedProductTypes.includes(lastPart)) {
+                                itemModelName = parts.slice(0, parts.length - 1).join(':').trim();
+                            }
+                        }
+                        return [
+                            row[0], // sales_return_no as invoice_no
+                            row[1], // sales_return_date as invoice_date
+                            row[2], // branch_code
+                            row[3], // branch_name
+                            row[4], // item_code
+                            itemModelName,
+                            row[6], // qty
+                            row[7], // net_amount as amount
+                            'RETURN'
+                        ];
+                    });
+                    await connection.query(`
+                        INSERT INTO sales_invoice_cache
+                            (invoice_no, invoice_date, branch_code, branch_name, item_code, item_model_name, qty, amount, record_type)
+                        VALUES ?
+                        ON DUPLICATE KEY UPDATE
+                            invoice_date = VALUES(invoice_date),
+                            branch_code = VALUES(branch_code),
+                            branch_name = VALUES(branch_name),
+                            item_code = VALUES(item_code),
+                            item_model_name = VALUES(item_model_name),
+                            qty = VALUES(qty),
+                            amount = VALUES(amount),
+                            record_type = VALUES(record_type)
+                    `, [cacheReturnValues]);
                 }
 
                 await connection.commit();

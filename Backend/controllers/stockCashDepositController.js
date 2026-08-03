@@ -7,6 +7,7 @@ const {
 } = require('../models/stockCashDepositModel.js');
 
 const db = require('../config/db.js');
+const { createAuditLog } = require('../models/auditLogModel.js');
 
 // Helper to retrieve allowed branch names for a user based on User Branch Mapping
 const getUserAllowedBranchNames = async (user) => {
@@ -76,6 +77,26 @@ const importStockCashDepositController = async (req, res) => {
             });
         }
         await importStockCashDepositData(records);
+
+        try {
+            const addedBy = req.user.id;
+            const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+            await createAuditLog(
+                addedBy,
+                req.user?.name || req.user?.username || 'Unknown',
+                deviceId,
+                'Stock vs Cash Deposit Import',
+                'updated',
+                null,
+                {
+                    imported_count: records.length,
+                    imported_at: new Date().toISOString()
+                }
+            );
+        } catch (auditErr) {
+            console.error("Failed to write audit log for Stock vs Cash Deposit import:", auditErr);
+        }
+
         res.status(200).json({
             success: true,
             message: 'Records imported successfully'
@@ -99,6 +120,26 @@ const importCurrentStockController = async (req, res) => {
             });
         }
         await importCurrentStockData(records);
+
+        try {
+            const addedBy = req.user.id;
+            const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+            await createAuditLog(
+                addedBy,
+                req.user?.name || req.user?.username || 'Unknown',
+                deviceId,
+                'Current Stock Import',
+                'updated',
+                null,
+                {
+                    imported_count: records.length,
+                    imported_at: new Date().toISOString()
+                }
+            );
+        } catch (auditErr) {
+            console.error("Failed to write audit log for Current Stock import:", auditErr);
+        }
+
         res.status(200).json({
             success: true,
             message: 'Current Stock records imported successfully'
@@ -122,6 +163,26 @@ const importOpeningCashAndCreditController = async (req, res) => {
             });
         }
         await importOpeningCashAndCreditData(records);
+
+        try {
+            const addedBy = req.user.id;
+            const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+            await createAuditLog(
+                addedBy,
+                req.user?.name || req.user?.username || 'Unknown',
+                deviceId,
+                'Opening Cash & Credit Import',
+                'updated',
+                null,
+                {
+                    imported_count: records.length,
+                    imported_at: new Date().toISOString()
+                }
+            );
+        } catch (auditErr) {
+            console.error("Failed to write audit log for Opening Cash & Credit import:", auditErr);
+        }
+
         res.status(200).json({
             success: true,
             message: 'Opening Cash & Credit records imported successfully'
@@ -145,6 +206,26 @@ const importCashDepositController = async (req, res) => {
             });
         }
         await importCashDepositData(records);
+
+        try {
+            const addedBy = req.user.id;
+            const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+            await createAuditLog(
+                addedBy,
+                req.user?.name || req.user?.username || 'Unknown',
+                deviceId,
+                'Cash Deposit Import',
+                'updated',
+                null,
+                {
+                    imported_count: records.length,
+                    imported_at: new Date().toISOString()
+                }
+            );
+        } catch (auditErr) {
+            console.error("Failed to write audit log for Cash Deposit import:", auditErr);
+        }
+
         res.status(200).json({
             success: true,
             message: 'Cash Deposit records imported successfully'

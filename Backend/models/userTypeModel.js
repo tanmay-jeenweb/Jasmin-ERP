@@ -21,6 +21,7 @@ const MASTERS = [
     { key: 'price_list_report', label: 'Price List Report' },
     { key: 'landing_type_master', label: 'Landing Type Master' },
     { key: 'target_vs_achievement', label: 'Target vs Achievement' },
+    { key: 'stock_vs_cash_deposit', label: 'Stock vs Cash Deposit' },
     { key: 'offer_master', label: 'Offers Master' },
     { key: 'finance_brand_mapping', label: 'Finance Brand Mapping' },
     { key: 'finance_brand_report', label: 'Finance Brand Report' },
@@ -99,7 +100,14 @@ const createUserTypePermissionsTable = async () => {
             WHERE master_name = 'variation_master'
         `);
 
-        console.log("✅ Permission keys migrated to worker_employee, worker_employee_type, user_branch_mapping, price_list, and price_list_report.");
+        // Seed initial stock_vs_cash_deposit permission rows for existing user types
+        await db.execute(`
+            INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete)
+            SELECT id, 'stock_vs_cash_deposit', 0, 0, 0, 0
+            FROM user_types
+        `);
+
+        console.log("✅ Permission keys migrated to worker_employee, worker_employee_type, user_branch_mapping, price_list, price_list_report, and stock_vs_cash_deposit.");
     } catch (err) {
         console.error("Migration of user permissions failed:", err.message);
     }
