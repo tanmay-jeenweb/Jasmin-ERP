@@ -10,30 +10,50 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-// Patch global.fetch to support HTTP fallback along with HTTPS for controller requests
-const originalFetch = global.fetch;
-if (originalFetch) {
-    global.fetch = async function (url, options = {}) {
-        try {
-            const response = await originalFetch(url, options);
-            if (response.ok) return response;
-            throw new Error(`HTTP error! status: ${response.status}`);
-        } catch (err) {
-            if (typeof url === "string" && url.startsWith("https://")) {
-                const httpUrl = url.replace("https://", "http://");
-                console.warn(`HTTPS sync request failed, retrying with HTTP fallback: ${httpUrl}`);
-                try {
-                    const response = await originalFetch(httpUrl, options);
-                    if (response.ok) return response;
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                } catch (httpErr) {
-                    throw new Error(`Both HTTPS and HTTP failed. HTTPS error: ${err.message}. HTTP error: ${httpErr.message}`);
-                }
-            }
-            throw err;
+// Override global fetch with native HTTP/HTTPS modules to bypass undici's WebAssembly LVE memory allocation limits
+const http = require('http');
+const https = require('https');
+const { URL } = require('url');
+
+global.fetch = function (url, options = {}) {
+    return new Promise((resolve, reject) => {
+        const parsedUrl = new URL(url);
+        const isHttps = parsedUrl.protocol === 'https:';
+        const client = isHttps ? https : http;
+
+        const reqOptions = {
+            method: options.method || 'GET',
+            headers: options.headers || {}
+        };
+
+        const req = client.request(url, reqOptions, (res) => {
+            const chunks = [];
+            res.on('data', (chunk) => chunks.push(chunk));
+            res.on('end', () => {
+                const body = Buffer.concat(chunks).toString();
+                resolve({
+                    ok: res.statusCode >= 200 && res.statusCode < 300,
+                    status: res.statusCode,
+                    statusText: res.statusMessage,
+                    headers: {
+                        get: (name) => res.headers[name.toLowerCase()]
+                    },
+                    json: async () => JSON.parse(body),
+                    text: async () => body
+                });
+            });
+        });
+
+        req.on('error', (err) => {
+            reject(err);
+        });
+
+        if (options.body) {
+            req.write(typeof options.body === 'string' ? options.body : JSON.stringify(options.body));
         }
-    };
-}
+        req.end();
+    });
+};
 
 const db = require('../config/db.js');
 
@@ -42,6 +62,8 @@ const { syncBranchesController } = require('../controllers/branchController.js')
 const { syncModelGroupsController } = require('../controllers/modelGroupController.js');
 const { syncItemModelsController } = require('../controllers/itemModelController.js');
 const { syncTargetVsAchievementsController } = require('../controllers/targetVsAchievementController.js');
+const { syncBrandWiseSalesController } = require('../controllers/brandWiseSalesController.js');
+
 
 // Helper to wrap express controllers for CLI invocation
 function runController(controllerFn, reqOverride = {}) {
@@ -114,6 +136,10 @@ async function main() {
             console.log('\n--- Syncing Sales Invoices & Returns (Target vs Achievement) ---');
             const salesRes = await runController(syncTargetVsAchievementsController);
             console.log(`Sales & Returns Sync Status [${salesRes.statusCode}]:`, salesRes.data?.message || salesRes.data);
+
+            console.log('\n--- Syncing Brand Wise Sales ---');
+            const brandSalesRes = await runController(syncBrandWiseSalesController);
+            console.log(`Brand Wise Sales Sync Status [${brandSalesRes.statusCode}]:`, brandSalesRes.data?.message || brandSalesRes.data);
         }
 
         console.log(`\n====================================================`);

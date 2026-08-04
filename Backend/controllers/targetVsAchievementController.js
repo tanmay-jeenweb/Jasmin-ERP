@@ -7,6 +7,65 @@ const {
 const { getAllBranches } = require('../models/branchModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
 const db = require('../config/db.js');
+const https = require('https');
+const http = require('http');
+
+// Native fetch using Node.js https/http — avoids undici WebAssembly which
+// crashes on CloudLinux/LVE shared hosting ("Out of memory: Cannot allocate Wasm memory").
+function nativeFetch(url, options = {}) {
+    return new Promise((resolve, reject) => {
+        const doRequest = (requestUrl, isRetry) => {
+            const parsedUrl = new URL(requestUrl);
+            const requester = parsedUrl.protocol === 'https:' ? https : http;
+            const reqOptions = {
+                hostname: parsedUrl.hostname,
+                port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+                path: parsedUrl.pathname + parsedUrl.search,
+                method: options.method || 'GET',
+                headers: options.headers || {},
+                rejectUnauthorized: false,
+                timeout: 60000
+            };
+            const req = requester.request(reqOptions, (res) => {
+                let data = '';
+                res.setEncoding('utf8');
+                res.on('data', (chunk) => { data += chunk; });
+                res.on('end', () => {
+                    const status = res.statusCode;
+                    const ok = status >= 200 && status < 300;
+                    resolve({
+                        ok,
+                        status,
+                        statusText: res.statusMessage || String(status),
+                        json: () => Promise.resolve(JSON.parse(data)),
+                        text: () => Promise.resolve(data)
+                    });
+                });
+            });
+            req.on('timeout', () => {
+                req.destroy();
+                if (!isRetry && requestUrl.startsWith('https://')) {
+                    const httpUrl = requestUrl.replace('https://', 'http://');
+                    console.warn(`HTTPS timed out, retrying with HTTP: ${httpUrl}`);
+                    doRequest(httpUrl, true);
+                } else {
+                    reject(new Error(`Request timed out: ${requestUrl}`));
+                }
+            });
+            req.on('error', (err) => {
+                if (!isRetry && requestUrl.startsWith('https://')) {
+                    const httpUrl = requestUrl.replace('https://', 'http://');
+                    console.warn(`HTTPS failed (${err.message}), retrying with HTTP: ${httpUrl}`);
+                    doRequest(httpUrl, true);
+                } else {
+                    reject(new Error(`Request failed: ${err.message}`));
+                }
+            });
+            req.end();
+        };
+        doRequest(url, false);
+    });
+}
 
 // Helper to retrieve allowed branch names for a user based on User Branch Mapping
 const getUserAllowedBranchNames = async (user) => {
@@ -169,6 +228,19 @@ const syncTargetVsAchievementsController = async (req, res) => {
         const addedBy = req.user.id;
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
 
+        // Self-heal/ensure item_code column exists
+        try {
+            const [cols] = await db.execute("SHOW COLUMNS FROM sales_invoice_cache LIKE 'item_code'");
+            if (cols.length === 0) {
+                console.log("Migrating (Controller): Adding item_code to sales_invoice_cache...");
+                await db.execute("ALTER TABLE sales_invoice_cache ADD COLUMN item_code VARCHAR(100) DEFAULT NULL AFTER branch_name");
+                console.log("✅ Migrated (Controller): item_code column added.");
+            }
+        } catch (migrationError) {
+            console.error("Controller migration check failed:", migrationError.message);
+        }
+
+
         // 1. Determine target date (default to current local date)
         let targetYear, targetMonth, targetDay;
         if (req.body.date) {
@@ -220,7 +292,7 @@ const syncTargetVsAchievementsController = async (req, res) => {
 
         // 2. Fetch invoice details from external API for only the last 5 days
         const apiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetExtendedInvoiceDetails?CompanyCode=JITPL&InvoiceStartDate=${syncStartDateStr}&InvoiceEndDate=${syncEndDateStr}&SalespersonCode=0`;
-        const response = await fetch(apiUrl, {
+        const response = await nativeFetch(apiUrl, {
             method: 'GET',
             headers: {
                 'userid': process.env.MODEL_API_USERID || 'WebSite',
@@ -241,7 +313,7 @@ const syncTargetVsAchievementsController = async (req, res) => {
 
         // 2b. Fetch sales return details from external API for only the last 5 days
         const srnApiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetExtendedSalesReturnDetails?CompanyCode=JITPL&SRNStartDate=${syncStartDateStr}&SRNEndDate=${syncEndDateStr}&BranchCode=0&SalespersonCode=0`;
-        const srnResponse = await fetch(srnApiUrl, {
+        const srnResponse = await nativeFetch(srnApiUrl, {
             method: 'GET',
             headers: {
                 'userid': process.env.MODEL_API_USERID || 'WebSite',
@@ -373,6 +445,87 @@ const syncTargetVsAchievementsController = async (req, res) => {
             connection.release();
         }
 
+        // Also upsert the fresh 5-day data into sales_invoice_cache so MTD/LMTD
+        // calculations (which read from sales_invoice_cache) stay current.
+        if (insertValues.length > 0) {
+            const cacheInvoiceValues = insertValues.map(row => {
+                const itemDesc = row[5] || '';
+                const parts = itemDesc.split(':');
+                let itemModelName = itemDesc;
+                if (parts.length > 1) {
+                    const lastPart = parts[parts.length - 1].trim().toUpperCase();
+                    if (allowedProductTypes.includes(lastPart)) {
+                        itemModelName = parts.slice(0, parts.length - 1).join(':').trim();
+                    }
+                }
+                return [
+                    row[0], // invoice_no
+                    row[1], // invoice_date
+                    row[2], // branch_code
+                    row[3], // branch_name
+                    row[4], // item_code
+                    itemModelName,
+                    row[6], // qty
+                    row[7], // net_amount as amount
+                    'INVOICE'
+                ];
+            });
+            await db.query(`
+                INSERT INTO sales_invoice_cache
+                    (invoice_no, invoice_date, branch_code, branch_name, item_code, item_model_name, qty, amount, record_type)
+                VALUES ?
+                ON DUPLICATE KEY UPDATE
+                    invoice_date = VALUES(invoice_date),
+                    branch_code = VALUES(branch_code),
+                    branch_name = VALUES(branch_name),
+                    item_code = VALUES(item_code),
+                    item_model_name = VALUES(item_model_name),
+                    qty = VALUES(qty),
+                    amount = VALUES(amount),
+                    record_type = VALUES(record_type)
+            `, [cacheInvoiceValues]);
+            console.log(`Upserted ${cacheInvoiceValues.length} fresh invoice items into sales_invoice_cache.`);
+        }
+        if (srnInsertValues.length > 0) {
+            const cacheReturnValues = srnInsertValues.map(row => {
+                const itemDesc = row[5] || '';
+                const parts = itemDesc.split(':');
+                let itemModelName = itemDesc;
+                if (parts.length > 1) {
+                    const lastPart = parts[parts.length - 1].trim().toUpperCase();
+                    if (allowedProductTypes.includes(lastPart)) {
+                        itemModelName = parts.slice(0, parts.length - 1).join(':').trim();
+                    }
+                }
+                return [
+                    row[0], // sales_return_no as invoice_no
+                    row[1], // sales_return_date as invoice_date
+                    row[2], // branch_code
+                    row[3], // branch_name
+                    row[4], // item_code
+                    itemModelName,
+                    row[6], // qty
+                    row[7], // net_amount as amount
+                    'RETURN'
+                ];
+            });
+            await db.query(`
+                INSERT INTO sales_invoice_cache
+                    (invoice_no, invoice_date, branch_code, branch_name, item_code, item_model_name, qty, amount, record_type)
+                VALUES ?
+                ON DUPLICATE KEY UPDATE
+                    invoice_date = VALUES(invoice_date),
+                    branch_code = VALUES(branch_code),
+                    branch_name = VALUES(branch_name),
+                    item_code = VALUES(item_code),
+                    item_model_name = VALUES(item_model_name),
+                    qty = VALUES(qty),
+                    amount = VALUES(amount),
+                    record_type = VALUES(record_type)
+            `, [cacheReturnValues]);
+            console.log(`Upserted ${cacheReturnValues.length} fresh return items into sales_invoice_cache.`);
+        }
+
         // 3. Load branches to map branch codes to names
         const branches = await getAllBranches();
         const branchNameLookup = {};
@@ -407,26 +560,29 @@ const syncTargetVsAchievementsController = async (req, res) => {
             };
         }
 
-        // 4. Query local cache range: firstDayLastMonth to targetDate
+        // 4. Query sales_invoice_cache (full historical data) for MTD/LMTD range
+        // This table contains all data from the populate script + freshly synced data above.
         const startDateStr = formatToDbDateStr(firstDayLastMonth);
         const endDateStr = formatToDbDateStr(targetDate);
-        console.log(`Querying local cache range: ${startDateStr} to ${endDateStr}`);
+        console.log(`Querying sales_invoice_cache range: ${startDateStr} to ${endDateStr}`);
 
         const [dbRows] = await db.execute(
-            `SELECT branch_code, branch_name, invoice_date, qty, net_amount 
-             FROM synced_invoice_items 
-             WHERE invoice_date BETWEEN ? AND ?`,
+            `SELECT branch_code, branch_name, invoice_date, qty, amount AS net_amount
+             FROM sales_invoice_cache
+             WHERE record_type = 'INVOICE'
+               AND invoice_date BETWEEN ? AND ?`,
             [startDateStr, endDateStr]
         );
-        console.log(`Retrieved ${dbRows.length} cached item rows from local database.`);
+        console.log(`Retrieved ${dbRows.length} invoice rows from sales_invoice_cache.`);
 
         const [dbSrnRows] = await db.execute(
-            `SELECT branch_code, branch_name, sales_return_date, qty, net_amount 
-             FROM synced_sales_return_items 
-             WHERE sales_return_date BETWEEN ? AND ?`,
+            `SELECT branch_code, branch_name, invoice_date AS sales_return_date, qty, amount AS net_amount
+             FROM sales_invoice_cache
+             WHERE record_type = 'RETURN'
+               AND invoice_date BETWEEN ? AND ?`,
             [startDateStr, endDateStr]
         );
-        console.log(`Retrieved ${dbSrnRows.length} cached sales return rows from local database.`);
+        console.log(`Retrieved ${dbSrnRows.length} return rows from sales_invoice_cache.`);
 
         // Aggregate data
         const ftdYYYYMMDD = formatToYYYYMMDD(targetDate);
@@ -598,7 +754,8 @@ const syncTargetVsAchievementsController = async (req, res) => {
         console.error('Error syncing target vs achievements:', error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error while syncing achievements'
+            message: 'Internal server error while syncing achievements',
+            error: error.message || String(error)
         });
     }
 };

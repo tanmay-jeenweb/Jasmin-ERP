@@ -43,6 +43,18 @@ function DetailModal({ isOpen, row, onClose }) {
         model_group_master: "Model Group Master",
         support_master: "Support Master",
         alert_master: "Alert Master",
+        branch_master: "Branch Master",
+        user_branch_mapping: "User Branch Mapping",
+        variation_master: "Pricing Formula Master",
+        price_list: "Price List",
+        price_list_report: "Price List Report",
+        landing_type_master: "Landing Type Master",
+        target_vs_achievement: "Target vs Achievement",
+        stock_vs_cash_deposit: "Stock vs Cash Deposit",
+        offer_master: "Offers Master",
+        finance_brand_mapping: "Finance Brand Mapping",
+        finance_brand_report: "Finance Brand Report",
+        activity_report: "Activity Log Report"
       };
 
       const PERM_LABELS = { canRead: "Read", canWrite: "Write / Approval", canUpdate: "Update", canDelete: "Delete" };

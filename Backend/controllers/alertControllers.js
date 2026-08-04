@@ -8,6 +8,7 @@ const {
     toggleAlertActive
 } = require("../models/alertModel.js");
 const { getFileUrl } = require("../config/uploadConfig.js");
+const { createAuditLog } = require("../models/auditLogModel.js");
 
 const createAlertController = async (req, res) => {
     try {
@@ -21,6 +22,22 @@ const createAlertController = async (req, res) => {
 
         const imagePath = req.file ? req.file.filename : null;
         const result = await createAlert(title, description, imagePath);
+
+        try {
+            const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+            const afterData = await getAlertById(result.insertId);
+            await createAuditLog(
+                req.user.id,
+                req.user?.name || req.user?.username || 'Unknown',
+                deviceId,
+                'Alert Master',
+                'created',
+                null,
+                afterData
+            );
+        } catch (auditErr) {
+            console.error("Failed to write audit log for alert creation:", auditErr);
+        }
 
         return res.status(201).json({
             success: true,
@@ -90,6 +107,12 @@ const updateAlertController = async (req, res) => {
             });
         }
 
+        const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+        const beforeData = await getAlertById(id);
+        if (!beforeData) {
+            return res.status(404).json({ success: false, message: "Alert not found." });
+        }
+
         // Determine if image should change
         let newImagePath;
         if (req.file) {
@@ -103,6 +126,21 @@ const updateAlertController = async (req, res) => {
         const isActive = active === "true" || active === true || active === "1" || active === 1;
 
         await updateAlert(id, title, description, newImagePath, isActive);
+
+        try {
+            const afterData = await getAlertById(id);
+            await createAuditLog(
+                req.user.id,
+                req.user?.name || req.user?.username || 'Unknown',
+                deviceId,
+                'Alert Master',
+                'updated',
+                beforeData,
+                afterData
+            );
+        } catch (auditErr) {
+            console.error("Failed to write audit log for alert update:", auditErr);
+        }
 
         return res.status(200).json({
             success: true,
@@ -120,7 +158,27 @@ const updateAlertController = async (req, res) => {
 const deleteAlertController = async (req, res) => {
     try {
         const { id } = req.params;
+        const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+        const beforeData = await getAlertById(id);
+        if (!beforeData) {
+            return res.status(404).json({ success: false, message: "Alert not found." });
+        }
+
         await deleteAlert(id);
+
+        try {
+            await createAuditLog(
+                req.user.id,
+                req.user?.name || req.user?.username || 'Unknown',
+                deviceId,
+                'Alert Master',
+                'deleted',
+                beforeData,
+                null
+            );
+        } catch (auditErr) {
+            console.error("Failed to write audit log for alert deletion:", auditErr);
+        }
 
         return res.status(200).json({
             success: true,
@@ -140,8 +198,29 @@ const toggleAlertActiveController = async (req, res) => {
         const { id } = req.params;
         const { active } = req.body;
 
+        const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+        const beforeData = await getAlertById(id);
+        if (!beforeData) {
+            return res.status(404).json({ success: false, message: "Alert not found." });
+        }
+
         const isActive = active === "true" || active === true || active === "1" || active === 1;
         await toggleAlertActive(id, isActive);
+
+        try {
+            const afterData = await getAlertById(id);
+            await createAuditLog(
+                req.user.id,
+                req.user?.name || req.user?.username || 'Unknown',
+                deviceId,
+                'Alert Master',
+                'updated',
+                beforeData,
+                afterData
+            );
+        } catch (auditErr) {
+            console.error("Failed to write audit log for alert toggle:", auditErr);
+        }
 
         return res.status(200).json({
             success: true,
