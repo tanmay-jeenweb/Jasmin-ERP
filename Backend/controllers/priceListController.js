@@ -14,7 +14,7 @@ const getPriceListDataController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Price List format not found' });
         }
 
-        const hasAccess = await checkUserStateAccess(req.user, variation.state_id, variation.state_name);
+        const hasAccess = await checkUserStateAccess(req.user, variation.state_ids || variation.state_id, variation.state_name);
         if (!hasAccess) {
             return res.status(403).json({
                 success: false,
@@ -215,7 +215,7 @@ const importPriceListController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Price List format not found' });
         }
 
-        const hasAccess = await checkUserStateAccess(req.user, variation.state_id, variation.state_name);
+        const hasAccess = await checkUserStateAccess(req.user, variation.state_ids || variation.state_id, variation.state_name);
         if (!hasAccess) {
             return res.status(403).json({
                 success: false,
@@ -275,7 +275,7 @@ const getPriceListReportController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Price List format not found' });
         }
 
-        const hasAccess = await checkUserStateAccess(req.user, variation.state_id, variation.state_name);
+        const hasAccess = await checkUserStateAccess(req.user, variation.state_ids || variation.state_id, variation.state_name);
         if (!hasAccess) {
             return res.status(403).json({
                 success: false,
@@ -513,7 +513,7 @@ const getHistoryTimestampsController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Price List format not found' });
         }
 
-        const hasAccess = await checkUserStateAccess(req.user, variation.state_id, variation.state_name);
+        const hasAccess = await checkUserStateAccess(req.user, variation.state_ids || variation.state_id, variation.state_name);
         if (!hasAccess) {
             return res.status(403).json({
                 success: false,

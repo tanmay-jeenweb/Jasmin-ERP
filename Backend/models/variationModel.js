@@ -16,6 +16,7 @@ const createVariationTable = async () => {
         CREATE TABLE IF NOT EXISTS variation_master (
             id INT AUTO_INCREMENT PRIMARY KEY,
             state_id INT NOT NULL,
+            state_ids JSON NULL,
             format_name VARCHAR(255) NOT NULL,
             columns JSON NOT NULL,
             brand_configs JSON NULL,
@@ -40,6 +41,12 @@ const createVariationTable = async () => {
         if (!deletedAtCol || deletedAtCol.length === 0) {
             console.log("Migrating variation_master schema: adding deleted_at column...");
             await db.execute(`ALTER TABLE variation_master ADD COLUMN deleted_at TIMESTAMP NULL DEFAULT NULL`);
+        }
+        const [stateIdsCol] = await db.execute(`SHOW COLUMNS FROM variation_master LIKE 'state_ids'`);
+        if (!stateIdsCol || stateIdsCol.length === 0) {
+            console.log("Migrating variation_master schema: adding state_ids column...");
+            await db.execute(`ALTER TABLE variation_master ADD COLUMN state_ids JSON NULL`);
+            await db.execute(`UPDATE variation_master SET state_ids = JSON_ARRAY(state_id) WHERE state_ids IS NULL`);
         }
 
         const [columnsInfo] = await db.execute(`SHOW COLUMNS FROM variation_master LIKE 'brands'`);
@@ -238,10 +245,41 @@ const dropFormatTable = async (variationId) => {
     console.log(`Dropped dynamic tables: ${tableName}, ${historyTableName}`);
 };
 
-const createVariation = async (stateId, formatName, columns, brandConfigs, addedBy, deviceId) => {
+const mapVariationStates = async (variations) => {
+    const [states] = await db.execute("SELECT id, name FROM state_master");
+    const stateMap = new Map(states.map(s => [s.id, s.name]));
+
+    const processVariation = (v) => {
+        if (!v) return null;
+        let stateIds = [];
+        if (v.state_ids) {
+            try {
+                stateIds = typeof v.state_ids === 'string' ? JSON.parse(v.state_ids) : v.state_ids;
+            } catch (e) {
+                stateIds = [];
+            }
+        }
+        if (!Array.isArray(stateIds) || stateIds.length === 0) {
+            stateIds = v.state_id ? [v.state_id] : [];
+        }
+
+        const names = stateIds.map(id => stateMap.get(id)).filter(Boolean);
+        v.state_ids = stateIds;
+        v.state_name = names.join(", ") || v.state_name || "Unknown";
+        return v;
+    };
+
+    if (Array.isArray(variations)) {
+        return variations.map(processVariation);
+    } else {
+        return processVariation(variations);
+    }
+};
+
+const createVariation = async (stateId, formatName, columns, brandConfigs, addedBy, deviceId, stateIds) => {
     const query = `
-        INSERT INTO variation_master (state_id, format_name, columns, brand_configs, added_by, device_id)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO variation_master (state_id, format_name, columns, brand_configs, added_by, device_id, state_ids)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
     const [result] = await db.execute(query, [
         stateId,
@@ -249,7 +287,8 @@ const createVariation = async (stateId, formatName, columns, brandConfigs, added
         JSON.stringify(columns),
         brandConfigs ? JSON.stringify(brandConfigs) : null,
         addedBy,
-        deviceId
+        deviceId,
+        stateIds ? JSON.stringify(stateIds) : JSON.stringify([stateId])
     ]);
 
     const insertedId = result.insertId;
@@ -270,6 +309,7 @@ const getAllVariations = async (includeDeleted = false) => {
         SELECT
             vm.id,
             vm.state_id,
+            vm.state_ids,
             sm.name AS state_name,
             vm.format_name,
             vm.brand_configs,
@@ -286,7 +326,7 @@ const getAllVariations = async (includeDeleted = false) => {
         ORDER BY vm.timestamp DESC
     `;
     const [results] = await db.execute(query);
-    return results;
+    return await mapVariationStates(results);
 };
 
 const getVariationById = async (id) => {
@@ -294,6 +334,7 @@ const getVariationById = async (id) => {
         SELECT
             vm.id,
             vm.state_id,
+            vm.state_ids,
             sm.name AS state_name,
             vm.format_name,
             vm.brand_configs,
@@ -308,10 +349,11 @@ const getVariationById = async (id) => {
         WHERE vm.id = ?
     `;
     const [rows] = await db.execute(query, [id]);
-    return rows[0] || null;
+    if (!rows[0]) return null;
+    return (await mapVariationStates(rows))[0];
 };
 
-const updateVariation = async (id, stateId, formatName, newColumns, brandConfigs) => {
+const updateVariation = async (id, stateId, formatName, newColumns, brandConfigs, stateIds) => {
     // Get old columns to preserve soft deleted columns
     const [rows] = await db.execute("SELECT columns FROM variation_master WHERE id = ?", [id]);
     const oldColumns = rows[0] && rows[0].columns
@@ -334,7 +376,7 @@ const updateVariation = async (id, stateId, formatName, newColumns, brandConfigs
 
     const query = `
         UPDATE variation_master
-        SET state_id = ?, format_name = ?, columns = ?, brand_configs = ?
+        SET state_id = ?, format_name = ?, columns = ?, brand_configs = ?, state_ids = ?
         WHERE id = ?
     `;
     const [result] = await db.execute(query, [
@@ -342,6 +384,7 @@ const updateVariation = async (id, stateId, formatName, newColumns, brandConfigs
         formatName,
         JSON.stringify(mergedColumns),
         brandConfigs ? JSON.stringify(brandConfigs) : null,
+        stateIds ? JSON.stringify(stateIds) : JSON.stringify([stateId]),
         id
     ]);
 

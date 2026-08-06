@@ -41,7 +41,19 @@ export default function PricingFormulaForm() {
     const [landingTypesList, setLandingTypesList] = useState([]);
 
     // Form Fields
-    const [selectedState, setSelectedState] = useState("");
+    const [selectedStates, setSelectedStates] = useState([]);
+    const [isStateDropdownOpen, setIsStateDropdownOpen] = useState(false);
+    const [stateSearchQuery, setStateSearchQuery] = useState("");
+
+    const handleToggleState = (stateId) => {
+        const idStr = stateId.toString();
+        setSelectedStates((prev) =>
+            prev.includes(idStr)
+                ? prev.filter((id) => id !== idStr)
+                : [...prev, idStr]
+        );
+    };
+
     const [formatName, setFormatName] = useState("");
     const [columns, setColumns] = useState([
         { column_id: "F", column_name: "", type: "user input", formula: "", landing_types: ["All"], not_show_in_report: false, isLandingTypeDropdownOpen: false, landingTypeSearch: "" }
@@ -68,7 +80,20 @@ export default function PricingFormulaForm() {
                 const varRes = await getPricingFormulaById(targetId);
                 if (varRes.data?.success && varRes.data.data) {
                     const detail = varRes.data.data;
-                    setSelectedState(detail.state_id ? detail.state_id.toString() : "");
+                    let statesArr = [];
+                    if (detail.state_ids) {
+                        try {
+                            statesArr = typeof detail.state_ids === 'string' ? JSON.parse(detail.state_ids) : detail.state_ids;
+                        } catch (e) {
+                            statesArr = [];
+                        }
+                    }
+                    if (!Array.isArray(statesArr) || statesArr.length === 0) {
+                        if (detail.state_id) {
+                            statesArr = [detail.state_id];
+                        }
+                    }
+                    setSelectedStates(statesArr.map(id => id.toString()));
                     setFormatName(isCopy ? `${detail.format_name || ""} (Copy)`.trim() : (detail.format_name || ""));
 
                     const parsedColumns = Array.isArray(detail.columns)
@@ -132,6 +157,10 @@ export default function PricingFormulaForm() {
                 setColumns((prev) =>
                     prev.map((c) => ({ ...c, isLandingTypeDropdownOpen: false, landingTypeSearch: "" }))
                 );
+            }
+            if (!event.target.closest(".state-select-container")) {
+                setIsStateDropdownOpen(false);
+                setStateSearchQuery("");
             }
         };
         document.addEventListener("mousedown", handleClickOutside);
@@ -397,8 +426,8 @@ export default function PricingFormulaForm() {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!selectedState) {
-            toast.error("Please select a State.");
+        if (selectedStates.length === 0) {
+            toast.error("Please select at least one State.");
             return;
         }
         if (!formatName.trim()) {
@@ -436,7 +465,8 @@ export default function PricingFormulaForm() {
         setSaving(true);
         try {
             const payload = {
-                stateId: parseInt(selectedState),
+                stateId: parseInt(selectedStates[0]),
+                stateIds: selectedStates.map((id) => parseInt(id)),
                 formatName: formatName.trim(),
                 columns: columns.map((c) => ({
                     column_id: c.column_id,
@@ -526,21 +556,120 @@ export default function PricingFormulaForm() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                    State <span className="text-rose-500">*</span>
+                                    States <span className="text-rose-500">*</span>
                                 </label>
-                                <select
-                                    value={selectedState}
-                                    onChange={(e) => setSelectedState(e.target.value)}
-                                    required
-                                    className="block w-full px-3.5 py-2.5 border border-slate-300 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-slate-800"
-                                >
-                                    <option value="">Select State</option>
-                                    {statesList.map((state) => (
-                                        <option key={state.id} value={state.id}>
-                                            {state.name}
-                                        </option>
-                                    ))}
-                                </select>
+                                <div className="relative state-select-container">
+                                    <div
+                                        onClick={() => setIsStateDropdownOpen(!isStateDropdownOpen)}
+                                        className="min-h-[42px] w-full px-3.5 py-2 border border-slate-300 bg-white rounded-lg cursor-pointer flex flex-wrap items-center gap-1.5 text-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500"
+                                    >
+                                        {selectedStates.length === 0 ? (
+                                            <span className="text-slate-400">Select States...</span>
+                                        ) : (
+                                            selectedStates.map((id) => {
+                                                const stateObj = statesList.find((s) => s.id.toString() === id);
+                                                return (
+                                                    <span
+                                                        key={id}
+                                                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200"
+                                                    >
+                                                        {stateObj ? stateObj.name : id}
+                                                        <span
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleToggleState(id);
+                                                            }}
+                                                            className="hover:text-indigo-900 cursor-pointer font-bold ml-0.5 text-sm"
+                                                        >
+                                                            ×
+                                                        </span>
+                                                    </span>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+
+                                    {isStateDropdownOpen && (
+                                        <div className="absolute z-40 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-y-auto p-2">
+                                            <input
+                                                type="text"
+                                                placeholder="Search state..."
+                                                value={stateSearchQuery}
+                                                onChange={(e) => setStateSearchQuery(e.target.value)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="w-full px-2.5 py-1.5 mb-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                            />
+                                            <div className="flex justify-between px-2 mb-2 pb-1.5 border-b border-slate-100">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const filtered = statesList.filter((s) =>
+                                                            s.name.toLowerCase().includes(stateSearchQuery.toLowerCase())
+                                                        );
+                                                        setSelectedStates((prev) => {
+                                                            const newStates = [...prev];
+                                                            filtered.forEach((s) => {
+                                                                const idStr = s.id.toString();
+                                                                if (!newStates.includes(idStr)) newStates.push(idStr);
+                                                            });
+                                                            return newStates;
+                                                        });
+                                                    }}
+                                                    className="text-[10px] font-bold text-indigo-650 hover:underline cursor-pointer"
+                                                >
+                                                    Select All
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const filtered = statesList.filter((s) =>
+                                                            s.name.toLowerCase().includes(stateSearchQuery.toLowerCase())
+                                                        );
+                                                        const filteredIds = filtered.map((s) => s.id.toString());
+                                                        setSelectedStates((prev) =>
+                                                            prev.filter((id) => !filteredIds.includes(id))
+                                                        );
+                                                    }}
+                                                    className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
+                                                >
+                                                    Clear All
+                                                </button>
+                                            </div>
+                                            {statesList.filter((s) =>
+                                                s.name.toLowerCase().includes(stateSearchQuery.toLowerCase())
+                                            ).length === 0 ? (
+                                                <div className="p-2 text-xs text-slate-400 text-center">
+                                                    No matching states
+                                                </div>
+                                            ) : (
+                                                statesList
+                                                    .filter((s) =>
+                                                        s.name.toLowerCase().includes(stateSearchQuery.toLowerCase())
+                                                    )
+                                                    .map((state) => {
+                                                        const isSelected = selectedStates.includes(state.id.toString());
+                                                        return (
+                                                            <div
+                                                                key={state.id}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleToggleState(state.id);
+                                                                }}
+                                                                className={`flex items-center justify-between px-3 py-1.5 text-xs rounded cursor-pointer ${
+                                                                    isSelected ? "bg-indigo-50 text-indigo-700 font-semibold" : "hover:bg-slate-50 text-slate-700"
+                                                                }`}
+                                                            >
+                                                                <span>{state.name}</span>
+                                                                {isSelected && <span className="font-bold">✓</span>}
+                                                            </div>
+                                                        );
+                                                    })
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             <div>
