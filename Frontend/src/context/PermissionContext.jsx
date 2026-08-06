@@ -47,7 +47,7 @@ export function PermissionProvider({ children }) {
 
     useEffect(() => {
         fetchPermissions();
-        
+
         // Listen for storage or custom events for login/logout
         const handleStorageChange = () => {
             fetchPermissions();

@@ -17,6 +17,11 @@ const createUsersTable = async () => {
             device_id VARCHAR(255) DEFAULT NULL,
             modules JSON DEFAULT NULL,
             active BOOLEAN DEFAULT TRUE,
+            state JSON DEFAULT NULL,
+            city VARCHAR(255) DEFAULT NULL,
+            branch JSON DEFAULT NULL,
+            product_type JSON DEFAULT NULL,
+            landing_type JSON DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ON UPDATE CURRENT_TIMESTAMP
@@ -49,6 +54,30 @@ const createUsersTable = async () => {
         {
             name: 'active',
             query: 'ALTER TABLE users ADD COLUMN active BOOLEAN DEFAULT TRUE'
+        },
+        {
+            name: 'state',
+            query: 'ALTER TABLE users ADD COLUMN state JSON DEFAULT NULL'
+        },
+        {
+            name: 'city',
+            query: 'ALTER TABLE users ADD COLUMN city VARCHAR(255) DEFAULT NULL'
+        },
+        {
+            name: 'branch',
+            query: 'ALTER TABLE users ADD COLUMN branch JSON DEFAULT NULL'
+        },
+        {
+            name: 'product_type',
+            query: 'ALTER TABLE users ADD COLUMN product_type JSON DEFAULT NULL'
+        },
+        {
+            name: 'landing_type',
+            query: 'ALTER TABLE users ADD COLUMN landing_type JSON DEFAULT NULL'
+        },
+        {
+            name: 'brand',
+            query: 'ALTER TABLE users ADD COLUMN brand JSON DEFAULT NULL'
         }
     ];
 
@@ -56,7 +85,35 @@ const createUsersTable = async () => {
         const [rows] = await db.execute(`SHOW COLUMNS FROM users LIKE '${column.name}'`);
         if (rows.length === 0) {
             await db.execute(column.query);
+        } else if (column.name === 'landing_type' && !rows[0].Type.includes('json')) {
+            try {
+                // Safely convert any non-JSON string values to array JSON format (e.g. 'GST DP' -> '["GST DP"]')
+                await db.execute(`
+                    UPDATE users 
+                    SET landing_type = CONCAT('["', REPLACE(landing_type, '"', '\\"'), '"]') 
+                    WHERE landing_type IS NOT NULL AND landing_type != '' AND (JSON_VALID(landing_type) = 0 OR landing_type NOT LIKE '[%')
+                `);
+                await db.execute(`
+                    UPDATE users 
+                    SET landing_type = NULL 
+                    WHERE landing_type = ''
+                `);
+            } catch (err) {
+                console.warn("Could not sanitize landing_type values before conversion:", err.message);
+            }
+            await db.execute('ALTER TABLE users MODIFY COLUMN landing_type JSON DEFAULT NULL');
         }
+    }
+
+    // Migrate existing users without landing_type to default '["All"]'
+    try {
+        await db.execute(`
+            UPDATE users 
+            SET landing_type = '["All"]' 
+            WHERE landing_type IS NULL OR landing_type = '' OR landing_type = '[]'
+        `);
+    } catch (err) {
+        console.warn("Could not migrate null landing_type for existing users:", err.message);
     }
 
     // Add UNIQUE index on username if not already present
@@ -91,13 +148,19 @@ const createUser = async (
     dateOfJoin = null,
     deviceVerificationRequired = true,
     active = true,
-    role = 'user'
+    role = 'user',
+    state = null,
+    city = null,
+    branch = null,
+    productType = null,
+    landingType = null,
+    brand = null
 ) => {
 
     const query = `
         INSERT INTO users
-        (name, username, email, password, user_type_id, mob_no, date_of_join, device_verification_required, active, role)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (name, username, email, password, user_type_id, mob_no, date_of_join, device_verification_required, active, role, state, city, branch, product_type, landing_type, brand)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const [result] = await db.execute(query, [
@@ -110,7 +173,13 @@ const createUser = async (
         dateOfJoin,
         deviceVerificationRequired ? 1 : 0,
         active ? 1 : 0,
-        role
+        role,
+        state ? JSON.stringify(state) : null,
+        city,
+        branch ? JSON.stringify(branch) : null,
+        productType ? JSON.stringify(productType) : null,
+        landingType ? JSON.stringify(landingType) : null,
+        brand ? JSON.stringify(brand) : null
     ]);
 
     return result;
@@ -144,7 +213,8 @@ const getAllUsers = async (includeInactive = false) => {
         SELECT 
             u.id, u.name, u.username, u.email,
             u.user_type_id, u.mob_no, u.date_of_join, u.device_verification_required,
-            ut.type_name AS user_type_name, u.active
+            ut.type_name AS user_type_name, u.active,
+            u.state, u.city, u.branch, u.product_type, u.landing_type, u.brand
         FROM users u
         LEFT JOIN user_types ut ON u.user_type_id = ut.id
         ${whereClause}

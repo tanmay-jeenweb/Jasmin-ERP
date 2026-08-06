@@ -23,6 +23,41 @@ const { createUserDevicesTable } = require("./models/deviceModel.js");
 const { createMobileBrandsTable } = require("./models/mobileBrandModel.js");
 const { createBankTable } = require("./models/bankModel.js");
 const { createFinanceMachineTable } = require("./models/financeMachineModel.js");
+const { createStateTable } = require("./models/stateModel.js");
+const stateRoutes = require("./routes/stateRoutes.js");
+const { createSupportTable } = require("./models/supportModel.js");
+const supportRoutes = require("./routes/supportRoutes.js");
+const { createProductTypeTable } = require("./models/productTypeModel.js");
+const productTypeRoutes = require("./routes/productTypeRoutes.js");
+const { createItemModelsTable } = require("./models/itemModelModel.js");
+const itemModelRoutes = require("./routes/itemModelRoutes.js");
+const { createModelGroupsTable } = require("./models/modelGroupModel.js");
+const modelGroupRoutes = require("./routes/modelGroupRoutes.js");
+const { createBranchTable } = require("./models/branchModel.js");
+const branchRoutes = require("./routes/branchRoutes.js");
+const { createBranchFinanceCodeTables } = require("./models/branchFinanceModel.js");
+const branchFinanceRoutes = require("./routes/branchFinanceRoutes.js");
+const { createOffersTable } = require("./models/offerModel.js");
+const offerRoutes = require("./routes/offerRoutes.js");
+const { createTargetVsAchievementsTable } = require("./models/targetVsAchievementModel.js");
+const targetVsAchievementRoutes = require("./routes/targetVsAchievementRoutes.js");
+const { createStockCashDepositTable } = require("./models/stockCashDepositModel.js");
+const stockCashDepositRoutes = require("./routes/stockCashDepositRoutes.js");
+const { createUserBranchMappingsTable } = require("./models/userBranchMappingModel.js");
+const userBranchMappingRoutes = require("./routes/userBranchMappingRoutes.js");
+const brandWiseSalesRoutes = require("./routes/brandWiseSalesRoutes.js");
+const { createAlertsTable } = require("./models/alertModel.js");
+const alertRoutes = require("./routes/alertRoutes.js");
+const { createBranchBrandFinanceMappingTable } = require("./models/branchBrandFinanceMappingModel.js");
+const branchBrandFinanceMappingRoutes = require("./routes/branchBrandFinanceMappingRoutes.js");
+const branchBrandFinanceReportRoutes = require("./routes/branchBrandFinanceReportRoutes.js");
+const { createVariationTable } = require("./models/variationModel.js");
+const variationRoutes = require("./routes/variationRoutes.js");
+const priceListRoutes = require("./routes/priceListRoutes.js");
+const { createLandingTypeTable } = require("./models/landingTypeModel.js");
+const landingTypeRoutes = require("./routes/landingTypeRoutes.js");
+const { createStockCacheTable } = require("./models/stockCacheModel.js");
+
 
 
 const app = express();
@@ -37,7 +72,13 @@ const allowedOrigins = [
     "http://erp.jasminmobile.com",
     "https://www.erp.jasminmobile.com",
     "http://www.erp.jasminmobile.com",
-    process.env.FRONTEND_URL
+    "https://interlink.jasminmobile.com",
+    "http://interlink.jasminmobile.com",
+    "https://www.interlink.jasminmobile.com",
+    "http://www.interlink.jasminmobile.com",
+    process.env.FRONTEND_URL,
+    process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/^https:/, "http:") : null,
+    process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/^http:/, "https:") : null
 ].filter(Boolean);
 
 app.use(cors({
@@ -46,7 +87,8 @@ app.use(cors({
     allowedHeaders: ["Content-Type", "Authorization", "X-HTTP-Method-Override", "x-device-id", "device-id"],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
 }));
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(cookieParser());
 
 // Serve uploaded files statically if set to express
@@ -70,6 +112,25 @@ app.use(["/api/usertypes", "/usertypes"], userTypeMasterRoutes);
 app.use(["/api/mobilebrands", "/mobilebrands"], mobileBrandRoutes);
 app.use(["/api/banks", "/banks"], bankRoutes);
 app.use(["/api/financemachines", "/financemachines"], financeMachineRoutes);
+app.use(["/api/states", "/states"], stateRoutes);
+app.use(["/api/support", "/support"], supportRoutes);
+app.use(["/api/producttypes", "/producttypes"], productTypeRoutes);
+app.use(["/api/itemmodels", "/itemmodels"], itemModelRoutes);
+app.use(["/api/modelgroups", "/modelgroups"], modelGroupRoutes);
+app.use(["/api/branches", "/branches"], branchRoutes);
+app.use(["/api/branches/finance-codes", "/branches/finance-codes"], branchFinanceRoutes);
+app.use(["/api/offers", "/offers"], offerRoutes);
+app.use(["/api/target-vs-achievement", "/target-vs-achievement"], targetVsAchievementRoutes);
+app.use(["/api/stock-cash-deposit", "/stock-cash-deposit"], stockCashDepositRoutes);
+app.use(["/api/user-branch-mappings", "/user-branch-mappings", "/api/user-branch-mapping", "/user-branch-mapping"], userBranchMappingRoutes);
+app.use(["/api/brand-wise-sales", "/brand-wise-sales"], brandWiseSalesRoutes);
+app.use(["/api/alerts", "/alerts"], alertRoutes);
+app.use(["/api/branch-brand-finance-mapping", "/branch-brand-finance-mapping"], branchBrandFinanceMappingRoutes);
+app.use(["/api/reports", "/reports"], branchBrandFinanceReportRoutes);
+app.use(["/api/variations", "/variations"], variationRoutes);
+app.use(["/api/price-lists", "/price-lists"], priceListRoutes);
+app.use(["/api/landingtypes", "/landingtypes"], landingTypeRoutes);
+
 
 
 // Global 404 handler
@@ -97,6 +158,24 @@ const startServer = async () => {
         await createMobileBrandsTable();
         await createBankTable();
         await createFinanceMachineTable();
+        await createStateTable();
+        await createSupportTable();
+        await createProductTypeTable();
+        await createItemModelsTable();
+        await createModelGroupsTable();
+        await createBranchTable();
+        await createBranchFinanceCodeTables();
+        await createOffersTable();
+        await createTargetVsAchievementsTable();
+        await createStockCashDepositTable();
+        await createUserBranchMappingsTable();
+        await createAlertsTable();
+        await createBranchBrandFinanceMappingTable();
+        await createVariationTable();
+        await createLandingTypeTable();
+        await createStockCacheTable();
+
+
 
         console.log("All database tables are initialized and ready.");
 

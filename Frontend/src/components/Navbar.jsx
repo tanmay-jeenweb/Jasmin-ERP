@@ -2,6 +2,8 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { logoutUser } from "../api/authApi";
 import { usePermission } from "../context/PermissionContext";
+import { getOffers } from "../api/offerApi";
+import { getVariations } from "../api/variationApi";
 
 const logo = "/Jasmin-Logo.png";
 
@@ -9,9 +11,95 @@ export default function Navbar() {
     const navigate = useNavigate();
     const location = useLocation();
     const user = JSON.parse(localStorage.getItem("user") || "{}");
+    const userModules = user.modules || [];
+    const isAdmin = user.role === "admin" || user.role === "super admin";
     const [isOpen, setIsOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const [isReportsOpen, setIsReportsOpen] = useState(false);
+    const [isOffersOpen, setIsOffersOpen] = useState(false);
+    const [isPriceListOpen, setIsPriceListOpen] = useState(false);
+    const [priceFormats, setPriceFormats] = useState([]);
     const { hasPermission } = usePermission();
+    const [runningOffers, setRunningOffers] = useState([]);
+
+    const toggleMastersMenu = () => {
+        setIsOpen(prev => !prev);
+        setIsPriceListOpen(false);
+        setIsOffersOpen(false);
+        setIsReportsOpen(false);
+        setIsProfileOpen(false);
+    };
+
+    const togglePriceListMenu = () => {
+        setIsPriceListOpen(prev => !prev);
+        setIsOpen(false);
+        setIsOffersOpen(false);
+        setIsReportsOpen(false);
+        setIsProfileOpen(false);
+    };
+
+    const toggleOffersMenu = () => {
+        setIsOffersOpen(prev => !prev);
+        setIsOpen(false);
+        setIsPriceListOpen(false);
+        setIsReportsOpen(false);
+        setIsProfileOpen(false);
+    };
+
+    const toggleReportsMenu = () => {
+        setIsReportsOpen(prev => !prev);
+        setIsOpen(false);
+        setIsPriceListOpen(false);
+        setIsOffersOpen(false);
+        setIsProfileOpen(false);
+    };
+
+    const toggleProfileMenu = () => {
+        setIsProfileOpen(prev => !prev);
+        setIsOpen(false);
+        setIsPriceListOpen(false);
+        setIsOffersOpen(false);
+        setIsReportsOpen(false);
+    };
+
+    useEffect(() => {
+        const fetchRunningOffers = async () => {
+            try {
+                const res = await getOffers();
+                if (res.data?.success && Array.isArray(res.data.data)) {
+                    const todayStr = new Date().toISOString().split("T")[0];
+                    const active = res.data.data.filter(o => {
+                        const from = o.from_date ? o.from_date.split("T")[0] : "";
+                        const to = o.to_date ? o.to_date.split("T")[0] : "";
+                        return from && to && from <= todayStr && todayStr <= to;
+                    });
+                    setRunningOffers(active);
+                }
+            } catch (err) {
+                console.error("Failed to fetch running offers:", err);
+            }
+        };
+        fetchRunningOffers();
+    }, []);
+
+    useEffect(() => {
+        const fetchPriceFormats = async () => {
+            try {
+                const res = await getVariations();
+                if (res.data?.success && Array.isArray(res.data.data)) {
+                    setPriceFormats(res.data.data);
+                }
+            } catch (err) {
+                console.error("Failed to fetch price formats:", err);
+            }
+        };
+        const canViewPriceList = isAdmin || hasPermission("price_list", "read");
+        const canViewPriceReport = isAdmin || hasPermission("price_list_report", "read");
+
+        if (canViewPriceList || canViewPriceReport) {
+            fetchPriceFormats();
+        }
+    }, [isAdmin, hasPermission, location.pathname]);
 
     useEffect(() => {
         const handleOutsideClick = (e) => {
@@ -21,10 +109,31 @@ export default function Navbar() {
             if (isProfileOpen && !e.target.closest("#profile-dropdown")) {
                 setIsProfileOpen(false);
             }
+            if (isReportsOpen && !e.target.closest("#reports-dropdown")) {
+                setIsReportsOpen(false);
+            }
+            if (isOffersOpen && !e.target.closest("#offers-dropdown")) {
+                setIsOffersOpen(false);
+            }
+            if (isPriceListOpen && !e.target.closest("#price-list-dropdown")) {
+                setIsPriceListOpen(false);
+            }
         };
         document.addEventListener("click", handleOutsideClick);
         return () => document.removeEventListener("click", handleOutsideClick);
-    }, [isOpen, isProfileOpen]);
+    }, [isOpen, isProfileOpen, isReportsOpen, isOffersOpen, isPriceListOpen]);
+
+    useEffect(() => {
+        setIsOpen(false);
+        setIsProfileOpen(false);
+        setIsReportsOpen(false);
+        setIsOffersOpen(false);
+        setIsPriceListOpen(false);
+    }, [location.pathname]);
+
+    const canSeePriceListTab = isAdmin || hasPermission("price_list", "read") || hasPermission("price_list_report", "read");
+    const canSeePriceListTables = isAdmin || hasPermission("price_list", "read");
+    const canSeePriceListReports = isAdmin || hasPermission("price_list_report", "read");
 
     const handleLogout = async () => {
         try {
@@ -35,12 +144,12 @@ export default function Navbar() {
         localStorage.removeItem("user");
         localStorage.removeItem("token");
         sessionStorage.removeItem("loginTime");
+        sessionStorage.removeItem("alertShown");
         window.dispatchEvent(new Event("auth-change"));
         navigate("/");
     };
 
-    const userModules = user.modules || [];
-    const isAdmin = user.role === "admin" || user.role === "super admin";
+
 
     const allMasters = [
         {
@@ -87,6 +196,87 @@ export default function Navbar() {
             color: "bg-violet-50 text-violet-600 border border-violet-100/50",
             activeColor: "bg-violet-100 text-violet-700",
             desc: "Manage finance machines"
+        },
+        {
+            name: "State Master",
+            path: "/admin/states",
+            masterKey: "state_master",
+            icon: "fa-solid fa-map-location-dot",
+            color: "bg-blue-50 text-blue-600 border border-blue-100/50",
+            activeColor: "bg-blue-100 text-blue-700",
+            desc: "Manage geographic states"
+        },
+        {
+            name: "Landing Type Master",
+            path: "/admin/landing-types",
+            masterKey: "landing_type_master",
+            icon: "fa-solid fa-location-arrow",
+            color: "bg-teal-50 text-teal-600 border border-teal-100/50",
+            activeColor: "bg-teal-100 text-teal-700",
+            desc: "Manage user landing types"
+        },
+        {
+            name: "Pricing Formula Master",
+            path: "/admin/pricing-formulas",
+            masterKey: "variation_master",
+            icon: "fa-solid fa-calculator",
+            color: "bg-purple-50 text-purple-600 border border-purple-100/50",
+            activeColor: "bg-purple-100 text-purple-700",
+            desc: "Manage Excel pricing formula rules"
+        },
+        {
+            name: "Support Master",
+            path: "/admin/support",
+            masterKey: "support_master",
+            icon: "fa-solid fa-headset",
+            color: "bg-indigo-50 text-indigo-600 border border-indigo-100/50",
+            activeColor: "bg-indigo-100 text-indigo-700",
+            desc: "Manage support staff details"
+        },
+        {
+            name: "Product Type Master",
+            path: "/admin/product-types",
+            masterKey: "product_type_master",
+            icon: "fa-solid fa-tags",
+            color: "bg-emerald-50 text-emerald-600 border border-emerald-100/50",
+            activeColor: "bg-emerald-100 text-emerald-700",
+            desc: "Manage product type tags"
+        },
+        {
+            name: "Model Master",
+            path: "/admin/item-models",
+            masterKey: "item_model_master",
+            icon: "fa-solid fa-layer-group",
+            color: "bg-blue-50 text-blue-600 border border-blue-100/50",
+            activeColor: "bg-blue-100 text-blue-700",
+            desc: "Fetch and manage item models"
+        },
+        {
+            name: "Model Group Master",
+            path: "/admin/model-groups",
+            masterKey: "model_group_master",
+            icon: "fa-solid fa-folder-open",
+            color: "bg-teal-50 text-teal-600 border border-teal-100/50",
+            activeColor: "bg-teal-100 text-teal-700",
+            desc: "Fetch and manage model groups"
+        },
+        {
+            name: "Branch Master",
+            path: "/admin/branches",
+            masterKey: "branch_master",
+            icon: "fa-solid fa-store",
+            color: "bg-emerald-50 text-emerald-600 border border-emerald-100/50",
+            activeColor: "bg-emerald-100 text-emerald-700",
+            desc: "Manage branches & franchise stores"
+        },
+        {
+            name: "User Branch Mapping",
+            path: "/admin/user-branch-mapping",
+            masterKey: "user_branch_mapping",
+            icon: "fa-solid fa-code-merge",
+            color: "bg-indigo-50 text-indigo-600 border border-indigo-100/50",
+            activeColor: "bg-indigo-100 text-indigo-700",
+            desc: "Map branches to active users"
         }
     ];
 
@@ -99,22 +289,121 @@ export default function Navbar() {
     });
 
 
+    const allReports = [
+        {
+            name: "Activity Report",
+            path: "/admin/report",
+            icon: "fa-solid fa-chart-line",
+        },
+        {
+            name: "Target vs Achievement",
+            path: "/admin/target-vs-achievement",
+            icon: "fa-solid fa-bullseye",
+        },
+        {
+            name: "ABM wise TvA Report",
+            path: "/admin/abm-wise-tva",
+            icon: "fa-solid fa-ranking-star",
+        },
+        {
+            name: "Stock vs Cash Deposit",
+            path: "/admin/stock-vs-cash-deposit",
+            icon: "fa-solid fa-money-bill-transfer",
+        },
+        {
+            name: "Finance Brand Mapping",
+            path: "/admin/finance-brand-mapping",
+            icon: "fa-solid fa-code-branch",
+        },
+        {
+            name: "Finance & Brand Report",
+            path: "/admin/finance-brand-report",
+            icon: "fa-solid fa-file-invoice",
+        }
+    ];
+
+    const availableReports = allReports.filter(r => {
+        if (r.path === "/admin/target-vs-achievement" || r.path === "/admin/abm-wise-tva") {
+            return isAdmin || hasPermission("target_vs_achievement", "read");
+        }
+        if (r.path === "/admin/stock-vs-cash-deposit") {
+            return isAdmin || hasPermission("stock_vs_cash_deposit", "read");
+        }
+        if (r.path === "/admin/finance-brand-mapping") {
+            return isAdmin || hasPermission("finance_brand_mapping", "read");
+        }
+        if (r.path === "/admin/finance-brand-report") {
+            return isAdmin || hasPermission("finance_brand_report", "read");
+        }
+        if (r.path === "/admin/report") {
+            return isAdmin || hasPermission("activity_report", "read");
+        }
+        return true;
+    });
+
+    let marqueeText = runningOffers.length > 0
+        ? runningOffers.map(o => `🔥 [${o.brand_name}] ${o.offer_type} (Valid: ${new Date(o.from_date).toLocaleDateString()} to ${new Date(o.to_date).toLocaleDateString()})`).join("   |   ")
+        : "";
+
+    // Repeat the text to ensure it's wide enough for a seamless circular loop
+    if (marqueeText) {
+        const base = marqueeText;
+        while (marqueeText.length < 200) {
+            marqueeText += "   |   " + base;
+        }
+    }
+
+
 
     return (
         <nav className="bg-white shadow-sm border-b border-slate-200 flex flex-col relative z-50">
             {/* First Row */}
-            <div className="px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between relative z-40">
-                <div className="flex items-center gap-3">
+            <div className="px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between relative z-40 gap-4">
+                <div className="flex items-center gap-3 shrink-0">
                     <img src={logo} alt="Jasmin Logo" className="h-12 w-auto" />
                 </div>
 
-                <div className="flex items-center gap-6">
+                {/* Continuous Horizontal Scrolling Banner */}
+                {runningOffers.length > 0 && (
+                    <div className="flex-1 max-w-xs md:max-w-lg lg:max-w-2xl xl:max-w-3xl overflow-hidden relative py-1.5 px-4 rounded-full flex items-center">
+                        <style>{`
+                            @keyframes marquee-scroll {
+                                0% { transform: translate3d(0, 0, 0); }
+                                100% { transform: translate3d(-50%, 0, 0); }
+                            }
+                            .marquee-container {
+                                display: flex;
+                                white-space: nowrap;
+                                width: max-content;
+                                animation: marquee-scroll 35s linear infinite;
+                                will-change: transform;
+                            }
+                            .marquee-container:hover {
+                                animation-play-state: paused;
+                            }
+                            .marquee-item {
+                                padding-right: 4rem;
+                            }
+                        `}</style>
+                        {(() => {
+                            const singleUnit = ` :: :: :: OFFERS 📢──★    ${marqueeText}`;
+                            return (
+                                <div className="marquee-container text-[12px] font-bold text-indigo-800">
+                                    <span className="marquee-item">{singleUnit}</span>
+                                    <span className="marquee-item">{singleUnit}</span>
+                                </div>
+                            );
+                        })()}
+                    </div>
+                )}
+
+                <div className="flex items-center gap-6 shrink-0">
 
 
                     {/* Profile Dropdown */}
                     <div className="relative" id="profile-dropdown">
                         <button
-                            onClick={() => setIsProfileOpen(!isProfileOpen)}
+                            onClick={toggleProfileMenu}
                             className="flex items-center gap-2.5 px-3 py-1.5 rounded-full hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all duration-200 cursor-pointer focus:outline-none"
                             title="User menu"
                         >
@@ -194,9 +483,8 @@ export default function Navbar() {
                                 onClick={() => {
                                     navigate("/user/home");
                                 }}
-                                className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-l border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${
-                                    location.pathname === "/user/home" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
-                                }`}
+                                className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-l border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname === "/user/home" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                    }`}
                             >
                                 <span className="flex items-center gap-2.5 truncate mx-auto">
                                     <span className="font-semibold text-white truncate">User Dashboard</span>
@@ -204,14 +492,30 @@ export default function Navbar() {
                             </button>
                         </div>
 
+                        {/* Admin Home Tab */}
+                        {isAdmin && (
+                            <div className="relative">
+                                <button
+                                    onClick={() => {
+                                        navigate("/admin/home");
+                                    }}
+                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname === "/admin/home" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                        }`}
+                                >
+                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                        <span className="font-semibold text-white truncate">Home</span>
+                                    </span>
+                                </button>
+                            </div>
+                        )}
+
                         {/* Masters Dropdown */}
                         {availableMasters.length > 0 && (
                             <div className="relative">
                                 <button
-                                    onClick={() => setIsOpen(!isOpen)}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${
-                                        isOpen ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
-                                    }`}
+                                    onClick={toggleMastersMenu}
+                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isOpen ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                        }`}
                                 >
                                     <span className="flex items-center gap-2.5 truncate mx-auto">
                                         <span className="font-semibold text-white truncate">Masters</span>
@@ -269,21 +573,285 @@ export default function Navbar() {
                             </div>
                         )}
 
-                        {/* Report Tab */}
-                        {isAdmin && (
+                        {/* Price List Dropdown */}
+                        {canSeePriceListTab && (
+                            <div className="relative" id="price-list-dropdown">
+                                <button
+                                    onClick={togglePriceListMenu}
+                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isPriceListOpen || location.pathname.startsWith("/admin/price-list")
+                                        ? "bg-white/15"
+                                        : "bg-[#6804a1] hover:bg-white/5"
+                                        }`}
+                                >
+                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                        <span className="font-semibold text-white truncate">Price List</span>
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            strokeWidth={2.5}
+                                            stroke="currentColor"
+                                            className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-200 ${isPriceListOpen ? "rotate-180 text-white" : ""}`}
+                                        >
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                                        </svg>
+                                    </span>
+                                </button>
+
+                                {isPriceListOpen && (
+                                    <div className={`absolute left-0 top-full mt-1.5 ${canSeePriceListTables && canSeePriceListReports ? "w-[640px]" : "w-80"} bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200`}>
+                                        {priceFormats.length === 0 ? (
+                                            <p className="text-slate-500 text-xs text-center py-2">No formats configured</p>
+                                        ) : (
+                                            <div className={`grid ${canSeePriceListTables && canSeePriceListReports ? "grid-cols-2 divide-x divide-slate-100 gap-4" : "grid-cols-1 gap-3"} max-h-96 overflow-y-auto`}>
+                                                {/* Section 1: Price List Data */}
+                                                {canSeePriceListTables && (
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1 flex items-center gap-1.5">
+                                                            <i className="fa-solid fa-table-list text-indigo-500"></i>
+                                                            Price List Tables
+                                                        </p>
+                                                        <div className="flex flex-col gap-1">
+                                                            {priceFormats.map((f, idx) => {
+                                                                const brandsList = f.brand_configs
+                                                                    ? (typeof f.brand_configs === 'string' ? JSON.parse(f.brand_configs) : f.brand_configs)
+                                                                    : [];
+                                                                const label = f.format_name || `${f.state_name} (${brandsList.join(', ')})`;
+                                                                const path = `/admin/price-list/${f.id}`;
+                                                                const isActive = location.pathname === path;
+                                                                return (
+                                                                    <button
+                                                                        key={idx}
+                                                                        onClick={() => {
+                                                                            navigate(path);
+                                                                            setIsPriceListOpen(false);
+                                                                        }}
+                                                                        className={`relative group flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border border-transparent ${isActive
+                                                                            ? "bg-indigo-50/70 text-indigo-700 font-semibold border-indigo-100/50"
+                                                                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
+                                                                            }`}
+                                                                    >
+                                                                        <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${isActive ? "bg-indigo-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"}`} />
+                                                                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${isActive ? "bg-indigo-100/80 text-indigo-700" : "bg-slate-100/80 text-slate-500 group-hover:scale-105"}`}>
+                                                                            <i className="fa-solid fa-file-invoice-dollar text-xs"></i>
+                                                                        </div>
+                                                                        <div className="flex-1">
+                                                                            <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-indigo-900 font-bold" : "text-slate-800 group-hover:text-slate-950"}`}>
+                                                                                {label}
+                                                                            </p>
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Section 2: Price List Reports */}
+                                                {canSeePriceListReports && (
+                                                    <div className={`flex flex-col gap-1.5 ${canSeePriceListTables ? "pl-4" : ""}`}>
+                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1 flex items-center gap-1.5">
+                                                            <i className="fa-solid fa-chart-pie text-emerald-500"></i>
+                                                            Price List Reports
+                                                        </p>
+                                                        <div className="flex flex-col gap-1">
+                                                            {priceFormats.map((f, idx) => {
+                                                                const brandsList = f.brand_configs
+                                                                    ? (typeof f.brand_configs === 'string' ? JSON.parse(f.brand_configs) : f.brand_configs)
+                                                                    : [];
+                                                                const label = `${f.format_name || f.state_name} Report`;
+                                                                const path = `/admin/price-list-report/${f.id}`;
+                                                                const isActive = location.pathname === path;
+                                                                return (
+                                                                    <button
+                                                                        key={idx}
+                                                                        onClick={() => {
+                                                                            navigate(path);
+                                                                            setIsPriceListOpen(false);
+                                                                        }}
+                                                                        className={`relative group flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border border-transparent ${isActive
+                                                                            ? "bg-emerald-50/70 text-emerald-700 font-semibold border-emerald-100/50"
+                                                                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
+                                                                            }`}
+                                                                    >
+                                                                        <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${isActive ? "bg-emerald-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"}`} />
+                                                                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${isActive ? "bg-emerald-100/80 text-emerald-700" : "bg-slate-100/80 text-slate-500 group-hover:scale-105"}`}>
+                                                                            <i className="fa-solid fa-square-poll-vertical text-xs"></i>
+                                                                        </div>
+                                                                        <div className="flex-1">
+                                                                            <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-emerald-900 font-bold" : "text-slate-800 group-hover:text-slate-950"}`}>
+                                                                                {label}
+                                                                            </p>
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Alert Master Tab */}
+                        {(isAdmin || hasPermission("alert_master", "read")) && (
                             <div className="relative">
                                 <button
                                     onClick={() => {
-                                        navigate("/admin/report");
+                                        navigate("/admin/alerts");
                                     }}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${
-                                        location.pathname.startsWith("/admin/report") ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
-                                    }`}
+                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname === "/admin/alerts" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                        }`}
                                 >
                                     <span className="flex items-center gap-2.5 truncate mx-auto">
-                                        <span className="font-semibold text-white truncate">Report</span>
+                                        <span className="font-semibold text-white truncate">Alert Master</span>
                                     </span>
                                 </button>
+                            </div>
+                        )}
+
+                        {/* Offers Dropdown */}
+                        {(isAdmin || hasPermission("offer_master", "read")) && (
+                            <div className="relative" id="offers-dropdown">
+                                <button
+                                    onClick={toggleOffersMenu}
+                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isOffersOpen || location.pathname.startsWith("/admin/offers")
+                                        ? "bg-white/15"
+                                        : "bg-[#6804a1] hover:bg-white/5"
+                                        }`}
+                                >
+                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                        <span className="font-semibold text-white truncate">Offers</span>
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            strokeWidth={2.5}
+                                            stroke="currentColor"
+                                            className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-200 ${isOffersOpen ? "rotate-180 text-white" : ""}`}
+                                        >
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                                        </svg>
+                                    </span>
+                                </button>
+
+                                {isOffersOpen && (
+                                    <div className="absolute right-0 top-full mt-1.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top-right animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <div className="flex flex-col gap-1">
+                                            {[
+                                                {
+                                                    name: "Offers",
+                                                    path: "/admin/offers",
+                                                    icon: "fa-solid fa-gift",
+                                                },
+                                                {
+                                                    name: "Expired Offers",
+                                                    path: "/admin/offers/expired",
+                                                    icon: "fa-solid fa-calendar-xmark",
+                                                }
+                                            ].map((o, idx) => {
+                                                const isActive = location.pathname === o.path;
+                                                return (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => {
+                                                            navigate(o.path);
+                                                            setIsOffersOpen(false);
+                                                        }}
+                                                        className={`relative group flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border border-transparent ${isActive
+                                                            ? "bg-indigo-50/70 text-indigo-700 font-semibold border-indigo-100/50"
+                                                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
+                                                            }`}
+                                                    >
+                                                        {/* Side Highlight Bar */}
+                                                        <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${isActive ? "bg-indigo-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"
+                                                            }`} />
+
+                                                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${isActive ? "bg-indigo-100/80 text-indigo-700" : "bg-slate-100/80 text-slate-500 group-hover:scale-105"
+                                                            }`}>
+                                                            <i className={`${o.icon} text-xs`}></i>
+                                                        </div>
+
+                                                        <div className="flex-1">
+                                                            <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-indigo-900 font-bold" : "text-slate-800 group-hover:text-slate-950"
+                                                                }`}>
+                                                                {o.name}
+                                                            </p>
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        {/* Reports Dropdown */}
+                        {availableReports.length > 0 && (
+                            <div className="relative" id="reports-dropdown">
+                                <button
+                                    onClick={toggleReportsMenu}
+                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/abm-wise-tva") || location.pathname.startsWith("/admin/stock-vs-cash-deposit") || location.pathname.startsWith("/admin/finance-brand-mapping") || location.pathname.startsWith("/admin/finance-brand-report")
+                                        ? "bg-white/15"
+                                        : "bg-[#6804a1] hover:bg-white/5"
+                                        }`}
+                                >
+                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                        <span className="font-semibold text-white truncate">Reports</span>
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            strokeWidth={2.5}
+                                            stroke="currentColor"
+                                            className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-200 ${isReportsOpen ? "rotate-180 text-white" : ""}`}
+                                        >
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                                        </svg>
+                                    </span>
+                                </button>
+
+                                {isReportsOpen && (
+                                    <div className="absolute right-0 top-full mt-1.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top-right animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <div className="flex flex-col gap-1">
+                                            {availableReports.map((r, idx) => {
+                                                const isActive = location.pathname === r.path;
+                                                return (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => {
+                                                            navigate(r.path);
+                                                            setIsReportsOpen(false);
+                                                        }}
+                                                        className={`relative group flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border border-transparent ${isActive
+                                                            ? "bg-indigo-50/70 text-indigo-700 font-semibold border-indigo-100/50"
+                                                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
+                                                            }`}
+                                                    >
+                                                        {/* Side Highlight Bar */}
+                                                        <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${isActive ? "bg-indigo-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"
+                                                            }`} />
+
+                                                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${isActive ? "bg-indigo-100/80 text-indigo-700" : "bg-slate-100/80 text-slate-500 group-hover:scale-105"
+                                                            }`}>
+                                                            <i className={`${r.icon || "fa-solid fa-folder"} text-xs`}></i>
+                                                        </div>
+
+                                                        <div className="flex-1">
+                                                            <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-indigo-900 font-bold" : "text-slate-800 group-hover:text-slate-950"
+                                                                }`}>
+                                                                {r.name}
+                                                            </p>
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 

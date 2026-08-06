@@ -3,19 +3,29 @@ const db = require('../config/db.js');
 // ─── Masters list (must match frontend) ─────────────────────────────────────
 const MASTERS = [
     { key: 'user_type', label: 'User Type Master' },
-    { key: 'label_master', label: 'Label Master' },
-    { key: 'inquiry_source_master', label: 'Inquiry Source Master' },
-    { key: 'company_brand_master', label: 'Company Brand Master' },
-    { key: 'document_master', label: 'Document Master' },
-    { key: 'team_role_master', label: 'Team Role Master' },
-    { key: 'call_outcome_master', label: 'Call Outcome Master' },
     { key: 'mobile_brand_master', label: 'Brand Master' },
     { key: 'bank_master', label: 'Finance Company Master' },
     { key: 'finance_machine_master', label: 'Finance Machine Master' },
-    { key: 'store_details_approval', label: 'Store Details Approval' },
-    { key: 'deposit_stock_approval', label: 'Deposit & Stock Approval' },
     { key: 'user_master', label: 'User Master' },
     { key: 'device_approval', label: 'Device Approval' },
+    { key: 'state_master', label: 'State Master' },
+    { key: 'product_type_master', label: 'Product Type Master' },
+    { key: 'item_model_master', label: 'Model Master' },
+    { key: 'model_group_master', label: 'Model Group Master' },
+    { key: 'branch_master', label: 'Branch Master' },
+    { key: 'user_branch_mapping', label: 'User Branch Mapping' },
+    { key: 'support_master', label: 'Support Master' },
+    { key: 'alert_master', label: 'Alert Master' },
+    { key: 'variation_master', label: 'Pricing Formula Master' },
+    { key: 'price_list', label: 'Price List' },
+    { key: 'price_list_report', label: 'Price List Report' },
+    { key: 'landing_type_master', label: 'Landing Type Master' },
+    { key: 'target_vs_achievement', label: 'Target vs Achievement' },
+    { key: 'stock_vs_cash_deposit', label: 'Stock vs Cash Deposit' },
+    { key: 'offer_master', label: 'Offers Master' },
+    { key: 'finance_brand_mapping', label: 'Finance Brand Mapping' },
+    { key: 'finance_brand_report', label: 'Finance Brand Report' },
+    { key: 'activity_report', label: 'Activity Log Report' },
 ];
 
 // ─── Table creation ──────────────────────────────────────────────────────────
@@ -25,6 +35,7 @@ const createUserTypesTable = async () => {
         CREATE TABLE IF NOT EXISTS user_types (
             id INT AUTO_INCREMENT PRIMARY KEY,
             type_name VARCHAR(100) NOT NULL UNIQUE,
+            user_role VARCHAR(50) DEFAULT 'VIEWER',
             added_by INT NOT NULL,
             device_id VARCHAR(255),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -33,6 +44,17 @@ const createUserTypesTable = async () => {
     `;
 
     await db.execute(query);
+
+    try {
+        const [rows] = await db.execute("SHOW COLUMNS FROM user_types LIKE 'user_role'");
+        if (rows.length === 0) {
+            await db.execute("ALTER TABLE user_types ADD COLUMN user_role VARCHAR(50) DEFAULT 'VIEWER'");
+            console.log("Added user_role column to user_types");
+        }
+    } catch (err) {
+        console.error("Error checking/adding user_role column:", err.message);
+    }
+
     console.log("User types table ready");
 };
 
@@ -60,8 +82,32 @@ const createUserTypePermissionsTable = async () => {
 
         await db.execute("UPDATE IGNORE user_type_permissions SET master_name = 'worker_employee_type' WHERE master_name = 'operator_type'");
         await db.execute("DELETE FROM user_type_permissions WHERE master_name = 'operator_type'");
-        
-        console.log("✅ Permission keys migrated to worker_employee and worker_employee_type.");
+
+        await db.execute("UPDATE IGNORE user_type_permissions SET master_name = 'user_branch_mapping' WHERE master_name = 'abm_branch_mapping'");
+        await db.execute("DELETE FROM user_type_permissions WHERE master_name = 'abm_branch_mapping'");
+
+        // Seed initial price_list and price_list_report permission rows from variation_master for existing user types
+        await db.execute(`
+            INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete)
+            SELECT user_type_id, 'price_list', can_read, can_write, can_update, can_delete
+            FROM user_type_permissions
+            WHERE master_name = 'variation_master'
+        `);
+        await db.execute(`
+            INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete)
+            SELECT user_type_id, 'price_list_report', can_read, can_write, can_update, can_delete
+            FROM user_type_permissions
+            WHERE master_name = 'variation_master'
+        `);
+
+        // Seed initial stock_vs_cash_deposit permission rows for existing user types
+        await db.execute(`
+            INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete)
+            SELECT id, 'stock_vs_cash_deposit', 0, 0, 0, 0
+            FROM user_types
+        `);
+
+        console.log("✅ Permission keys migrated to worker_employee, worker_employee_type, user_branch_mapping, price_list, price_list_report, and stock_vs_cash_deposit.");
     } catch (err) {
         console.error("Migration of user permissions failed:", err.message);
     }
@@ -109,14 +155,14 @@ const getPermissionsByUserTypeId = async (userTypeId) => {
 
 // ─── User Type CRUD ──────────────────────────────────────────────────────────
 
-const createUserType = async (typeName, addedBy, deviceId, permissions) => {
+const createUserType = async (typeName, userRole, addedBy, deviceId, permissions) => {
     const conn = await db.getConnection();
     try {
         await conn.beginTransaction();
 
         const [result] = await conn.execute(
-            `INSERT INTO user_types (type_name, added_by, device_id) VALUES (?, ?, ?)`,
-            [typeName, addedBy, deviceId]
+            `INSERT INTO user_types (type_name, user_role, added_by, device_id) VALUES (?, ?, ?, ?)`,
+            [typeName, userRole || 'VIEWER', addedBy, deviceId]
         );
 
         const newId = result.insertId;
@@ -153,6 +199,7 @@ const getAllUserTypes = async () => {
         SELECT
             ut.id,
             ut.type_name,
+            ut.user_role,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             ut.device_id,
             ut.created_at
@@ -178,14 +225,14 @@ const getAllUserTypes = async () => {
     return results;
 };
 
-const updateUserType = async (id, typeName, permissions) => {
+const updateUserType = async (id, typeName, userRole, permissions) => {
     const conn = await db.getConnection();
     try {
         await conn.beginTransaction();
 
         await conn.execute(
-            `UPDATE user_types SET type_name = ? WHERE id = ?`,
-            [typeName, id]
+            `UPDATE user_types SET type_name = ?, user_role = ? WHERE id = ?`,
+            [typeName, userRole || 'VIEWER', id]
         );
 
         if (permissions && permissions.length > 0) {
@@ -222,7 +269,7 @@ const deleteUserType = async (id) => {
 
 const getUserTypeById = async (id) => {
     const [rows] = await db.execute(
-        `SELECT id, type_name, added_by, device_id, created_at, updated_at FROM user_types WHERE id = ?`,
+        `SELECT id, type_name, user_role, added_by, device_id, created_at, updated_at FROM user_types WHERE id = ?`,
         [id]
     );
     if (!rows[0]) return null;

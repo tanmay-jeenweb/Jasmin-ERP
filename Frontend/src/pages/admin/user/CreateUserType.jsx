@@ -4,30 +4,94 @@ import { createUserType } from "../../../api/userTypeMasterApi";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
-const MASTERS = [
-  { key: "user_type",             label: "User Type Master" },
-  { key: "label_master",          label: "Label Master" },
-  { key: "inquiry_source_master", label: "Inquiry Source Master" },
-  { key: "company_brand_master",  label: "Company Brand Master" },
-  { key: "document_master",       label: "Document Master" },
-  { key: "team_role_master",      label: "Team Role Master" },
-  { key: "call_outcome_master",   label: "Call Outcome Master" },
-  { key: "mobile_brand_master",   label: "Brand Master" },
-  { key: "bank_master",           label: "Finance Company Master" },
-  { key: "finance_machine_master", label: "Finance Machine Master" },
-  { key: "store_details_approval", label: "Store Details Approval" },
-  { key: "deposit_stock_approval", label: "Deposit & Stock Approval" },
-  { key: "user_master",             label: "User Master" },
-  { key: "device_approval",         label: "Device Approval" },
+const MASTER_GROUPS = [
+  {
+    category: "👥 User & Access Management",
+    masters: [
+      { key: "user_type", label: "User Type Master" },
+      { key: "user_master", label: "User Master" },
+      { key: "user_branch_mapping", label: "User Branch Mapping", note: "Write = Branch Access Mapping" },
+      { key: "device_approval", label: "Device Approval" },
+    ]
+  },
+  {
+    category: "🏢 Organization & Locations",
+    masters: [
+      { key: "branch_master", label: "Branch Master" },
+      { key: "state_master", label: "State Master" },
+    ]
+  },
+  {
+    category: "📦 Products & Catalog",
+    masters: [
+      { key: "mobile_brand_master", label: "Brand Master" },
+      { key: "product_type_master", label: "Product Type Master" },
+      { key: "item_model_master", label: "Model Master" },
+      { key: "model_group_master", label: "Model Group Master" },
+    ]
+  },
+  {
+    category: "💳 Finance & Pricing",
+    masters: [
+      { key: "bank_master", label: "Finance Company Master" },
+      { key: "finance_machine_master", label: "Finance Machine Master" },
+      { key: "variation_master", label: "Pricing Formula Master" },
+      { key: "price_list", label: "Price List", note: "Write = Price List Import/Export" },
+      { key: "price_list_report", label: "Price List Report" },
+      { key: "landing_type_master", label: "Landing Type Master" },
+      { key: "finance_brand_mapping", label: "Finance Brand Mapping" },
+    ]
+  },
+  {
+    category: "📊 Reports & Analytics",
+    masters: [
+      { key: "target_vs_achievement", label: "Target vs Achievement", note: "Write = Import/Export Template & Sync" },
+      { key: "stock_vs_cash_deposit", label: "Stock vs Cash Deposit", note: "Write = Import/Export Template" },
+      { key: "finance_brand_report", label: "Finance Brand Report" },
+      { key: "activity_report", label: "Activity Log Report" },
+    ]
+  },
+  {
+    category: "⚙️ System Operations & Support",
+    masters: [
+      { key: "support_master", label: "Support Master" },
+      { key: "alert_master", label: "Alert Master" },
+      { key: "offer_master", label: "Offers Master" },
+    ]
+  }
 ];
 
+const MASTERS = MASTER_GROUPS.flatMap((g) => g.masters);
+
 const PERMS = ["canRead", "canWrite", "canUpdate", "canDelete"];
-const PERM_LABELS = { canRead: "Read", canWrite: "Write / Approval", canUpdate: "Update", canDelete: "Delete" };
-const PERM_COLORS = {
-  canRead:   { bg: "#f3e8ff", border: "#d8b4fe", text: "#6804a1", check: "#6804a1" },
-  canWrite:  { bg: "#f0fdf4", border: "#bbf7d0", text: "#15803d", check: "#16a34a" },
-  canUpdate: { bg: "#fffbeb", border: "#fde68a", text: "#b45309", check: "#d97706" },
-  canDelete: { bg: "#fff1f2", border: "#fecdd3", text: "#be123c", check: "#e11d48" },
+const PERM_LABELS = { canRead: "Read", canWrite: "Write / Import / Approval", canUpdate: "Update", canDelete: "Delete" };
+
+const PERM_CLASSES = {
+  canRead: "bg-purple-50 text-indigo-650 border-purple-200",
+  canWrite: "bg-green-50 text-green-700 border-green-200",
+  canUpdate: "bg-amber-50 text-amber-800 border-amber-200",
+  canDelete: "bg-rose-50 text-rose-700 border-rose-200"
+};
+
+const PERM_CHECKBOX_CLASSES = {
+  canRead: "border-indigo-600 bg-indigo-600",
+  canWrite: "border-green-600 bg-green-600",
+  canUpdate: "border-amber-600 bg-amber-600",
+  canDelete: "border-rose-600 bg-rose-600"
+};
+
+const PERM_CHECKBOX_RING_CLASSES = {
+  canRead: "ring-purple-100 border-indigo-600 bg-indigo-600",
+  canWrite: "ring-green-100 border-green-600 bg-green-600",
+  canUpdate: "ring-amber-100 border-amber-600 bg-amber-600",
+  canDelete: "ring-rose-100 border-rose-600 bg-rose-600"
+};
+
+const PERM_LEGEND_DOTS = {
+  canRead: "bg-indigo-600",
+  canWrite: "bg-green-600",
+  canUpdate: "bg-amber-600",
+  canDelete: "bg-rose-600"
 };
 
 const defaultPerms = () =>
@@ -41,9 +105,9 @@ const defaultPerms = () =>
 
 export default function CreateUserType() {
   const [newTypeName, setNewTypeName] = useState("");
+  const [userRole, setUserRole] = useState("VIEWER");
   const [permissions, setPermissions] = useState(defaultPerms());
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
@@ -66,14 +130,39 @@ export default function CreateUserType() {
       prev.map((p) =>
         p.masterName === masterKey
           ? {
-              ...p,
-              canRead: !allChecked,
-              canWrite: !allChecked,
-              canUpdate: isApprovalRow ? false : !allChecked,
-              canDelete: isApprovalRow ? false : !allChecked,
-            }
+            ...p,
+            canRead: !allChecked,
+            canWrite: !allChecked,
+            canUpdate: isApprovalRow ? false : !allChecked,
+            canDelete: isApprovalRow ? false : !allChecked,
+          }
           : p
       )
+    );
+  };
+
+  // Toggle entire section / group (all perms for masters in group)
+  const toggleGroup = (groupMasters) => {
+    const keys = groupMasters.map((m) => m.key);
+    const allChecked = keys.every((key) => {
+      const isApprovalRow = key.endsWith("_approval");
+      const applicablePerms = isApprovalRow ? ["canRead", "canWrite"] : PERMS;
+      const row = permissions.find((p) => p.masterName === key);
+      return row && applicablePerms.every((perm) => row[perm]);
+    });
+
+    setPermissions((prev) =>
+      prev.map((p) => {
+        if (!keys.includes(p.masterName)) return p;
+        const isApprovalRow = p.masterName.endsWith("_approval");
+        return {
+          ...p,
+          canRead: !allChecked,
+          canWrite: !allChecked,
+          canUpdate: isApprovalRow ? false : !allChecked,
+          canDelete: isApprovalRow ? false : !allChecked,
+        };
+      })
     );
   };
 
@@ -124,7 +213,7 @@ export default function CreateUserType() {
     }
     return p[perm];
   });
-  
+
   const isAllAll = () => permissions.every((p) => {
     const isApprovalRow = p.masterName.endsWith("_approval");
     const applicablePerms = isApprovalRow ? ["canRead", "canWrite"] : PERMS;
@@ -139,11 +228,11 @@ export default function CreateUserType() {
     }
     setSaving(true);
     setError("");
-    // setMessage("");
     try {
-      await createUserType({ typeName: newTypeName.trim(), permissions });
+      await createUserType({ typeName: newTypeName.trim(), userRole, permissions });
       toast.success(`User type '${newTypeName.trim()}' added successfully.`);
       setNewTypeName("");
+      setUserRole("VIEWER");
       setPermissions(defaultPerms());
       setTimeout(() => navigate("/admin/user-types"), 1200);
     } catch (err) {
@@ -155,199 +244,215 @@ export default function CreateUserType() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "linear-gradient(135deg,#f8fafc 0%,#eef2ff 100%)", fontFamily: "'Inter',sans-serif" }}>
+    <div className="flex flex-col flex-1 bg-gradient-to-br from-slate-50 to-indigo-50 font-sans">
       <Navbar title="ERP Admin" />
 
       <main className="flex-1 flex flex-col w-full max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
 
         {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
+        <div className="flex items-center justify-between mb-7">
           <div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, color: "#1e293b", margin: 0 }}>Create User Type</h1>
-            <p style={{ color: "#64748b", marginTop: 4, fontSize: 14 }}>Define a new user group and set its module permissions.</p>
+            <h1 className="text-2xl font-bold text-slate-800 m-0">Create User Type</h1>
+            <p className="text-slate-500 mt-1 text-sm">Define a new user group and set its module permissions.</p>
           </div>
           <button
             onClick={() => navigate("/admin/user-types")}
-            style={{ display: "flex", alignItems: "center", gap: 6, color: "#64748b", background: "none", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 500 }}
+            className="flex items-center gap-1.5 text-slate-500 bg-none border-none cursor-pointer text-sm font-medium hover:text-slate-700 transition-colors"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" style={{ width: 16, height: 16 }}>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
             </svg>
             Back to User Types
           </button>
         </div>
 
-        {/* Alerts */}
-        {/* {message && (
-          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#15803d", padding: "12px 16px", borderRadius: 10, marginBottom: 20, fontSize: 14, fontWeight: 500 }}>
-            ✓ {message}
-          </div>
-        )} */}
-        {/* {error && (
-          <div style={{ background: "#fff1f2", border: "1px solid #fecdd3", color: "#be123c", padding: "12px 16px", borderRadius: 10, marginBottom: 20, fontSize: 14, fontWeight: 500 }}>
-            ✕ {error}
-          </div>
-        )} */}
-
         <form onSubmit={handleAddType}>
-          {/* Type Name Card */}
-          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "24px", marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#475569", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              User Type Name <span style={{ color: "#e11d48" }}>*</span>
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Supervisor, Technician, Manager"
-              value={newTypeName}
-              onChange={(e) => setNewTypeName(e.target.value)}
-              required
-              style={{
-                width: "100%", boxSizing: "border-box", border: "1.5px solid #cbd5e1", borderRadius: 9,
-                padding: "11px 14px", fontSize: 15, outline: "none", color: "#1e293b",
-                transition: "border 0.2s",
-              }}
-              onFocus={e => e.target.style.borderColor = "#6804a1"}
-              onBlur={e => e.target.style.borderColor = "#cbd5e1"}
-            />
+          {/* Form Fields Card */}
+          <div className="bg-white border border-slate-200 rounded-xl p-6 mb-5 shadow-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-[13px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                  User Type Name <span className="text-rose-600">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Supervisor, Technician, Manager"
+                  value={newTypeName}
+                  onChange={(e) => setNewTypeName(e.target.value)}
+                  required
+                  className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-[11px] text-[15px] outline-none text-slate-800 bg-white focus:border-indigo-650 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-[13px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                  User Role <span className="text-rose-600">*</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={userRole}
+                    onChange={(e) => setUserRole(e.target.value)}
+                    required
+                    className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-[11px] text-[15px] outline-none text-slate-800 bg-white focus:border-indigo-650 transition-colors appearance-none cursor-pointer"
+                  >
+                    <option value="VIEWER">VIEWER</option>
+                    <option value="ADMIN">ADMIN</option>
+                    <option value="ABM">ABM</option>
+                    <option value="MANAGER">MANAGER</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Permissions Card */}
-          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "24px", marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+          <div className="bg-white border border-slate-200 rounded-xl p-6 mb-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4.5">
               <div>
-                <h2 style={{ fontSize: 15, fontWeight: 700, color: "#1e293b", margin: 0 }}>Module Permissions</h2>
-                <p style={{ fontSize: 13, color: "#94a3b8", margin: "4px 0 0" }}>Set read, write, update and delete access per master module.</p>
+                <h2 className="text-[15px] font-bold text-slate-800 m-0">Module Permissions</h2>
+                <p className="text-[13px] text-slate-400 mt-1 m-0">Set read, write, update and delete access per master module.</p>
               </div>
               <button
                 type="button"
                 onClick={toggleAll}
-                style={{
-                  fontSize: 12, fontWeight: 600, padding: "6px 14px", borderRadius: 8, cursor: "pointer",
-                  border: "1.5px solid #6804a1", color: isAllAll() ? "#fff" : "#6804a1",
-                  background: isAllAll() ? "#6804a1" : "#e6ebf0", transition: "all 0.2s"
-                }}
+                className={`text-xs font-semibold px-3.5 py-1.5 rounded-lg cursor-pointer border-[1.5px] border-indigo-600 transition-colors ${isAllAll() ? "bg-indigo-600 text-white" : "bg-purple-50 text-indigo-600 hover:bg-purple-100"}`}
               >
                 {isAllAll() ? "Deselect All" : "Select All"}
               </button>
             </div>
 
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 500 }}>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse min-w-[500px]">
                 <thead>
-                  <tr style={{ background: "#f8fafc" }}>
-                    <th style={{ textAlign: "left", padding: "10px 14px", fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "2px solid #e2e8f0", minWidth: 160 }}>
+                  <tr className="bg-slate-55">
+                    <th className="text-left px-3.5 py-2.5 text-xs font-bold text-slate-500 uppercase tracking-wider border-b-2 border-slate-200 min-w-[160px]">
                       Master Module
                     </th>
-                    {PERMS.map((perm) => {
-                      const c = PERM_COLORS[perm];
-                      return (
-                        <th key={perm} style={{ textAlign: "center", padding: "10px 8px", borderBottom: "2px solid #e2e8f0", minWidth: 90 }}>
-                          <button
-                            type="button"
-                            onClick={() => toggleColumn(perm)}
-                            title={`Toggle all ${PERM_LABELS[perm]}`}
-                            style={{
-                              display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 4,
-                              background: "none", border: "none", cursor: "pointer", padding: 4
-                            }}
-                          >
-                            <span style={{
-                              fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em",
-                              color: c.text, background: c.bg, border: `1px solid ${c.border}`,
-                              borderRadius: 6, padding: "3px 8px"
-                            }}>
-                              {PERM_LABELS[perm]}
-                            </span>
-                            <div style={{
-                              width: 18, height: 18, borderRadius: 5, border: `2px solid ${isColAll(perm) ? c.check : "#cbd5e1"}`,
-                              background: isColAll(perm) ? c.check : "#fff",
-                              display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s"
-                            }}>
-                              {isColAll(perm) && (
-                                <svg viewBox="0 0 12 10" style={{ width: 10, height: 10 }}>
-                                  <polyline points="1,5 4.5,8.5 11,1" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                              )}
-                            </div>
-                          </button>
-                        </th>
-                      );
-                    })}
-                    <th style={{ textAlign: "center", padding: "10px 8px", borderBottom: "2px solid #e2e8f0", minWidth: 80, fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    {PERMS.map((perm) => (
+                      <th key={perm} className="text-center px-2 py-2.5 border-b-2 border-slate-200 min-w-[90px]">
+                        <button
+                          type="button"
+                          onClick={() => toggleColumn(perm)}
+                          title={`Toggle all ${PERM_LABELS[perm]}`}
+                          className="inline-flex flex-col items-center gap-1 bg-transparent border-none cursor-pointer p-1"
+                        >
+                          <span className={`text-[11px] font-bold uppercase tracking-wider rounded-md px-2 py-0.5 border ${PERM_CLASSES[perm]}`}>
+                            {PERM_LABELS[perm]}
+                          </span>
+                          <div className={`w-4 h-4 rounded-[5px] border flex items-center justify-center transition-all ${isColAll(perm) ? PERM_CHECKBOX_CLASSES[perm] : "border-slate-300 bg-white"}`}>
+                            {isColAll(perm) && (
+                              <svg viewBox="0 0 12 10" className="w-2.5 h-2.5">
+                                <polyline points="1,5 4.5,8.5 11,1" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            )}
+                          </div>
+                        </button>
+                      </th>
+                    ))}
+                    <th className="text-center px-2 py-2.5 border-b-2 border-slate-200 min-w-[80px] text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                       All
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {MASTERS.map((master, idx) => {
-                    const row = permissions.find((p) => p.masterName === master.key);
-                    const rowAll = isRowAll(master.key);
+                  {MASTER_GROUPS.map((group) => {
+                    const groupAll = group.masters.every((m) => isRowAll(m.key));
                     return (
-                      <tr
-                        key={master.key}
-                        style={{ background: idx % 2 === 0 ? "#fff" : "#fafafa", transition: "background 0.15s" }}
-                        onMouseEnter={e => e.currentTarget.style.background = "#f1f5f9"}
-                        onMouseLeave={e => e.currentTarget.style.background = idx % 2 === 0 ? "#fff" : "#fafafa"}
-                      >
-                        <td style={{ padding: "12px 14px", fontSize: 14, fontWeight: 600, color: "#334155", borderBottom: "1px solid #f1f5f9" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#6804a1", flexShrink: 0 }} />
-                            {master.label}
-                          </div>
-                        </td>
-                        {PERMS.map((perm) => {
-                          const c = PERM_COLORS[perm];
-                          const checked = row[perm];
-                          const isApprovalRow = master.key.endsWith("_approval");
-
-                          if (isApprovalRow && (perm === "canUpdate" || perm === "canDelete")) {
-                            return (
-                              <td key={perm} style={{ textAlign: "center", padding: "12px 8px", borderBottom: "1px solid #f1f5f9", color: "#94a3b8" }}>
-                                —
-                              </td>
-                            );
-                          }
-
-                          return (
-                            <td key={perm} style={{ textAlign: "center", padding: "12px 8px", borderBottom: "1px solid #f1f5f9" }}>
-                              <div
-                                onClick={() => togglePerm(master.key, perm)}
-                                style={{
-                                  width: 22, height: 22, borderRadius: 6,
-                                  border: `2px solid ${checked ? c.check : "#cbd5e1"}`,
-                                  background: checked ? c.check : "#fff",
-                                  display: "flex", alignItems: "center", justifyContent: "center",
-                                  cursor: "pointer", transition: "all 0.15s",
-                                  margin: "0 auto",
-                                  boxShadow: checked ? `0 0 0 3px ${c.bg}` : "none"
-                                }}
-                              >
-                                {checked && (
-                                  <svg viewBox="0 0 12 10" style={{ width: 11, height: 11 }}>
-                                    <polyline points="1,5 4.5,8.5 11,1" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
-                                )}
+                      <tbody key={group.category} className="contents">
+                        {/* Section Header */}
+                        <tr className="bg-gradient-to-r from-slate-100 via-indigo-50/60 to-purple-50/60 border-y border-indigo-100/80">
+                          <td colSpan={6} className="px-3.5 py-2.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-extrabold text-indigo-950 uppercase tracking-wide">
+                                  {group.category}
+                                </span>
+                                <span className="text-[11px] font-semibold text-slate-500 bg-white/80 px-2 py-0.5 rounded-full border border-slate-200">
+                                  {group.masters.length} {group.masters.length === 1 ? 'module' : 'modules'}
+                                </span>
                               </div>
-                            </td>
+                              <button
+                                type="button"
+                                onClick={() => toggleGroup(group.masters)}
+                                className={`text-[10px] font-bold px-2.5 py-1 rounded-md cursor-pointer border transition-all ${
+                                  groupAll
+                                    ? "border-indigo-600 bg-indigo-600 text-white shadow-xs"
+                                    : "border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-100 shadow-xs"
+                                }`}
+                              >
+                                {groupAll ? "✓ Group All" : "Select Group"}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* Section Items */}
+                        {group.masters.map((master, idx) => {
+                          const row = permissions.find((p) => p.masterName === master.key);
+                          const rowAll = isRowAll(master.key);
+                          return (
+                            <tr
+                              key={master.key}
+                              className={`transition-colors border-b border-slate-100 last:border-b-0 hover:bg-slate-50/80 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}
+                            >
+                              <td className="px-3.5 py-3 text-sm font-semibold text-slate-700 pl-7">
+                                <div className="flex flex-col gap-0.5">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-600 flex-shrink-0" />
+                                    <span>{master.label}</span>
+                                  </div>
+                                  {master.note && (
+                                    <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50/80 px-1.75 py-0.25 rounded border border-indigo-200/60 w-max ml-3.5">
+                                      {master.note}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              {PERMS.map((perm) => {
+                                const checked = row[perm];
+                                const isApprovalRow = master.key.endsWith("_approval");
+
+                                if (isApprovalRow && (perm === "canUpdate" || perm === "canDelete")) {
+                                  return (
+                                    <td key={perm} className="text-center px-2 py-3 text-slate-400">
+                                      —
+                                    </td>
+                                  );
+                                }
+
+                                return (
+                                  <td key={perm} className="text-center px-2 py-3">
+                                    <div
+                                      onClick={() => togglePerm(master.key, perm)}
+                                      className={`w-5.5 h-5.5 rounded-md border flex items-center justify-center cursor-pointer transition-all mx-auto ${checked ? `ring-4 ${PERM_CHECKBOX_RING_CLASSES[perm]}` : "border-slate-300 bg-white"}`}
+                                    >
+                                      {checked && (
+                                        <svg viewBox="0 0 12 10" className="w-[11px] h-[11px]">
+                                          <polyline points="1,5 4.5,8.5 11,1" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                      )}
+                                    </div>
+                                  </td>
+                                );
+                              })}
+                              {/* Row toggle */}
+                              <td className="text-center px-2 py-3">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleRow(master.key)}
+                                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-md cursor-pointer border-[1.5px] transition-all ${rowAll ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-slate-50 text-slate-500 hover:bg-slate-100"}`}
+                                >
+                                  {rowAll ? "✓ All" : "All"}
+                                </button>
+                              </td>
+                            </tr>
                           );
                         })}
-                        {/* Row toggle */}
-                        <td style={{ textAlign: "center", padding: "12px 8px", borderBottom: "1px solid #f1f5f9" }}>
-                          <button
-                            type="button"
-                            onClick={() => toggleRow(master.key)}
-                            style={{
-                              fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 6, cursor: "pointer",
-                              border: `1.5px solid ${rowAll ? "#6804a1" : "#cbd5e1"}`,
-                              color: rowAll ? "#fff" : "#64748b",
-                              background: rowAll ? "#6804a1" : "#f8fafc",
-                              transition: "all 0.15s"
-                            }}
-                          >
-                            {rowAll ? "✓ All" : "All"}
-                          </button>
-                        </td>
-                      </tr>
+                      </tbody>
                     );
                   })}
                 </tbody>
@@ -355,44 +460,29 @@ export default function CreateUserType() {
             </div>
 
             {/* Legend */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16, paddingTop: 14, borderTop: "1px solid #f1f5f9" }}>
-              {PERMS.map((perm) => {
-                const c = PERM_COLORS[perm];
-                return (
-                  <div key={perm} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <div style={{ width: 10, height: 10, borderRadius: 3, background: c.check }} />
-                    <span style={{ fontSize: 12, color: "#64748b", fontWeight: 500 }}>{PERM_LABELS[perm]}</span>
-                  </div>
-                );
-              })}
+            <div className="flex flex-wrap gap-2.5 mt-4 pt-3.5 border-t border-slate-100">
+              {PERMS.map((perm) => (
+                <div key={perm} className="flex items-center gap-1.5">
+                  <div className={`w-2.5 h-2.5 rounded-[3px] ${PERM_LEGEND_DOTS[perm]}`} />
+                  <span className="text-xs text-slate-500 font-medium">{PERM_LABELS[perm]}</span>
+                </div>
+              ))}
             </div>
           </div>
 
           {/* Actions */}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+          <div className="flex justify-end gap-3 mt-5">
             <button
               type="button"
               onClick={() => navigate("/admin/user-types")}
-              style={{
-                padding: "10px 22px", borderRadius: 9, border: "1.5px solid #cbd5e1",
-                color: "#475569", background: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer",
-                transition: "background 0.15s"
-              }}
-              onMouseEnter={e => e.target.style.background = "#f8fafc"}
-              onMouseLeave={e => e.target.style.background = "#fff"}
+              className="px-5.5 py-2.5 rounded-[9px] border-[1.5px] border-slate-300 text-slate-600 bg-white font-semibold text-sm cursor-pointer hover:bg-slate-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              style={{
-                padding: "10px 28px", borderRadius: 9, border: "none",
-                background: saving ? "#94a3b8" : "linear-gradient(135deg,#6804a1,#52037e)",
-                color: "#fff", fontWeight: 700, fontSize: 14, cursor: saving ? "not-allowed" : "pointer",
-                boxShadow: saving ? "none" : "0 2px 8px rgba(104,4,161,0.35)",
-                transition: "all 0.2s"
-              }}
+              className="px-7 py-2.5 rounded-[9px] border-none text-white font-bold text-sm bg-gradient-to-br from-indigo-600 to-indigo-700 shadow-[0_2px_8px_rgba(104,4,161,0.35)] cursor-pointer disabled:bg-slate-400 disabled:cursor-not-allowed disabled:shadow-none hover:opacity-95 transition-all"
             >
               {saving ? "Saving…" : "Create User Type"}
             </button>
@@ -402,4 +492,3 @@ export default function CreateUserType() {
     </div>
   );
 }
-
