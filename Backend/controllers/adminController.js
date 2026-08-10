@@ -20,15 +20,16 @@ const fetchUsers = async (req, res) => {
     try {
         const includeInactive = req.query.includeInactive === 'true';
         const whereClause = includeInactive ? '' : 'WHERE u.active = TRUE';
-        // Fetch users along with their active device status
+        // Fetch users along with device counts using subqueries to prevent duplicate user rows
         const query = `
             SELECT 
                 u.id, u.name, u.username, u.email, u.mob_no, u.role,
-                d.status AS device_status, ut.type_name,
-                d.device_id, device_verification_required, u.active,
-                u.state, u.city, u.branch, u.product_type, u.landing_type
+                ut.type_name,
+                device_verification_required, u.active,
+                u.state, u.city, u.branch, u.product_type, u.landing_type,
+                (SELECT COUNT(*) FROM user_devices WHERE user_id = u.id AND status = 'approved' AND closed_at IS NULL) AS approved_devices_count,
+                (SELECT COUNT(*) FROM user_devices WHERE user_id = u.id AND status = 'pending' AND closed_at IS NULL) AS pending_devices_count
             FROM users u
-            LEFT JOIN user_devices d ON d.user_id = u.id AND d.closed_at IS NULL
             LEFT JOIN user_types ut ON u.user_type_id = ut.id
             ${whereClause}
         `;
@@ -243,6 +244,59 @@ const toggleUserActiveController = async (req, res) => {
     }
 };
 
+const fetchUserActiveDevicesController = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const [devices] = await db.execute(`
+            SELECT * FROM user_devices
+            WHERE user_id = ? AND closed_at IS NULL
+            ORDER BY status DESC, submitted_at DESC
+        `, [userId]);
+        return res.status(200).json({ success: true, devices });
+    } catch (error) {
+        console.log("Fetch User Active Devices Error:", error);
+        return res.status(500).json({ success: false, message: "Server Error" });
+    }
+};
+
+const revokeSpecificDeviceController = async (req, res) => {
+    try {
+        const { deviceRowId } = req.params;
+        const adminId = req.user.id;
+
+        // Fetch device info before revoking for logging
+        const [deviceRows] = await db.execute(`
+            SELECT ud.device_id, ud.user_id, u.username, u.name AS user_name
+            FROM user_devices ud
+            JOIN users u ON u.id = ud.user_id
+            WHERE ud.id = ?
+        `, [deviceRowId]);
+        const deviceInfo = deviceRows[0] || {};
+
+        await db.execute(`
+            UPDATE user_devices
+            SET status = 'revoked', closed_at = NOW(), closed_by = ?
+            WHERE id = ?
+        `, [adminId, deviceRowId]);
+
+        const adminDeviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+        await createAuditLog(
+            adminId,
+            req.user?.name || req.user?.username || 'Unknown',
+            adminDeviceId,
+            'Device Management',
+            'revoked',
+            { status: 'approved', device_id: deviceInfo.device_id, user: deviceInfo.user_name },
+            { status: 'revoked', device_id: deviceInfo.device_id, user: deviceInfo.user_name, closed_by: req.user?.name }
+        );
+
+        return res.status(200).json({ success: true, message: "Specific device revoked successfully" });
+    } catch (error) {
+        console.log("Revoke Specific Device Error:", error);
+        return res.status(500).json({ success: false, message: "Server Error" });
+    }
+};
+
 module.exports = {
     fetchUsers,
     createUserByAdmin,
@@ -252,5 +306,7 @@ module.exports = {
     fetchUserAuditLogs,
     fetchActivityLogs,
     fetchPendingDevices,
-    toggleUserActiveController
+    toggleUserActiveController,
+    fetchUserActiveDevicesController,
+    revokeSpecificDeviceController
 };

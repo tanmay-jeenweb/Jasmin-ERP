@@ -10,7 +10,7 @@ const {
 const { createAuditLog } = require("../models/auditLogModel.js");
 
 const {
-    getApprovedDevice,
+    getApprovedDevices,
     getPendingDevice,
     createPendingDevice
 } = require("../models/deviceModel.js");
@@ -122,53 +122,42 @@ const login = async (req, res) => {
             });
         }
 
-        const approvedDevice = await getApprovedDevice(user.id);
+        const approvedDevices = await getApprovedDevices(user.id);
+        const isDeviceApproved = approvedDevices.some(d => d.device_id === deviceId);
 
-        if (approvedDevice) {
-            if (approvedDevice.device_id === deviceId) {
-                // Device matches, login successful
-                const token = jwt.sign(
-                    { id: user.id, role: user.role, name: user.name, username: user.username, mob_no: user.mob_no },
-                    process.env.JWT_SECRET,
-                    { expiresIn: "1d" }
-                );
+        if (isDeviceApproved) {
+            // Device matches, login successful
+            const token = jwt.sign(
+                { id: user.id, role: user.role, name: user.name, username: user.username, mob_no: user.mob_no },
+                process.env.JWT_SECRET,
+                { expiresIn: "1d" }
+            );
 
-                return res.status(200).json({
-                    success: true,
-                    message: "Login successful",
-                    token,
-                    user: {
-                        id: user.id,
-                        name: user.name,
-                        username: user.username,
-                        email: user.email,
-                        role: user.role,
-                        mob_no: user.mob_no,
-                        modules: user.modules || [],
-                        landing_type: userLandingType,
-                        state: userState
-                    }
-                });
-            } else {
-                // Device mismatch, check if they have a pending device for this deviceId
-                const pendingDevice = await getPendingDevice(user.id);
-                if (pendingDevice && pendingDevice.device_id === deviceId) {
-                    return res.status(200).json({
-                        success: false,
-                        status: "PENDING_APPROVAL"
-                    });
+            return res.status(200).json({
+                success: true,
+                message: "Login successful",
+                token,
+                user: {
+                    id: user.id,
+                    name: user.name,
+                    username: user.username,
+                    email: user.email,
+                    role: user.role,
+                    mob_no: user.mob_no,
+                    modules: user.modules || [],
+                    landing_type: userLandingType,
+                    state: userState
                 }
-                return res.status(200).json({
-                    success: false,
-                    status: "DEVICE_REGISTRATION_REQUIRED",
-                    message: "New device detected. Registration required."
-                });
-            }
+            });
         }
 
-        // No approved device found
-        const pendingDevice = await getPendingDevice(user.id);
-        if (pendingDevice) {
+        // If the current device is not approved, check if there is a pending registration request for this device
+        const [pendingRows] = await db.execute(
+            "SELECT * FROM user_devices WHERE user_id = ? AND status = 'pending' AND closed_at IS NULL AND device_id = ?",
+            [user.id, deviceId]
+        );
+        
+        if (pendingRows.length > 0) {
             return res.status(200).json({
                 success: false,
                 status: "PENDING_APPROVAL"
@@ -178,7 +167,13 @@ const login = async (req, res) => {
         // No pending or approved device, needs registration
         return res.status(200).json({
             success: false,
-            status: "DEVICE_REGISTRATION_REQUIRED"
+            status: "DEVICE_REGISTRATION_REQUIRED",
+            message: "New device detected. Registration required.",
+            approvedDevices: approvedDevices.map(d => ({
+                id: d.id,
+                device_id: d.device_id,
+                submitted_at: d.submitted_at
+            }))
         });
 
     } catch (error) {
@@ -194,7 +189,7 @@ const login = async (req, res) => {
 
 const requestDeviceRegistration = async (req, res) => {
     try {
-        const { username, password, deviceId } = req.body;
+        const { username, password, deviceId, revokeDeviceId } = req.body;
 
         if (!username || !password || !deviceId) {
             return res.status(400).json({
@@ -220,8 +215,33 @@ const requestDeviceRegistration = async (req, res) => {
             return res.status(401).json({ success: false, message: "Invalid credentials" });
         }
 
-        // Create pending device
-        await createPendingDevice(user.id, deviceId);
+        // Check if user already has 3 approved devices
+        const approvedDevices = await getApprovedDevices(user.id);
+        if (approvedDevices.length >= 3 && !revokeDeviceId) {
+            return res.status(400).json({
+                success: false,
+                message: "Maximum limit of 3 devices reached. Please select a device to replace."
+            });
+        }
+
+        if (revokeDeviceId) {
+            // Revoke the chosen device immediately so the user deletes/removes it themselves
+            const revokeQuery = `
+                UPDATE user_devices
+                SET status = 'revoked', closed_at = NOW(), closed_by = NULL
+                WHERE user_id = ? AND id = ? AND status = 'approved' AND closed_at IS NULL
+            `;
+            const [revokeResult] = await db.execute(revokeQuery, [user.id, revokeDeviceId]);
+            if (revokeResult.affectedRows === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid device selected for replacement."
+                });
+            }
+        }
+
+        // Create pending device with optional replacement ID
+        await createPendingDevice(user.id, deviceId, revokeDeviceId || null);
 
         await createAuditLog(
             user.id,
@@ -234,7 +254,8 @@ const requestDeviceRegistration = async (req, res) => {
                 user_id: user.id,
                 username: user.username,
                 device_id: deviceId,
-                status: 'pending'
+                status: 'pending',
+                replaces_device_id: revokeDeviceId || null
             }
         );
 
@@ -391,11 +412,53 @@ const getActiveUsersController = async (req, res) => {
     }
 };
 
+const getApprovedDevicesController = async (req, res) => {
+    try {
+        const { username, password } = req.body;
+
+        if (!username || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "Username and password are required"
+            });
+        }
+
+        const user = await findUserByUsername(username);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        const isPasswordCorrect = await bcrypt.compare(password, user.password);
+        if (!isPasswordCorrect) {
+            return res.status(401).json({ success: false, message: "Invalid credentials" });
+        }
+
+        const approvedDevices = await getApprovedDevices(user.id);
+
+        return res.status(200).json({
+            success: true,
+            approvedDevices: approvedDevices.map(d => ({
+                id: d.id,
+                device_id: d.device_id,
+                submitted_at: d.submitted_at
+            }))
+        });
+
+    } catch (error) {
+        console.error("Get Approved Devices Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal Server Error"
+        });
+    }
+};
+
 module.exports = {
     login,
     logout,
     updateProfileController,
     requestDeviceRegistration,
     getMyPermissions,
-    getActiveUsersController
+    getActiveUsersController,
+    getApprovedDevicesController
 };
