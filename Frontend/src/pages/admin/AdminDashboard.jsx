@@ -332,16 +332,16 @@ export default function AdminDashboard() {
                     <div className="flex flex-col items-start gap-1">
                         {approvedCount > 0 && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
-                                <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> {approvedCount} Approved
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5" />{approvedCount} Approved
                             </span>
                         )}
                         {pendingCount > 0 && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200 animate-pulse">
-                                <span className="w-1.5 h-1.5 rounded-full bg-orange-500" /> {pendingCount} Pending ⏳
+                                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mr-1.5" />{pendingCount} Pending ⏳
                             </span>
                         )}
                         {approvedCount === 0 && pendingCount === 0 && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-50 text-slate-650 border border-slate-200">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-50 text-slate-655 border border-slate-200">
                                 No Device —
                             </span>
                         )}
@@ -371,7 +371,7 @@ export default function AdminDashboard() {
                         {canMap && (
                             <button
                                 onClick={() => navigate(`/admin/user-branch-mapping?userId=${row.id}`)}
-                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-indigo-650 hover:bg-purple-100 transition-colors"
+                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
                                 title="User Branch Mapping"
                             >
                                 <svg
