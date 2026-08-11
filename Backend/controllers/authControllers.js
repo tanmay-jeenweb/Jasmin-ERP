@@ -321,6 +321,16 @@ const updateProfileController = async (req, res) => {
         
     } catch (error) {
         console.error("Update Profile Error:", error);
+        if (error.code === 'ER_DUP_ENTRY') {
+            const message = error.sqlMessage || error.message || '';
+            if (message.includes('email')) {
+                return res.status(400).json({ success: false, message: "Email already exists" });
+            }
+            if (message.includes('username')) {
+                return res.status(400).json({ success: false, message: "Username already exists" });
+            }
+            return res.status(400).json({ success: false, message: "Email or username already exists" });
+        }
         return res.status(500).json({
             success: false,
             message: "Internal Server Error"

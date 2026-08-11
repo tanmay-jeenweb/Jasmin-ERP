@@ -120,6 +120,16 @@ const createUserByAdmin = async (req, res) => {
         return res.status(201).json({ success: true, message: "User created successfully" });
     } catch (error) {
         console.log("Create User Error:", error);
+        if (error.code === 'ER_DUP_ENTRY') {
+            const message = error.sqlMessage || error.message || '';
+            if (message.includes('username')) {
+                return res.status(400).json({ success: false, message: "Username already exists" });
+            }
+            if (message.includes('email')) {
+                return res.status(400).json({ success: false, message: "Email already exists" });
+            }
+            return res.status(400).json({ success: false, message: "Username or email already exists" });
+        }
         return res.status(500).json({ success: false, message: "Server Error" });
     }
 };
