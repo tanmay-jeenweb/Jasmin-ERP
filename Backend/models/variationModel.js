@@ -38,6 +38,44 @@ const deduplicateColumns = (columns) => {
 };
 
 
+const migrateTableColumnsToText = async (tableName) => {
+    try {
+        const [columns] = await db.execute(`SHOW COLUMNS FROM \`${tableName}\``);
+        const modifyClauses = [];
+        
+        for (const col of columns) {
+            const fieldName = col.Field;
+            const fieldType = col.Type.toLowerCase();
+            
+            // Exclude fixed columns that must remain VARCHAR for index/lookup constraints
+            const isFixedColumn = [
+                'id', 'product_code', 'brand', 'icat_name', 'model_group_name', 'model_name',
+                'added_by', 'device_id', 'timestamp', 'updated_at'
+            ].includes(fieldName);
+            
+            if (!isFixedColumn && fieldType.startsWith('varchar')) {
+                modifyClauses.push(`MODIFY \`${fieldName}\` TEXT NULL`);
+            }
+        }
+        
+        if (modifyClauses.length > 0) {
+            console.log(`Migrating columns in ${tableName} to TEXT and DYNAMIC row format...`);
+            const query = `ALTER TABLE \`${tableName}\` ${modifyClauses.join(', ')}, ROW_FORMAT=DYNAMIC`;
+            await db.execute(query);
+            console.log(`Successfully migrated ${tableName} columns to TEXT and DYNAMIC.`);
+        } else {
+            // Already converted or no custom columns, just enforce ROW_FORMAT=DYNAMIC
+            try {
+                await db.execute(`ALTER TABLE \`${tableName}\` ROW_FORMAT=DYNAMIC`);
+            } catch (e) {
+                // Ignore if not supported
+            }
+        }
+    } catch (err) {
+        console.warn(`Failed to migrate table schema for ${tableName}:`, err.message);
+    }
+};
+
 const createVariationTable = async () => {
     const query = `
         CREATE TABLE IF NOT EXISTS variation_master (
@@ -113,30 +151,77 @@ const createVariationTable = async () => {
             const vId = v.id;
             let columns = typeof v.columns === 'string' ? JSON.parse(v.columns) : (v.columns || []);
             
-            // Deduplicate columns with identical names to prevent MySQL syntax errors and frontend overwrites
-            const { newColumns, changed } = deduplicateColumns(columns);
-            if (changed) {
-                console.log(`Detected duplicate column names in variation #${vId}. Automatically updating to unique names...`);
-                await db.execute("UPDATE variation_master SET columns = ? WHERE id = ?", [JSON.stringify(newColumns), vId]);
-                columns = newColumns;
-            }
-
             const tableName = `price_list_format_${vId}`;
             const historyTableName = `price_list_format_history_${vId}`;
 
             const currentExists = await checkTableExists(tableName);
             const historyExists = await checkTableExists(historyTableName);
 
+            // 1. Upgrade existing tables to TEXT and DYNAMIC row format FIRST
+            // to prevent "Row size too large" errors during the column renaming/adding below
+            if (currentExists) {
+                await migrateTableColumnsToText(tableName);
+            }
+            if (historyExists) {
+                await migrateTableColumnsToText(historyTableName);
+            }
+
+            // Deduplicate columns with identical names to prevent MySQL syntax errors and frontend overwrites
+            const { newColumns, changed } = deduplicateColumns(columns);
+            if (changed) {
+                console.log(`Detected duplicate column names in variation #${vId}. Automatically updating to unique names...`);
+                await db.execute("UPDATE variation_master SET columns = ? WHERE id = ?", [JSON.stringify(newColumns), vId]);
+                
+                // Rename or add missing unique columns in the MySQL tables
+                if (currentExists) {
+                    for (let i = 0; i < columns.length; i++) {
+                        const oldName = sanitize(columns[i].column_name);
+                        const newName = sanitize(newColumns[i].column_name);
+                        if (oldName !== newName && oldName && newName) {
+                            try {
+                                await db.execute(`ALTER TABLE \`${tableName}\` CHANGE COLUMN \`${oldName}\` \`${newName}\` TEXT NULL`);
+                                console.log(`Renamed/modified column in ${tableName}: ${oldName} -> ${newName}`);
+                            } catch (e) {
+                                try {
+                                    await db.execute(`ALTER TABLE \`${tableName}\` ADD COLUMN \`${newName}\` TEXT NULL`);
+                                    console.log(`Added missing column to ${tableName}: ${newName}`);
+                                } catch (addErr) {
+                                    // Ignore if already exists
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if (historyExists) {
+                    for (let i = 0; i < columns.length; i++) {
+                        const oldName = sanitize(columns[i].column_name);
+                        const newName = sanitize(newColumns[i].column_name);
+                        if (oldName !== newName && oldName && newName) {
+                            try {
+                                await db.execute(`ALTER TABLE \`${historyTableName}\` CHANGE COLUMN \`${oldName}\` \`${newName}\` TEXT NULL`);
+                                console.log(`Renamed/modified column in ${historyTableName}: ${oldName} -> ${newName}`);
+                            } catch (e) {
+                                try {
+                                    await db.execute(`ALTER TABLE \`${historyTableName}\` ADD COLUMN \`${newName}\` TEXT NULL`);
+                                    console.log(`Added missing column to ${historyTableName}: ${newName}`);
+                                } catch (addErr) {
+                                    // Ignore if already exists
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                columns = newColumns;
+            }
+
             if (!currentExists) {
                 console.log(`Recreating missing format and history tables for variation #${vId}...`);
                 await createFormatTable(vId, columns);
             } else {
-                // Ensure existing table is in DYNAMIC row format to avoid size limit
-                try {
-                    await db.execute(`ALTER TABLE \`${tableName}\` ROW_FORMAT=DYNAMIC`);
-                } catch (e) {
-                    console.warn(`Could not set ROW_FORMAT=DYNAMIC on ${tableName}:`, e.message);
-                }
+                // Migrate existing tables to TEXT and DYNAMIC row format to avoid size limits
+                await migrateTableColumnsToText(tableName);
 
                 if (!historyExists) {
                     console.log(`Migrating history table for variation #${vId}...`);
@@ -178,12 +263,8 @@ const createVariationTable = async () => {
                         console.warn(`Could not seed initial baseline for ${historyTableName}:`, seedErr.message);
                     }
                 } else {
-                    // Ensure existing history table is in DYNAMIC row format
-                    try {
-                        await db.execute(`ALTER TABLE \`${historyTableName}\` ROW_FORMAT=DYNAMIC`);
-                    } catch (e) {
-                        console.warn(`Could not set ROW_FORMAT=DYNAMIC on ${historyTableName}:`, e.message);
-                    }
+                    // Ensure existing history table is migrated to TEXT and DYNAMIC
+                    await migrateTableColumnsToText(historyTableName);
                 }
             }
         }
@@ -196,13 +277,15 @@ const createVariationTable = async () => {
 
 // Helpers for dynamic table schema updates
 const checkTableExists = async (tableName) => {
-    const query = `
-        SELECT COUNT(*) as count 
-        FROM information_schema.tables 
-        WHERE table_schema = DATABASE() AND table_name = ?
-    `;
-    const [rows] = await db.execute(query, [tableName]);
-    return rows[0].count > 0;
+    try {
+        await db.execute(`SELECT 1 FROM \`${tableName}\` LIMIT 0`);
+        return true;
+    } catch (e) {
+        if (e.code === 'ER_NO_SUCH_TABLE') {
+            return false;
+        }
+        throw e;
+    }
 };
 
 const createFormatTable = async (variationId, columns) => {
@@ -267,12 +350,8 @@ const syncFormatTableSchema = async (variationId, oldColumns, newColumns) => {
     }
 
     for (const target of targetTables) {
-        // Ensure table is in DYNAMIC row format to avoid size limit issues when adding columns
-        try {
-            await db.execute(`ALTER TABLE \`${target}\` ROW_FORMAT=DYNAMIC`);
-        } catch (e) {
-            console.warn(`Could not set ROW_FORMAT=DYNAMIC on ${target}:`, e.message);
-        }
+        // Migrate table to TEXT / DYNAMIC row format first to avoid size limit issues when adding columns
+        await migrateTableColumnsToText(target);
 
         // 1. Columns to Add or Rename
         for (const [colId, newName] of newColsMap.entries()) {

@@ -17,35 +17,55 @@ const sanitize = (name) => {
     return String(name).replace(/`/g, '');
 };
 
+/**
+ * Gets a validated, live database connection from the pool.
+ * Retries up to 3 times if the pooled connection turns out to be stale/dead (ECONNRESET).
+ * This is necessary on CPanel shared hosting where MySQL drops idle pool connections.
+ */
+const getValidConnection = async (maxRetries = 3) => {
+    let lastError;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        let conn;
+        try {
+            conn = await db.getConnection();
+            // Ping the connection to verify it is alive
+            await conn.execute('SELECT 1');
+            return conn;
+        } catch (e) {
+            // Destroy this dead connection so it's not returned to the pool
+            if (conn) {
+                try { conn.destroy(); } catch (_) {}
+            }
+            lastError = e;
+            console.warn(`Database connection attempt ${attempt}/${maxRetries} failed: ${e.message}. Retrying...`);
+        }
+    }
+    throw lastError;
+};
+
 const upsertPriceListData = async (variationId, columnsList = [], records = [], addedBy = null, deviceId = 'Unknown') => {
     const tableName = `price_list_format_${variationId}`;
     const historyTableName = `price_list_format_history_${variationId}`;
-    const connection = await db.getConnection();
+
+    // Acquire a validated, live connection (retries if pool returns a stale one)
+    const connection = await getValidConnection();
 
     try {
-        // 1. Safe check if table exists to prevent fatal connection-closing errors
-        const [tableCheck] = await connection.execute(`
-            SELECT COUNT(*) as count 
-            FROM information_schema.tables 
-            WHERE table_schema = DATABASE() AND table_name = ?
-        `, [tableName]);
-        
-        if (!tableCheck[0] || tableCheck[0].count === 0) {
-            throw new Error(`Table 'adminjasminmobil_myappdb.${tableName}' doesn't exist`);
+        // Verify the target table exists before starting a transaction
+        let tableExists = false;
+        try {
+            await connection.execute(`SELECT 1 FROM \`${tableName}\` LIMIT 0`);
+            tableExists = true;
+        } catch (e) {
+            if (e.code === 'ER_NO_SUCH_TABLE') {
+                tableExists = false;
+            } else {
+                throw e;
+            }
         }
 
-        // Ensure device_id column exists on current table
-        try {
-            await connection.execute(`ALTER TABLE \`${tableName}\` ADD COLUMN device_id VARCHAR(100) NULL`);
-        } catch (e) {
-            // Already exists
-        }
-
-        // Ensure device_id column exists on history table
-        try {
-            await connection.execute(`ALTER TABLE \`${historyTableName}\` ADD COLUMN device_id VARCHAR(100) NULL`);
-        } catch (e) {
-            // Already exists
+        if (!tableExists) {
+            throw new Error(`Table '${tableName}' doesn't exist. Please restart the server to auto-create it.`);
         }
 
         await connection.beginTransaction();
