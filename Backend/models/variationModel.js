@@ -10,6 +10,33 @@ const sanitize = (name) => {
     return String(name).replace(/`/g, '');
 };
 
+const deduplicateColumns = (columns) => {
+    if (!columns || !Array.isArray(columns)) return { newColumns: columns || [], changed: false };
+    
+    let nameCounts = new Map();
+    columns.forEach(col => {
+        const name = col.column_name ? col.column_name.trim() : "";
+        if (name) {
+            nameCounts.set(name, (nameCounts.get(name) || 0) + 1);
+        }
+    });
+
+    let changed = false;
+    const newColumns = columns.map(col => {
+        const name = col.column_name ? col.column_name.trim() : "";
+        if (name && nameCounts.get(name) > 1 && col.column_id) {
+            changed = true;
+            return {
+                ...col,
+                column_name: `${name} (${col.column_id})`
+            };
+        }
+        return col;
+    });
+
+    return { newColumns, changed };
+};
+
 
 const createVariationTable = async () => {
     const query = `
@@ -84,18 +111,30 @@ const createVariationTable = async () => {
         const [variations] = await db.execute("SELECT id, columns FROM variation_master");
         for (const v of variations) {
             const vId = v.id;
-            const columns = typeof v.columns === 'string' ? JSON.parse(v.columns) : (v.columns || []);
+            let columns = typeof v.columns === 'string' ? JSON.parse(v.columns) : (v.columns || []);
+            
+            // Deduplicate columns with identical names to prevent MySQL syntax errors and frontend overwrites
+            const { newColumns, changed } = deduplicateColumns(columns);
+            if (changed) {
+                console.log(`Detected duplicate column names in variation #${vId}. Automatically updating to unique names...`);
+                await db.execute("UPDATE variation_master SET columns = ? WHERE id = ?", [JSON.stringify(newColumns), vId]);
+                columns = newColumns;
+            }
+
             const tableName = `price_list_format_${vId}`;
             const historyTableName = `price_list_format_history_${vId}`;
 
             const currentExists = await checkTableExists(tableName);
             const historyExists = await checkTableExists(historyTableName);
 
-            if (currentExists && !historyExists) {
+            if (!currentExists) {
+                console.log(`Recreating missing format and history tables for variation #${vId}...`);
+                await createFormatTable(vId, columns);
+            } else if (!historyExists) {
                 console.log(`Migrating history table for variation #${vId}...`);
                 const columnDefs = columns.map(col => {
                     const safeName = sanitize(col.column_name);
-                    return `\`${safeName}\` VARCHAR(255) NULL`;
+                    return `\`${safeName}\` TEXT NULL`;
                 }).join(', ');
 
                 const createHistQuery = `
@@ -156,7 +195,7 @@ const createFormatTable = async (variationId, columns) => {
 
     const columnDefs = columns.map(col => {
         const safeName = sanitize(col.column_name);
-        return `\`${safeName}\` VARCHAR(255) NULL`;
+        return `\`${safeName}\` TEXT NULL`;
     }).join(', ');
 
     // 1. Current Snapshot Table (product_code is UNIQUE)
@@ -226,7 +265,7 @@ const syncFormatTableSchema = async (variationId, oldColumns, newColumns) => {
                 }
             } else {
                 // Column is new
-                const query = `ALTER TABLE \`${target}\` ADD COLUMN \`${safeNewName}\` VARCHAR(255) NULL`;
+                const query = `ALTER TABLE \`${target}\` ADD COLUMN \`${safeNewName}\` TEXT NULL`;
                 await db.execute(query);
                 console.log(`Added column to ${target}: ${newName}`);
             }
@@ -277,6 +316,7 @@ const mapVariationStates = async (variations) => {
 };
 
 const createVariation = async (stateId, formatName, columns, brandConfigs, addedBy, deviceId, stateIds) => {
+    const { newColumns } = deduplicateColumns(columns);
     const query = `
         INSERT INTO variation_master (state_id, format_name, columns, brand_configs, added_by, device_id, state_ids)
         VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -284,7 +324,7 @@ const createVariation = async (stateId, formatName, columns, brandConfigs, added
     const [result] = await db.execute(query, [
         stateId,
         formatName,
-        JSON.stringify(columns),
+        JSON.stringify(newColumns),
         brandConfigs ? JSON.stringify(brandConfigs) : null,
         addedBy,
         deviceId,
@@ -292,7 +332,7 @@ const createVariation = async (stateId, formatName, columns, brandConfigs, added
     ]);
 
     const insertedId = result.insertId;
-    await createFormatTable(insertedId, columns);
+    await createFormatTable(insertedId, newColumns);
 
     return result;
 };
@@ -374,6 +414,8 @@ const updateVariation = async (id, stateId, formatName, newColumns, brandConfigs
         }
     });
 
+    const { newColumns: deduplicatedColumns } = deduplicateColumns(mergedColumns);
+
     const query = `
         UPDATE variation_master
         SET state_id = ?, format_name = ?, columns = ?, brand_configs = ?, state_ids = ?
@@ -382,7 +424,7 @@ const updateVariation = async (id, stateId, formatName, newColumns, brandConfigs
     const [result] = await db.execute(query, [
         stateId,
         formatName,
-        JSON.stringify(mergedColumns),
+        JSON.stringify(deduplicatedColumns),
         brandConfigs ? JSON.stringify(brandConfigs) : null,
         stateIds ? JSON.stringify(stateIds) : JSON.stringify([stateId]),
         id
@@ -392,9 +434,9 @@ const updateVariation = async (id, stateId, formatName, newColumns, brandConfigs
     const tableName = `price_list_format_${id}`;
     const exists = await checkTableExists(tableName);
     if (exists) {
-        await syncFormatTableSchema(id, oldColumns, mergedColumns);
+        await syncFormatTableSchema(id, oldColumns, deduplicatedColumns);
     } else {
-        await createFormatTable(id, mergedColumns);
+        await createFormatTable(id, deduplicatedColumns);
     }
 
     return result;

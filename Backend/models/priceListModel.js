@@ -23,18 +23,29 @@ const upsertPriceListData = async (variationId, columnsList = [], records = [], 
     const connection = await db.getConnection();
 
     try {
+        // 1. Safe check if table exists to prevent fatal connection-closing errors
+        const [tableCheck] = await connection.execute(`
+            SELECT COUNT(*) as count 
+            FROM information_schema.tables 
+            WHERE table_schema = DATABASE() AND table_name = ?
+        `, [tableName]);
+        
+        if (!tableCheck[0] || tableCheck[0].count === 0) {
+            throw new Error(`Table 'adminjasminmobil_myappdb.${tableName}' doesn't exist`);
+        }
+
         // Ensure device_id column exists on current table
         try {
             await connection.execute(`ALTER TABLE \`${tableName}\` ADD COLUMN device_id VARCHAR(100) NULL`);
         } catch (e) {
-            // Already exists or table doesn't exist
+            // Already exists
         }
 
         // Ensure device_id column exists on history table
         try {
             await connection.execute(`ALTER TABLE \`${historyTableName}\` ADD COLUMN device_id VARCHAR(100) NULL`);
         } catch (e) {
-            // Already exists or table doesn't exist
+            // Already exists
         }
 
         await connection.beginTransaction();
@@ -97,10 +108,18 @@ const upsertPriceListData = async (variationId, columnsList = [], records = [], 
 
         await connection.commit();
     } catch (err) {
-        await connection.rollback();
+        try {
+            await connection.rollback();
+        } catch (rollbackErr) {
+            console.warn(`Rollback failed (connection might be closed):`, rollbackErr.message);
+        }
         throw err;
     } finally {
-        connection.release();
+        try {
+            connection.release();
+        } catch (releaseErr) {
+            // Ignore release error if connection was already closed
+        }
     }
 };
 
