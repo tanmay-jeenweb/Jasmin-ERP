@@ -130,44 +130,60 @@ const createVariationTable = async () => {
             if (!currentExists) {
                 console.log(`Recreating missing format and history tables for variation #${vId}...`);
                 await createFormatTable(vId, columns);
-            } else if (!historyExists) {
-                console.log(`Migrating history table for variation #${vId}...`);
-                const columnDefs = columns.map(col => {
-                    const safeName = sanitize(col.column_name);
-                    return `\`${safeName}\` TEXT NULL`;
-                }).join(', ');
-
-                const createHistQuery = `
-                    CREATE TABLE IF NOT EXISTS \`${historyTableName}\` (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        product_code VARCHAR(100) NOT NULL,
-                        brand VARCHAR(150) NOT NULL,
-                        icat_name VARCHAR(150) NOT NULL,
-                        model_group_name VARCHAR(255) NOT NULL,
-                        model_name VARCHAR(255) NOT NULL,
-                        ${columnDefs ? columnDefs + ',' : ''}
-                        added_by INT NULL,
-                        device_id VARCHAR(100) NULL,
-                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE SET NULL
-                    )
-                `;
-                await db.execute(createHistQuery);
-
-                // Seed existing records as initial history baseline if rows exist
+            } else {
+                // Ensure existing table is in DYNAMIC row format to avoid size limit
                 try {
-                    const customCols = columns.map(c => `\`${sanitize(c.column_name)}\``);
-                    const colsString = customCols.length > 0 ? customCols.join(', ') + ', ' : '';
+                    await db.execute(`ALTER TABLE \`${tableName}\` ROW_FORMAT=DYNAMIC`);
+                } catch (e) {
+                    console.warn(`Could not set ROW_FORMAT=DYNAMIC on ${tableName}:`, e.message);
+                }
 
-                    const seedQuery = `
-                        INSERT INTO \`${historyTableName}\` (product_code, brand, icat_name, model_group_name, model_name, ${colsString}added_by, device_id, timestamp)
-                        SELECT product_code, brand, icat_name, model_group_name, model_name, ${colsString}added_by, device_id, timestamp
-                        FROM \`${tableName}\`
+                if (!historyExists) {
+                    console.log(`Migrating history table for variation #${vId}...`);
+                    const columnDefs = columns.map(col => {
+                        const safeName = sanitize(col.column_name);
+                        return `\`${safeName}\` TEXT NULL`;
+                    }).join(', ');
+
+                    const createHistQuery = `
+                        CREATE TABLE IF NOT EXISTS \`${historyTableName}\` (
+                            id INT AUTO_INCREMENT PRIMARY KEY,
+                            product_code VARCHAR(100) NOT NULL,
+                            brand VARCHAR(150) NOT NULL,
+                            icat_name VARCHAR(150) NOT NULL,
+                            model_group_name VARCHAR(255) NOT NULL,
+                            model_name VARCHAR(255) NOT NULL,
+                            ${columnDefs ? columnDefs + ',' : ''}
+                            added_by INT NULL,
+                            device_id VARCHAR(100) NULL,
+                            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE SET NULL
+                        ) ROW_FORMAT=DYNAMIC
                     `;
-                    await db.execute(seedQuery);
-                    console.log(`Seeded history table ${historyTableName} from current table ${tableName}`);
-                } catch (seedErr) {
-                    console.warn(`Could not seed initial baseline for ${historyTableName}:`, seedErr.message);
+                    await db.execute(createHistQuery);
+
+                    // Seed existing records as initial history baseline if rows exist
+                    try {
+                        const customCols = columns.map(c => `\`${sanitize(c.column_name)}\``);
+                        const colsString = customCols.length > 0 ? customCols.join(', ') + ', ' : '';
+
+                        const seedQuery = `
+                            INSERT INTO \`${historyTableName}\` (product_code, brand, icat_name, model_group_name, model_name, ${colsString}added_by, device_id, timestamp)
+                            SELECT product_code, brand, icat_name, model_group_name, model_name, ${colsString}added_by, device_id, timestamp
+                            FROM \`${tableName}\`
+                        `;
+                        await db.execute(seedQuery);
+                        console.log(`Seeded history table ${historyTableName} from current table ${tableName}`);
+                    } catch (seedErr) {
+                        console.warn(`Could not seed initial baseline for ${historyTableName}:`, seedErr.message);
+                    }
+                } else {
+                    // Ensure existing history table is in DYNAMIC row format
+                    try {
+                        await db.execute(`ALTER TABLE \`${historyTableName}\` ROW_FORMAT=DYNAMIC`);
+                    } catch (e) {
+                        console.warn(`Could not set ROW_FORMAT=DYNAMIC on ${historyTableName}:`, e.message);
+                    }
                 }
             }
         }
@@ -213,7 +229,7 @@ const createFormatTable = async (variationId, columns) => {
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE SET NULL
-        )
+        ) ROW_FORMAT=DYNAMIC
     `;
     await db.execute(currentQuery);
     console.log(`Created dynamic price list format table: ${tableName}`);
@@ -232,7 +248,7 @@ const createFormatTable = async (variationId, columns) => {
             device_id VARCHAR(100) NULL,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE SET NULL
-        )
+        ) ROW_FORMAT=DYNAMIC
     `;
     await db.execute(historyQuery);
     console.log(`Created dynamic price list format history table: ${historyTableName}`);
@@ -251,6 +267,13 @@ const syncFormatTableSchema = async (variationId, oldColumns, newColumns) => {
     }
 
     for (const target of targetTables) {
+        // Ensure table is in DYNAMIC row format to avoid size limit issues when adding columns
+        try {
+            await db.execute(`ALTER TABLE \`${target}\` ROW_FORMAT=DYNAMIC`);
+        } catch (e) {
+            console.warn(`Could not set ROW_FORMAT=DYNAMIC on ${target}:`, e.message);
+        }
+
         // 1. Columns to Add or Rename
         for (const [colId, newName] of newColsMap.entries()) {
             const safeNewName = sanitize(newName);
