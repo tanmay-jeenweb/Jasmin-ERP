@@ -55,11 +55,11 @@ const validateColumnDependencies = (columns, brandConfigs) => {
 
 const addVariationController = async (req, res) => {
     try {
-        const { stateId, formatName, columns, brandConfigs } = req.body;
+        const { stateId, formatName, columns, brandConfigs, stateIds } = req.body;
         const addedBy = req.user.id;
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
 
-        if (!stateId) {
+        if (!stateId && (!stateIds || stateIds.length === 0)) {
             return res.status(400).json({ success: false, message: 'State is required' });
         }
         if (!formatName || !formatName.trim()) {
@@ -117,11 +117,12 @@ const addVariationController = async (req, res) => {
             return res.status(400).json({ success: false, message: depError });
         }
 
-        const result = await createVariation(stateId, formatName, columns, brandConfigs, addedBy, deviceId);
+        const result = await createVariation(stateId || (stateIds && stateIds[0]), formatName, columns, brandConfigs, addedBy, deviceId, stateIds);
 
         const newRecord = {
             id: result.insertId,
-            state_id: stateId,
+            state_id: stateId || (stateIds && stateIds[0]),
+            state_ids: stateIds || [stateId],
             format_name: formatName,
             columns,
             brand_configs: brandConfigs,
@@ -161,7 +162,7 @@ const getAllVariationsController = async (req, res) => {
         // Filter variations based on user state access permissions
         const accessibleVariations = [];
         for (const v of variations) {
-            const hasAccess = await checkUserStateAccess(req.user, v.state_id, v.state_name);
+            const hasAccess = await checkUserStateAccess(req.user, v.state_ids || v.state_id, v.state_name);
             if (hasAccess) {
                 accessibleVariations.push(v);
             }
@@ -189,7 +190,7 @@ const getVariationByIdController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Variation rule not found' });
         }
 
-        const hasAccess = await checkUserStateAccess(req.user, variation.state_id, variation.state_name);
+        const hasAccess = await checkUserStateAccess(req.user, variation.state_ids || variation.state_id, variation.state_name);
         if (!hasAccess) {
             return res.status(403).json({
                 success: false,
@@ -214,10 +215,10 @@ const getVariationByIdController = async (req, res) => {
 const updateVariationController = async (req, res) => {
     try {
         const { id } = req.params;
-        const { stateId, formatName, columns, brandConfigs } = req.body;
+        const { stateId, formatName, columns, brandConfigs, stateIds } = req.body;
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
 
-        if (!stateId) {
+        if (!stateId && (!stateIds || stateIds.length === 0)) {
             return res.status(400).json({ success: false, message: 'State is required' });
         }
         if (!formatName || !formatName.trim()) {
@@ -280,11 +281,12 @@ const updateVariationController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Variation rule not found' });
         }
 
-        await updateVariation(id, stateId, formatName, columns, brandConfigs);
+        await updateVariation(id, stateId || (stateIds && stateIds[0]), formatName, columns, brandConfigs, stateIds);
 
         const afterData = {
             ...beforeData,
-            state_id: stateId,
+            state_id: stateId || (stateIds && stateIds[0]),
+            state_ids: stateIds || [stateId],
             format_name: formatName,
             columns,
             brand_configs: brandConfigs

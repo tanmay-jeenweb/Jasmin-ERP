@@ -14,7 +14,7 @@ const getPriceListDataController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Price List format not found' });
         }
 
-        const hasAccess = await checkUserStateAccess(req.user, variation.state_id, variation.state_name);
+        const hasAccess = await checkUserStateAccess(req.user, variation.state_ids || variation.state_id, variation.state_name);
         if (!hasAccess) {
             return res.status(403).json({
                 success: false,
@@ -40,9 +40,6 @@ const getPriceListDataController = async (req, res) => {
         let data = [];
         try {
             data = await getPriceListData(variationId);
-            if (data.length > 0) {
-                data = await evaluateFormulasForRecords(variationId, columns, brandConfigs, data);
-            }
         } catch (err) {
             console.warn(`Dynamic table for format ${variationId} fetch error:`, err.message);
         }
@@ -215,7 +212,7 @@ const importPriceListController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Price List format not found' });
         }
 
-        const hasAccess = await checkUserStateAccess(req.user, variation.state_id, variation.state_name);
+        const hasAccess = await checkUserStateAccess(req.user, variation.state_ids || variation.state_id, variation.state_name);
         if (!hasAccess) {
             return res.status(403).json({
                 success: false,
@@ -275,7 +272,7 @@ const getPriceListReportController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Price List format not found' });
         }
 
-        const hasAccess = await checkUserStateAccess(req.user, variation.state_id, variation.state_name);
+        const hasAccess = await checkUserStateAccess(req.user, variation.state_ids || variation.state_id, variation.state_name);
         if (!hasAccess) {
             return res.status(403).json({
                 success: false,
@@ -301,9 +298,6 @@ const getPriceListReportController = async (req, res) => {
         let data = [];
         try {
             data = await getPriceListReportData(variationId, date);
-            if (data.length > 0) {
-                data = await evaluateFormulasForRecords(variationId, columns, brandConfigs, data);
-            }
         } catch (err) {
             console.warn(`Dynamic table for format ${variationId} report error:`, err.message);
         }
@@ -513,7 +507,7 @@ const getHistoryTimestampsController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Price List format not found' });
         }
 
-        const hasAccess = await checkUserStateAccess(req.user, variation.state_id, variation.state_name);
+        const hasAccess = await checkUserStateAccess(req.user, variation.state_ids || variation.state_id, variation.state_name);
         if (!hasAccess) {
             return res.status(403).json({
                 success: false,

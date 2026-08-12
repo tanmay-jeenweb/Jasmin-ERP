@@ -22,7 +22,13 @@ export default function Login() {
 
             if (!response.data.success) {
                 if (response.data.status === "DEVICE_REGISTRATION_REQUIRED") {
-                    navigate("/device-registration", { state: { username: form.username, password: form.password } });
+                    navigate("/device-registration", { 
+                        state: { 
+                            username: form.username, 
+                            password: form.password,
+                            approvedDevices: response.data.approvedDevices || []
+                        } 
+                    });
                     return;
                 }
                 if (response.data.status === "PENDING_APPROVAL") {

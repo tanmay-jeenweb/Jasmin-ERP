@@ -261,13 +261,13 @@ export default function PriceListData() {
         cell.fill = {
           type: "pattern",
           pattern: "solid",
-          fgColor: { argb: "FF6804A1" }, // Purple theme
+          fgColor: { argb: "FFE9D5FF" }, // Light purple theme
         };
         cell.font = {
           name: "Segoe UI",
           size: 11,
           bold: true,
-          color: { argb: "FFFFFFFF" },
+          color: { argb: "FF1E293B" },
         };
         cell.alignment = { vertical: "middle", horizontal: "center" };
       });

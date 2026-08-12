@@ -38,13 +38,40 @@ const checkUserStateAccess = async (reqUser, targetStateId, targetStateName) => 
 
     // Normalize user state values to lower-case strings for matching
     const userStateNormalized = userState.map(s => String(s).trim().toLowerCase());
-    const targetNameLower = targetStateName ? String(targetStateName).trim().toLowerCase() : '';
-    const targetIdStr = targetStateId !== undefined && targetStateId !== null ? String(targetStateId).trim().toLowerCase() : '';
 
-    return (
-        (targetNameLower && userStateNormalized.includes(targetNameLower)) ||
-        (targetIdStr && userStateNormalized.includes(targetIdStr))
-    );
+    // Support targetStateName as comma-separated or array
+    let targetNames = [];
+    if (targetStateName) {
+        if (typeof targetStateName === 'string') {
+            targetNames = targetStateName.split(',').map(s => s.trim().toLowerCase());
+        } else if (Array.isArray(targetStateName)) {
+            targetNames = targetStateName.map(s => String(s).trim().toLowerCase());
+        }
+    }
+
+    // Support targetStateId as JSON array, comma-separated or number/string
+    let targetIds = [];
+    if (targetStateId !== undefined && targetStateId !== null) {
+        if (Array.isArray(targetStateId)) {
+            targetIds = targetStateId.map(id => String(id).trim().toLowerCase());
+        } else if (typeof targetStateId === 'string' && targetStateId.startsWith('[')) {
+            try {
+                targetIds = JSON.parse(targetStateId).map(id => String(id).trim().toLowerCase());
+            } catch (e) {
+                targetIds = [targetStateId.trim().toLowerCase()];
+            }
+        } else if (typeof targetStateId === 'string') {
+            targetIds = targetStateId.split(',').map(id => id.trim().toLowerCase());
+        } else {
+            targetIds = [String(targetStateId).trim().toLowerCase()];
+        }
+    }
+
+    // If any of the target states are in user's authorized states, grant access
+    const hasNameAccess = targetNames.some(name => userStateNormalized.includes(name));
+    const hasIdAccess = targetIds.some(id => userStateNormalized.includes(id));
+
+    return hasNameAccess || hasIdAccess;
 };
 
 module.exports = {

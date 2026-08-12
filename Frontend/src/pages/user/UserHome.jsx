@@ -307,8 +307,8 @@ export default function UserHome() {
                     const headerAddress = XLSX.utils.encode_cell({ r: 0, c: col });
                     if (worksheet[headerAddress]) {
                         worksheet[headerAddress].s = {
-                            font: { bold: true, color: { rgb: "FFFFFF" } },
-                            fill: { fgColor: { rgb: "6804A1" } },
+                            font: { bold: true, color: { rgb: "1E293B" } },
+                            fill: { fgColor: { rgb: "E9D5FF" } },
                             alignment: { horizontal: "center" }
                         };
                     }
@@ -394,8 +394,8 @@ export default function UserHome() {
                     const headerAddress = XLSX.utils.encode_cell({ r: 0, c: col });
                     if (worksheet[headerAddress]) {
                         worksheet[headerAddress].s = {
-                            font: { bold: true, color: { rgb: "FFFFFF" } },
-                            fill: { fgColor: { rgb: "6804A1" } },
+                            font: { bold: true, color: { rgb: "1E293B" } },
+                            fill: { fgColor: { rgb: "E9D5FF" } },
                             alignment: { horizontal: "center" }
                         };
                     }
