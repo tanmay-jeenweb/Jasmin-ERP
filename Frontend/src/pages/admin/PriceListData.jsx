@@ -79,6 +79,33 @@ export default function PriceListData() {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
 
+  // Brand filter state
+  const [selectedBrands, setSelectedBrands] = useState([]);
+  const [brandSearchText, setBrandSearchText] = useState("");
+  const [isBrandFilterOpen, setIsBrandFilterOpen] = useState(false);
+
+  useEffect(() => {
+    setSelectedBrands([]);
+    setBrandSearchText("");
+    setIsBrandFilterOpen(false);
+  }, [variationId]);
+
+  const uniqueBrands = useMemo(() => {
+    const brands = new Set();
+    data.forEach(row => {
+      if (row.brand) {
+        brands.add(row.brand.trim());
+      }
+    });
+    return Array.from(brands).sort();
+  }, [data]);
+
+  const filteredData = useMemo(() => {
+    return data.filter(row => {
+      return selectedBrands.length === 0 || selectedBrands.includes(row.brand?.trim());
+    });
+  }, [data, selectedBrands]);
+
   const currentUser = useMemo(() => {
     try {
       return JSON.parse(localStorage.getItem("user") || "{}");
@@ -272,8 +299,13 @@ export default function PriceListData() {
       });
       headerRow.height = 25;
 
+      // Filter active models to only include selected brands (if filter applied)
+      const filteredActiveModels = activeModels.filter(m =>
+        selectedBrands.length === 0 || selectedBrands.includes(m.brand_name?.trim())
+      );
+
       // 5. Populate Rows for all active product models
-      activeModels.forEach((m, index) => {
+      filteredActiveModels.forEach((m, index) => {
         const rowIndex = index + 2;
         const existingRow = data.find(r => r.product_code === m.item_code);
 
@@ -536,13 +568,91 @@ export default function PriceListData() {
         <DataTable
           tableId={`price_list_format_${variationId}`}
           title={`${formatName} - Price List`}
-          data={data}
+          data={filteredData}
           columns={columns}
           loading={loading}
           searchPlaceholder="Search products or prices..."
           actionButton={
             <div className="flex items-center gap-3">
+              {/* Brand Multi-select Dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsBrandFilterOpen(!isBrandFilterOpen);
+                  }}
+                  className="flex items-center justify-between gap-2 h-9 px-3 rounded-[9px] border border-slate-300 bg-white hover:border-slate-400 text-xs font-semibold shadow-xs transition-colors duration-150 cursor-pointer focus:outline-none"
+                >
+                  <span className="text-slate-700">
+                    {selectedBrands.length === 0
+                      ? "All Brands"
+                      : `${selectedBrands.length} Brand${selectedBrands.length > 1 ? 's' : ''}`}
+                  </span>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 text-slate-400">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
 
+                {isBrandFilterOpen && (
+                  <>
+                    <div className="fixed inset-0 z-45" onClick={() => setIsBrandFilterOpen(false)}></div>
+                    <div className="absolute right-0 mt-1 w-64 rounded-xl border border-slate-200 bg-white shadow-xl py-2 z-50 flex flex-col text-left">
+                      <div className="px-3 py-1.5 border-b border-slate-100 flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.602 10.602Z" />
+                        </svg>
+                        <input
+                          type="text"
+                          placeholder="Search brands..."
+                          value={brandSearchText}
+                          onChange={(e) => setBrandSearchText(e.target.value)}
+                          className="w-full text-xs border-none outline-none bg-transparent"
+                        />
+                      </div>
+                      <div className="px-2 py-1 border-b border-slate-100 flex items-center justify-between text-[11px] font-bold text-indigo-650">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedBrands(uniqueBrands)}
+                          className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                        >
+                          Select All
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedBrands([])}
+                          className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                        >
+                          Deselect All
+                        </button>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto px-1 py-1 space-y-0.5">
+                        {uniqueBrands
+                          .filter(b => b.toLowerCase().includes(brandSearchText.toLowerCase()))
+                          .map(brand => {
+                            const isChecked = selectedBrands.includes(brand);
+                            return (
+                              <label key={brand} className="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    if (isChecked) {
+                                      setSelectedBrands(selectedBrands.filter(name => name !== brand));
+                                    } else {
+                                      setSelectedBrands([...selectedBrands, brand]);
+                                    }
+                                  }}
+                                  className="accent-[#6804a1] h-3.5 w-3.5 flex-shrink-0"
+                                />
+                                <span className="truncate">{brand}</span>
+                              </label>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
 
               {canImportExport && (
                 <>
