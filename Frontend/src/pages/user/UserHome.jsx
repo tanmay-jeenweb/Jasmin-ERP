@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Navbar from "../../components/Navbar";
 import DataTable from "../../components/DataTable";
-import { getStockCashDepositReport } from "../../api/stockCashDepositApi";
+import { getAbmWiseCashDepositReport } from "../../api/stockCashDepositApi";
 import { getStates } from "../../api/stateApi";
 import { getTargetVsAchievements, syncTargetVsAchievements } from "../../api/targetVsAchievementApi";
 import { getMobileBrands } from "../../api/mobileBrandApi";
@@ -12,7 +12,7 @@ import * as XLSX from "xlsx-js-style";
 export default function UserHome() {
     const user = useMemo(() => JSON.parse(localStorage.getItem("user") || "{}"), []);
 
-    const [data, setData] = useState([]);
+        const [data, setData] = useState([]);
     const [states, setStates] = useState([]);
     const [selectedState, setSelectedState] = useState("All");
     const [loading, setLoading] = useState(false);
@@ -31,6 +31,30 @@ export default function UserHome() {
     });
     const [brandSyncing, setBrandSyncing] = useState(false);
 
+    const [cashDepositTotals, setCashDepositTotals] = useState({
+        opening_cash: 0,
+        cash_deposit: 0,
+        pending_cash_deposit: 0,
+        pending_pct: 0
+    });
+
+    const loadCashDepositData = async (state) => {
+        try {
+            const res = await getAbmWiseCashDepositReport(state);
+            if (res.data?.success) {
+                setData(res.data.data || []);
+                setCashDepositTotals(res.data.totals || {
+                    opening_cash: 0,
+                    cash_deposit: 0,
+                    pending_cash_deposit: 0,
+                    pending_pct: 0
+                });
+            }
+        } catch (err) {
+            console.error("Failed to load ABM wise cash deposit report:", err);
+        }
+    };
+
     const loadBrandSalesData = async (date, state = "All") => {
         try {
             const res = await getBrandWiseSales(date, state);
@@ -44,8 +68,7 @@ export default function UserHome() {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [reportRes, statesRes, targetRes, brandsRes] = await Promise.all([
-                getStockCashDepositReport(),
+            const [statesRes, targetRes, brandsRes] = await Promise.all([
                 getStates().catch(err => {
                     console.error("Failed to load states from API:", err);
                     return { data: { data: [] } };
@@ -60,11 +83,14 @@ export default function UserHome() {
                 })
             ]);
 
-            setData(reportRes.data.data || []);
             setStates(statesRes.data.data || []);
             setTargetData(targetRes.data.data || []);
             setBrandsList(brandsRes.data.data || []);
-            await loadBrandSalesData(brandSyncDate, selectedState);
+            
+            await Promise.all([
+                loadCashDepositData(selectedState),
+                loadBrandSalesData(brandSyncDate, selectedState)
+            ]);
         } catch (err) {
             console.error("Failed to load dashboard data:", err);
             toast.error("Failed to load dashboard data");
@@ -78,86 +104,26 @@ export default function UserHome() {
     }, []);
 
     useEffect(() => {
-        if (brandSyncDate) {
+        if (states.length > 0) {
+            loadCashDepositData(selectedState);
+        }
+    }, [selectedState]);
+
+    useEffect(() => {
+        if (brandSyncDate && states.length > 0) {
             loadBrandSalesData(brandSyncDate, selectedState);
         }
     }, [brandSyncDate, selectedState]);
 
     // Get list of states that actually have data in the report as fallback/helper
     const activeStates = useMemo(() => {
-        const reportStates = data
-            .map(r => r.state_name)
-            .filter(name => name && name !== "—");
-        const uniqueReportStates = Array.from(new Set(reportStates));
-
-        // Merge with all states from database to be comprehensive
         const dbStates = states.map(s => s.name);
-        const combined = Array.from(new Set([...uniqueReportStates, ...dbStates]));
-        return combined.sort((a, b) => a.localeCompare(b));
-    }, [data, states]);
-
-    // Group data by ABM Wise Cash Deposit
-    const abmSummary = useMemo(() => {
-        const summary = {};
-
-        data.forEach(item => {
-            // Apply State Filter
-            if (selectedState !== "All" && item.state_name !== selectedState) {
-                return;
-            }
-
-            const abm = item.abm_name || "—";
-            if (!summary[abm]) {
-                summary[abm] = {
-                    abm_name: abm,
-                    opening_cash: 0,
-                    cash_deposit: 0,
-                    pending_cash_deposit: 0
-                };
-            }
-
-            summary[abm].opening_cash += Number(item.opening_cash_deposit_pending || 0);
-            summary[abm].cash_deposit += Number(item.cash_deposit || 0);
-            summary[abm].pending_cash_deposit += Number(item.pending_cash_deposit || 0);
-        });
-
-        return Object.values(summary).map(group => {
-            const pending_pct = group.opening_cash > 0
-                ? (group.pending_cash_deposit / group.opening_cash) * 100
-                : 0;
-            return {
-                ...group,
-                pending_pct
-            };
-        });
-    }, [data, selectedState]);
-
-    // Calculate Summary Totals for Cards and Table Footer
-    const totals = useMemo(() => {
-        const t = {
-            opening_cash: 0,
-            cash_deposit: 0,
-            pending_cash_deposit: 0,
-            pending_pct: 0
-        };
-
-        // Use the state-filtered summary (abmSummary) so cards match the selected state
-        abmSummary.forEach(item => {
-            t.opening_cash += item.opening_cash;
-            t.cash_deposit += item.cash_deposit;
-            t.pending_cash_deposit += item.pending_cash_deposit;
-        });
-
-        t.pending_pct = t.opening_cash > 0
-            ? (t.pending_cash_deposit / t.opening_cash) * 100
-            : 0;
-
-        return t;
-    }, [abmSummary]);
+        return Array.from(new Set(dbStates)).sort((a, b) => a.localeCompare(b));
+    }, [states]);
 
     // Format data with Total row appended for the table
     const formattedData = useMemo(() => {
-        const base = abmSummary.map((item, index) => ({
+        const base = data.map((item, index) => ({
             ...item,
             id: `abm-row-${index}`,
             sr_no: index + 1
@@ -169,14 +135,14 @@ export default function UserHome() {
             id: "Total",
             sr_no: "",
             abm_name: "Total",
-            opening_cash: totals.opening_cash,
-            cash_deposit: totals.cash_deposit,
-            pending_cash_deposit: totals.pending_cash_deposit,
-            pending_pct: totals.pending_pct
+            opening_cash: cashDepositTotals.opening_cash,
+            cash_deposit: cashDepositTotals.cash_deposit,
+            pending_cash_deposit: cashDepositTotals.pending_cash_deposit,
+            pending_pct: cashDepositTotals.pending_pct
         };
 
         return [...base, totalRow];
-    }, [abmSummary, totals]);
+    }, [data, cashDepositTotals]);
 
     // Brand Totals calculated from real brandSalesData state
 
@@ -262,28 +228,28 @@ export default function UserHome() {
     // Excel Export function for ABM Cash Deposit Report
     const handleExportExcel = () => {
         try {
-            if (abmSummary.length === 0) {
+            if (data.length === 0) {
                 toast.error("No data available to export");
                 return;
             }
 
-            const dataToExport = abmSummary.map((row, index) => ({
+            const dataToExport = data.map((row, index) => ({
                 "Sr. No": index + 1,
                 "ABM Name": row.abm_name,
                 "Opening Cash": row.opening_cash,
                 "Cash Deposit": row.cash_deposit,
                 "Pending Cash Deposit": row.pending_cash_deposit,
-                "Pending Deposit %": `${row.pending_pct.toFixed(2)}%`
+                "Pending Deposit %": `${(row.pending_pct || 0).toFixed(2)}%`
             }));
 
             // Add totals row
             dataToExport.push({
                 "Sr. No": "Total",
                 "ABM Name": "",
-                "Opening Cash": totals.opening_cash,
-                "Cash Deposit": totals.cash_deposit,
-                "Pending Cash Deposit": totals.pending_cash_deposit,
-                "Pending Deposit %": `${totals.pending_pct.toFixed(2)}%`
+                "Opening Cash": cashDepositTotals.opening_cash,
+                "Cash Deposit": cashDepositTotals.cash_deposit,
+                "Pending Cash Deposit": cashDepositTotals.pending_cash_deposit,
+                "Pending Deposit %": `${(cashDepositTotals.pending_pct || 0).toFixed(2)}%`
             });
 
             const worksheet = XLSX.utils.json_to_sheet(dataToExport);
@@ -491,7 +457,7 @@ export default function UserHome() {
                 );
             }
         }
-    ], [totals]);
+    ], [cashDepositTotals]);
 
     // Brand columns
     const brandColumns = useMemo(() => [
