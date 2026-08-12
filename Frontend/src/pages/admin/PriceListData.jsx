@@ -70,7 +70,6 @@ export default function PriceListData() {
   const { hasPermission, isAdmin } = usePermission();
 
   const canImportExport = isAdmin || hasPermission("price_list", "write") || hasPermission("price_list", "update");
-  const canViewReport = isAdmin || hasPermission("price_list_report", "read");
 
   const [data, setData] = useState([]);
   const [dynamicColumns, setDynamicColumns] = useState([]);
@@ -543,16 +542,7 @@ export default function PriceListData() {
           searchPlaceholder="Search products or prices..."
           actionButton={
             <div className="flex items-center gap-3">
-              {canViewReport && (
-                <button
-                  onClick={() => navigate(`/admin/price-list-report/${variationId}`)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-[9px] text-emerald-800 bg-emerald-50 border border-emerald-200 font-semibold text-[13px] hover:bg-emerald-100/80 transition-all cursor-pointer shadow-xs"
-                  title="View Price List Report"
-                >
-                  <i className="fa-solid fa-square-poll-vertical text-emerald-600 text-xs"></i>
-                  <span>View Price Report</span>
-                </button>
-              )}
+
 
               {canImportExport && (
                 <>
