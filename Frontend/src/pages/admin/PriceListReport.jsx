@@ -51,6 +51,53 @@ export default function PriceListReport() {
   const [historyTimestamps, setHistoryTimestamps] = useState([]);
   const [isHistoricalView, setIsHistoricalView] = useState(false);
 
+  // Brand & Product filter state
+  const [selectedBrands, setSelectedBrands] = useState([]);
+  const [selectedProductNames, setSelectedProductNames] = useState([]);
+  const [brandSearchText, setBrandSearchText] = useState("");
+  const [productSearchText, setProductSearchText] = useState("");
+  const [isBrandFilterOpen, setIsBrandFilterOpen] = useState(false);
+  const [isProductFilterOpen, setIsProductFilterOpen] = useState(false);
+
+  useEffect(() => {
+    setSelectedBrands([]);
+    setSelectedProductNames([]);
+    setBrandSearchText("");
+    setProductSearchText("");
+    setIsBrandFilterOpen(false);
+    setIsProductFilterOpen(false);
+  }, [variationId]);
+
+  const uniqueBrands = useMemo(() => {
+    const brands = new Set();
+    data.forEach(row => {
+      if (row.brand) {
+        brands.add(row.brand.trim());
+      }
+    });
+    return Array.from(brands).sort();
+  }, [data]);
+
+  const uniqueProductNames = useMemo(() => {
+    const names = new Set();
+    data.forEach(row => {
+      const name = row.product_name || row.icat_name;
+      if (name) {
+        names.add(name.trim());
+      }
+    });
+    return Array.from(names).sort();
+  }, [data]);
+
+  const filteredData = useMemo(() => {
+    return data.filter(row => {
+      const brandMatch = selectedBrands.length === 0 || selectedBrands.includes(row.brand?.trim());
+      const productName = row.product_name || row.icat_name;
+      const productMatch = selectedProductNames.length === 0 || selectedProductNames.includes(productName?.trim());
+      return brandMatch && productMatch;
+    });
+  }, [data, selectedBrands, selectedProductNames]);
+
   const currentUser = useMemo(() => {
     try {
       return JSON.parse(localStorage.getItem("user") || "{}");
@@ -210,12 +257,174 @@ export default function PriceListReport() {
         <DataTable
           tableId={`price_list_report_${variationId}`}
           title={`${formatName} - Price List Report`}
-          data={data}
+          data={filteredData}
           columns={columns}
           loading={loading}
           searchPlaceholder="Search Brand, Product Name, Model Group, or prices..."
           actionButton={
             <div className="flex flex-wrap items-center gap-3">
+              {/* Brand Multi-select Dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsBrandFilterOpen(!isBrandFilterOpen);
+                    setIsProductFilterOpen(false);
+                  }}
+                  className="flex items-center justify-between gap-2 h-9 px-3 rounded-[9px] border border-slate-300 bg-white hover:border-slate-400 text-xs font-semibold shadow-xs transition-colors duration-150 cursor-pointer focus:outline-none"
+                >
+                  <span className="text-slate-700">
+                    {selectedBrands.length === 0
+                      ? "All Brands"
+                      : `${selectedBrands.length} Brand${selectedBrands.length > 1 ? 's' : ''}`}
+                  </span>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 text-slate-400">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
+
+                {isBrandFilterOpen && (
+                  <>
+                    <div className="fixed inset-0 z-45" onClick={() => setIsBrandFilterOpen(false)}></div>
+                    <div className="absolute right-0 mt-1 w-64 rounded-xl border border-slate-200 bg-white shadow-xl py-2 z-50 flex flex-col">
+                      <div className="px-3 py-1.5 border-b border-slate-100 flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.602 10.602Z" />
+                        </svg>
+                        <input
+                          type="text"
+                          placeholder="Search brands..."
+                          value={brandSearchText}
+                          onChange={(e) => setBrandSearchText(e.target.value)}
+                          className="w-full text-xs border-none outline-none bg-transparent"
+                        />
+                      </div>
+                      <div className="px-2 py-1 border-b border-slate-100 flex items-center justify-between text-[11px] font-bold text-indigo-650">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedBrands(uniqueBrands)}
+                          className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                        >
+                          Select All
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedBrands([])}
+                          className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                        >
+                          Deselect All
+                        </button>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto px-1 py-1 space-y-0.5">
+                        {uniqueBrands
+                          .filter(b => b.toLowerCase().includes(brandSearchText.toLowerCase()))
+                          .map(brand => {
+                            const isChecked = selectedBrands.includes(brand);
+                            return (
+                              <label key={brand} className="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    if (isChecked) {
+                                      setSelectedBrands(selectedBrands.filter(name => name !== brand));
+                                    } else {
+                                      setSelectedBrands([...selectedBrands, brand]);
+                                    }
+                                  }}
+                                  className="accent-[#6804a1] h-3.5 w-3.5 flex-shrink-0"
+                                />
+                                <span className="truncate">{brand}</span>
+                              </label>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Product Name Multi-select Dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProductFilterOpen(!isProductFilterOpen);
+                    setIsBrandFilterOpen(false);
+                  }}
+                  className="flex items-center justify-between gap-2 h-9 px-3 rounded-[9px] border border-slate-300 bg-white hover:border-slate-400 text-xs font-semibold shadow-xs transition-colors duration-150 cursor-pointer focus:outline-none"
+                >
+                  <span className="text-slate-700">
+                    {selectedProductNames.length === 0
+                      ? "All Products"
+                      : `${selectedProductNames.length} Product${selectedProductNames.length > 1 ? 's' : ''}`}
+                  </span>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 text-slate-400">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
+
+                {isProductFilterOpen && (
+                  <>
+                    <div className="fixed inset-0 z-45" onClick={() => setIsProductFilterOpen(false)}></div>
+                    <div className="absolute right-0 mt-1 w-64 rounded-xl border border-slate-200 bg-white shadow-xl py-2 z-50 flex flex-col">
+                      <div className="px-3 py-1.5 border-b border-slate-100 flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.602 10.602Z" />
+                        </svg>
+                        <input
+                          type="text"
+                          placeholder="Search products..."
+                          value={productSearchText}
+                          onChange={(e) => setProductSearchText(e.target.value)}
+                          className="w-full text-xs border-none outline-none bg-transparent"
+                        />
+                      </div>
+                      <div className="px-2 py-1 border-b border-slate-100 flex items-center justify-between text-[11px] font-bold text-indigo-650">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProductNames(uniqueProductNames)}
+                          className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                        >
+                          Select All
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProductNames([])}
+                          className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                        >
+                          Deselect All
+                        </button>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto px-1 py-1 space-y-0.5">
+                        {uniqueProductNames
+                          .filter(p => p.toLowerCase().includes(productSearchText.toLowerCase()))
+                          .map(name => {
+                            const isChecked = selectedProductNames.includes(name);
+                            return (
+                              <label key={name} className="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    if (isChecked) {
+                                      setSelectedProductNames(selectedProductNames.filter(pName => pName !== name));
+                                    } else {
+                                      setSelectedProductNames([...selectedProductNames, name]);
+                                    }
+                                  }}
+                                  className="accent-[#6804a1] h-3.5 w-3.5 flex-shrink-0"
+                                />
+                                <span className="truncate">{name}</span>
+                              </label>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
               <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-[9px] px-3 py-1.5 shadow-xs">
                 <i className="fa-solid fa-calendar-days text-indigo-600 text-xs"></i>
                 <label htmlFor="report-date" className="text-xs font-semibold text-slate-700 whitespace-nowrap">
@@ -246,8 +455,6 @@ export default function PriceListReport() {
                   <span>Historical Data ({reportDate})</span>
                 </div>
               )}
-
-
             </div>
           }
         />
