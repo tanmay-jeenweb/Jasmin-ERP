@@ -39,6 +39,7 @@ import PricingFormulaMasterList from "./pages/admin/PricingFormulaMasterList";
 import PricingFormulaForm from "./pages/admin/PricingFormulaForm";
 import PriceListData from "./pages/admin/PriceListData";
 import PriceListReport from "./pages/admin/PriceListReport";
+import PriceListView from "./pages/admin/PriceListView";
 
 
 export default function AppRoutes() {
@@ -293,6 +294,13 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/price-list-report/:variationId"
                     element={<PriceListReport />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredMaster="price_list_view" requiredAction="read" />}>
+                <Route
+                    path="/admin/price-list-view/:variationId"
+                    element={<PriceListView />}
                 />
             </Route>
 

@@ -19,3 +19,9 @@ export const importOpeningCashAndCreditReport = async (records) => {
 export const importCashDepositReport = async (records) => {
     return apiClient.post("/stock-cash-deposit/import-cash-deposit", { records });
 };
+
+export const getAbmWiseCashDepositReport = async (state = "All") => {
+    return apiClient.get("/stock-cash-deposit/abm-wise", {
+        params: { state }
+    });
+};
