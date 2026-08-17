@@ -41,7 +41,7 @@ const createTargetVsAchievementsTable = async () => {
             INDEX idx_invoice_date (invoice_date),
             INDEX idx_branch_code  (branch_code),
             INDEX idx_record_type  (record_type)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
     `;
     await db.execute(createCacheQuery);
     console.log("sales_invoice_cache table ready");

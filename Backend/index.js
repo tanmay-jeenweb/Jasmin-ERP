@@ -1,4 +1,6 @@
 require("dotenv").config();
+// Server initialization
+
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
@@ -64,6 +66,11 @@ const app = express();
 
 const allowedOrigins = [
     "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
     "https://crm.jasminmobile.com",
     "http://crm.jasminmobile.com",
     "https://www.crm.jasminmobile.com",
@@ -82,9 +89,18 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 app.use(cors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (
+            allowedOrigins.includes(origin) ||
+            /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+        ) {
+            return callback(null, origin);
+        }
+        return callback(null, origin);
+    },
     credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization", "X-HTTP-Method-Override", "x-device-id", "device-id"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-HTTP-Method-Override", "x-device-id", "device-id", "Accept", "Origin"],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
 }));
 app.use(express.json({ limit: "50mb" }));
