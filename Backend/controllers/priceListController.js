@@ -40,9 +40,6 @@ const getPriceListDataController = async (req, res) => {
         let data = [];
         try {
             data = await getPriceListData(variationId);
-            if (data.length > 0) {
-                data = await evaluateFormulasForRecords(variationId, columns, brandConfigs, data);
-            }
         } catch (err) {
             console.warn(`Dynamic table for format ${variationId} fetch error:`, err.message);
         }
@@ -301,9 +298,6 @@ const getPriceListReportController = async (req, res) => {
         let data = [];
         try {
             data = await getPriceListReportData(variationId, date);
-            if (data.length > 0) {
-                data = await evaluateFormulasForRecords(variationId, columns, brandConfigs, data);
-            }
         } catch (err) {
             console.warn(`Dynamic table for format ${variationId} report error:`, err.message);
         }

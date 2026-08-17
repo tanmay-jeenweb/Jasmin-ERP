@@ -131,9 +131,23 @@ export default function Navbar() {
         setIsPriceListOpen(false);
     }, [location.pathname]);
 
-    const canSeePriceListTab = isAdmin || hasPermission("price_list", "read") || hasPermission("price_list_report", "read");
+    const canSeePriceListView = isAdmin || hasPermission("price_list_view", "read");
+    const canSeePriceListTab = isAdmin || hasPermission("price_list", "read") || hasPermission("price_list_report", "read") || hasPermission("price_list_view", "read");
     const canSeePriceListTables = isAdmin || hasPermission("price_list", "read");
     const canSeePriceListReports = isAdmin || hasPermission("price_list_report", "read");
+
+    let colsCount = 0;
+    if (canSeePriceListTables) colsCount++;
+    if (canSeePriceListReports) colsCount++;
+    if (canSeePriceListView) colsCount++;
+
+    let dropdownWidthClass = "w-80";
+    if (colsCount === 2) dropdownWidthClass = "w-[640px]";
+    else if (colsCount === 3) dropdownWidthClass = "w-[960px]";
+
+    let gridColsClass = "grid-cols-1 gap-3";
+    if (colsCount === 2) gridColsClass = "grid-cols-2 divide-x divide-slate-100 gap-4";
+    else if (colsCount === 3) gridColsClass = "grid-cols-3 divide-x divide-slate-100 gap-4";
 
     const handleLogout = async () => {
         try {
@@ -599,11 +613,11 @@ export default function Navbar() {
                                 </button>
 
                                 {isPriceListOpen && (
-                                    <div className={`absolute left-0 top-full mt-1.5 ${canSeePriceListTables && canSeePriceListReports ? "w-[640px]" : "w-80"} bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200`}>
+                                    <div className={`absolute left-1/2 -translate-x-1/2 top-full mt-1.5 ${dropdownWidthClass} bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200`}>
                                         {priceFormats.length === 0 ? (
                                             <p className="text-slate-500 text-xs text-center py-2">No formats configured</p>
                                         ) : (
-                                            <div className={`grid ${canSeePriceListTables && canSeePriceListReports ? "grid-cols-2 divide-x divide-slate-100 gap-4" : "grid-cols-1 gap-3"} max-h-96 overflow-y-auto`}>
+                                            <div className={`grid ${gridColsClass} max-h-96 overflow-y-auto`}>
                                                 {/* Section 1: Price List Data */}
                                                 {canSeePriceListTables && (
                                                     <div className="flex flex-col gap-1.5">
@@ -680,6 +694,49 @@ export default function Navbar() {
                                                                         </div>
                                                                         <div className="flex-1">
                                                                             <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-emerald-900 font-bold" : "text-slate-800 group-hover:text-slate-950"}`}>
+                                                                                {label}
+                                                                            </p>
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Section 3: Price List View */}
+                                                {canSeePriceListView && (
+                                                    <div className={`flex flex-col gap-1.5 ${(canSeePriceListTables || canSeePriceListReports) ? "pl-4" : ""}`}>
+                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1 flex items-center gap-1.5">
+                                                            <i className="fa-solid fa-eye text-cyan-500"></i>
+                                                            Price List View
+                                                        </p>
+                                                        <div className="flex flex-col gap-1">
+                                                            {priceFormats.map((f, idx) => {
+                                                                const brandsList = f.brand_configs
+                                                                    ? (typeof f.brand_configs === 'string' ? JSON.parse(f.brand_configs) : f.brand_configs)
+                                                                    : [];
+                                                                const label = `${f.format_name || f.state_name} View`;
+                                                                const path = `/admin/price-list-view/${f.id}`;
+                                                                const isActive = location.pathname === path;
+                                                                return (
+                                                                    <button
+                                                                        key={idx}
+                                                                        onClick={() => {
+                                                                            navigate(path);
+                                                                            setIsPriceListOpen(false);
+                                                                        }}
+                                                                        className={`relative group flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border border-transparent ${isActive
+                                                                            ? "bg-cyan-50/70 text-cyan-700 font-semibold border-cyan-100/50"
+                                                                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
+                                                                            }`}
+                                                                    >
+                                                                        <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${isActive ? "bg-cyan-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"}`} />
+                                                                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${isActive ? "bg-cyan-100/80 text-cyan-700" : "bg-slate-100/80 text-slate-500 group-hover:scale-105"}`}>
+                                                                            <i className="fa-solid fa-eye text-xs"></i>
+                                                                        </div>
+                                                                        <div className="flex-1">
+                                                                            <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-cyan-900 font-bold" : "text-slate-800 group-hover:text-slate-950"}`}>
                                                                                 {label}
                                                                             </p>
                                                                         </div>

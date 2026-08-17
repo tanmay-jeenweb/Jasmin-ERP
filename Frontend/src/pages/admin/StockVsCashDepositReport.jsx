@@ -162,16 +162,16 @@ export default function StockVsCashDepositReport() {
       const headerRow = sheet.getRow(1);
       headerRow.height = 26;
       headerRow.eachCell((cell) => {
-        cell.font = { bold: true, color: { argb: "FFFFFFFF" }, name: "Segoe UI", size: 10 };
+        cell.font = { bold: true, color: { argb: "FF1E293B" }, name: "Segoe UI", size: 10 };
         cell.fill = {
           type: "pattern",
           pattern: "solid",
-          fgColor: { argb: "FF4F46E5" }
+          fgColor: { argb: "FFE0E7FF" }
         };
         cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
         cell.border = {
-          top: { style: "medium", color: { argb: "FF3730A3" } },
-          bottom: { style: "medium", color: { argb: "FF3730A3" } },
+          top: { style: "medium", color: { argb: "FFA5B4FC" } },
+          bottom: { style: "medium", color: { argb: "FFA5B4FC" } },
           left: { style: "thin", color: { argb: "FFE2E8F0" } },
           right: { style: "thin", color: { argb: "FFE2E8F0" } }
         };
@@ -280,16 +280,16 @@ export default function StockVsCashDepositReport() {
       const headerRow = sheet.getRow(1);
       headerRow.height = 26;
       headerRow.eachCell((cell) => {
-        cell.font = { bold: true, color: { argb: "FFFFFFFF" }, name: "Segoe UI", size: 10 };
+        cell.font = { bold: true, color: { argb: "FF1E293B" }, name: "Segoe UI", size: 10 };
         cell.fill = {
           type: "pattern",
           pattern: "solid",
-          fgColor: { argb: "FF4F46E5" }
+          fgColor: { argb: "FFE0E7FF" }
         };
         cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
         cell.border = {
-          top: { style: "medium", color: { argb: "FF3730A3" } },
-          bottom: { style: "medium", color: { argb: "FF3730A3" } },
+          top: { style: "medium", color: { argb: "FFA5B4FC" } },
+          bottom: { style: "medium", color: { argb: "FFA5B4FC" } },
           left: { style: "thin", color: { argb: "FFE2E8F0" } },
           right: { style: "thin", color: { argb: "FFE2E8F0" } }
         };
@@ -400,16 +400,16 @@ export default function StockVsCashDepositReport() {
       const headerRow = sheet.getRow(1);
       headerRow.height = 26;
       headerRow.eachCell((cell) => {
-        cell.font = { bold: true, color: { argb: "FFFFFFFF" }, name: "Segoe UI", size: 10 };
+        cell.font = { bold: true, color: { argb: "FF1E293B" }, name: "Segoe UI", size: 10 };
         cell.fill = {
           type: "pattern",
           pattern: "solid",
-          fgColor: { argb: "FF4F46E5" }
+          fgColor: { argb: "FFE0E7FF" }
         };
         cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
         cell.border = {
-          top: { style: "medium", color: { argb: "FF3730A3" } },
-          bottom: { style: "medium", color: { argb: "FF3730A3" } },
+          top: { style: "medium", color: { argb: "FFA5B4FC" } },
+          bottom: { style: "medium", color: { argb: "FFA5B4FC" } },
           left: { style: "thin", color: { argb: "FFE2E8F0" } },
           right: { style: "thin", color: { argb: "FFE2E8F0" } }
         };
@@ -518,16 +518,16 @@ export default function StockVsCashDepositReport() {
       const headerRow = sheet.getRow(1);
       headerRow.height = 26;
       headerRow.eachCell((cell) => {
-        cell.font = { bold: true, color: { argb: "FFFFFFFF" }, name: "Segoe UI", size: 10 };
+        cell.font = { bold: true, color: { argb: "FF1E293B" }, name: "Segoe UI", size: 10 };
         cell.fill = {
           type: "pattern",
           pattern: "solid",
-          fgColor: { argb: "FF4F46E5" }
+          fgColor: { argb: "FFE0E7FF" }
         };
         cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
         cell.border = {
-          top: { style: "medium", color: { argb: "FF3730A3" } },
-          bottom: { style: "medium", color: { argb: "FF3730A3" } },
+          top: { style: "medium", color: { argb: "FFA5B4FC" } },
+          bottom: { style: "medium", color: { argb: "FFA5B4FC" } },
           left: { style: "thin", color: { argb: "FFE2E8F0" } },
           right: { style: "thin", color: { argb: "FFE2E8F0" } }
         };
@@ -678,16 +678,16 @@ export default function StockVsCashDepositReport() {
       const headerRow = sheet.getRow(1);
       headerRow.height = 26;
       headerRow.eachCell((cell) => {
-        cell.font = { bold: true, color: { argb: "FFFFFFFF" }, name: "Segoe UI", size: 10 };
+        cell.font = { bold: true, color: { argb: "FF1E293B" }, name: "Segoe UI", size: 10 };
         cell.fill = {
           type: "pattern",
           pattern: "solid",
-          fgColor: { argb: "FF4F46E5" }
+          fgColor: { argb: "FFE0E7FF" }
         };
         cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
         cell.border = {
-          top: { style: "medium", color: { argb: "FF3730A3" } },
-          bottom: { style: "medium", color: { argb: "FF3730A3" } },
+          top: { style: "medium", color: { argb: "FFA5B4FC" } },
+          bottom: { style: "medium", color: { argb: "FFA5B4FC" } },
           left: { style: "thin", color: { argb: "FFE2E8F0" } },
           right: { style: "thin", color: { argb: "FFE2E8F0" } }
         };

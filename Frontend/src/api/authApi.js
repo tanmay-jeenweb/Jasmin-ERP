@@ -46,6 +46,10 @@ export const requestDeviceRegistration = async (data) => {
     return apiClient.post("/auth/request-device", data);
 };
 
+export const getApprovedDevicesList = async (data) => {
+    return apiClient.post("/auth/approved-devices", data);
+};
+
 export const logoutUser = async () => {
     return apiClient.post("/auth/logout");
 };
@@ -68,6 +72,14 @@ export const approveDevice = async (deviceRowId) => {
 
 export const revokeDevice = async (userId) => {
     return apiClient.put(`/admin/revoke-device/${userId}`);
+};
+
+export const fetchUserActiveDevices = async (userId) => {
+    return apiClient.get(`/admin/devices/user/${userId}`);
+};
+
+export const revokeSpecificDevice = async (deviceRowId) => {
+    return apiClient.put(`/admin/devices/revoke/${deviceRowId}`);
 };
 
 

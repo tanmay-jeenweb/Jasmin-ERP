@@ -41,6 +41,7 @@ const MASTER_GROUPS = [
       { key: "variation_master", label: "Pricing Formula Master" },
       { key: "price_list", label: "Price List", note: "Write = Price List Import/Export" },
       { key: "price_list_report", label: "Price List Report" },
+      { key: "price_list_view", label: "Price List View" },
       { key: "landing_type_master", label: "Landing Type Master" },
       { key: "finance_brand_mapping", label: "Finance Brand Mapping" },
     ]

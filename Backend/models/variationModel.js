@@ -10,6 +10,71 @@ const sanitize = (name) => {
     return String(name).replace(/`/g, '');
 };
 
+const deduplicateColumns = (columns) => {
+    if (!columns || !Array.isArray(columns)) return { newColumns: columns || [], changed: false };
+    
+    let nameCounts = new Map();
+    columns.forEach(col => {
+        const name = col.column_name ? col.column_name.trim() : "";
+        if (name) {
+            nameCounts.set(name, (nameCounts.get(name) || 0) + 1);
+        }
+    });
+
+    let changed = false;
+    const newColumns = columns.map(col => {
+        const name = col.column_name ? col.column_name.trim() : "";
+        if (name && nameCounts.get(name) > 1 && col.column_id) {
+            changed = true;
+            return {
+                ...col,
+                column_name: `${name} (${col.column_id})`
+            };
+        }
+        return col;
+    });
+
+    return { newColumns, changed };
+};
+
+
+const migrateTableColumnsToText = async (tableName) => {
+    try {
+        const [columns] = await db.execute(`SHOW COLUMNS FROM \`${tableName}\``);
+        const modifyClauses = [];
+        
+        for (const col of columns) {
+            const fieldName = col.Field;
+            const fieldType = col.Type.toLowerCase();
+            
+            // Exclude fixed columns that must remain VARCHAR for index/lookup constraints
+            const isFixedColumn = [
+                'id', 'product_code', 'brand', 'icat_name', 'model_group_name', 'model_name',
+                'added_by', 'device_id', 'timestamp', 'updated_at'
+            ].includes(fieldName);
+            
+            if (!isFixedColumn && fieldType.startsWith('varchar')) {
+                modifyClauses.push(`MODIFY \`${fieldName}\` TEXT NULL`);
+            }
+        }
+        
+        if (modifyClauses.length > 0) {
+            console.log(`Migrating columns in ${tableName} to TEXT and DYNAMIC row format...`);
+            const query = `ALTER TABLE \`${tableName}\` ${modifyClauses.join(', ')}, ROW_FORMAT=DYNAMIC`;
+            await db.execute(query);
+            console.log(`Successfully migrated ${tableName} columns to TEXT and DYNAMIC.`);
+        } else {
+            // Already converted or no custom columns, just enforce ROW_FORMAT=DYNAMIC
+            try {
+                await db.execute(`ALTER TABLE \`${tableName}\` ROW_FORMAT=DYNAMIC`);
+            } catch (e) {
+                // Ignore if not supported
+            }
+        }
+    } catch (err) {
+        console.warn(`Failed to migrate table schema for ${tableName}:`, err.message);
+    }
+};
 
 const createVariationTable = async () => {
     const query = `
@@ -84,51 +149,122 @@ const createVariationTable = async () => {
         const [variations] = await db.execute("SELECT id, columns FROM variation_master");
         for (const v of variations) {
             const vId = v.id;
-            const columns = typeof v.columns === 'string' ? JSON.parse(v.columns) : (v.columns || []);
+            let columns = typeof v.columns === 'string' ? JSON.parse(v.columns) : (v.columns || []);
+            
             const tableName = `price_list_format_${vId}`;
             const historyTableName = `price_list_format_history_${vId}`;
 
             const currentExists = await checkTableExists(tableName);
             const historyExists = await checkTableExists(historyTableName);
 
-            if (currentExists && !historyExists) {
-                console.log(`Migrating history table for variation #${vId}...`);
-                const columnDefs = columns.map(col => {
-                    const safeName = sanitize(col.column_name);
-                    return `\`${safeName}\` VARCHAR(255) NULL`;
-                }).join(', ');
+            // 1. Upgrade existing tables to TEXT and DYNAMIC row format FIRST
+            // to prevent "Row size too large" errors during the column renaming/adding below
+            if (currentExists) {
+                await migrateTableColumnsToText(tableName);
+            }
+            if (historyExists) {
+                await migrateTableColumnsToText(historyTableName);
+            }
 
-                const createHistQuery = `
-                    CREATE TABLE IF NOT EXISTS \`${historyTableName}\` (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        product_code VARCHAR(100) NOT NULL,
-                        brand VARCHAR(150) NOT NULL,
-                        icat_name VARCHAR(150) NOT NULL,
-                        model_group_name VARCHAR(255) NOT NULL,
-                        model_name VARCHAR(255) NOT NULL,
-                        ${columnDefs ? columnDefs + ',' : ''}
-                        added_by INT NULL,
-                        device_id VARCHAR(100) NULL,
-                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE SET NULL
-                    )
-                `;
-                await db.execute(createHistQuery);
+            // Deduplicate columns with identical names to prevent MySQL syntax errors and frontend overwrites
+            const { newColumns, changed } = deduplicateColumns(columns);
+            if (changed) {
+                console.log(`Detected duplicate column names in variation #${vId}. Automatically updating to unique names...`);
+                await db.execute("UPDATE variation_master SET columns = ? WHERE id = ?", [JSON.stringify(newColumns), vId]);
+                
+                // Rename or add missing unique columns in the MySQL tables
+                if (currentExists) {
+                    for (let i = 0; i < columns.length; i++) {
+                        const oldName = sanitize(columns[i].column_name);
+                        const newName = sanitize(newColumns[i].column_name);
+                        if (oldName !== newName && oldName && newName) {
+                            try {
+                                await db.execute(`ALTER TABLE \`${tableName}\` CHANGE COLUMN \`${oldName}\` \`${newName}\` TEXT NULL`);
+                                console.log(`Renamed/modified column in ${tableName}: ${oldName} -> ${newName}`);
+                            } catch (e) {
+                                try {
+                                    await db.execute(`ALTER TABLE \`${tableName}\` ADD COLUMN \`${newName}\` TEXT NULL`);
+                                    console.log(`Added missing column to ${tableName}: ${newName}`);
+                                } catch (addErr) {
+                                    // Ignore if already exists
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if (historyExists) {
+                    for (let i = 0; i < columns.length; i++) {
+                        const oldName = sanitize(columns[i].column_name);
+                        const newName = sanitize(newColumns[i].column_name);
+                        if (oldName !== newName && oldName && newName) {
+                            try {
+                                await db.execute(`ALTER TABLE \`${historyTableName}\` CHANGE COLUMN \`${oldName}\` \`${newName}\` TEXT NULL`);
+                                console.log(`Renamed/modified column in ${historyTableName}: ${oldName} -> ${newName}`);
+                            } catch (e) {
+                                try {
+                                    await db.execute(`ALTER TABLE \`${historyTableName}\` ADD COLUMN \`${newName}\` TEXT NULL`);
+                                    console.log(`Added missing column to ${historyTableName}: ${newName}`);
+                                } catch (addErr) {
+                                    // Ignore if already exists
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                columns = newColumns;
+            }
 
-                // Seed existing records as initial history baseline if rows exist
-                try {
-                    const customCols = columns.map(c => `\`${sanitize(c.column_name)}\``);
-                    const colsString = customCols.length > 0 ? customCols.join(', ') + ', ' : '';
+            if (!currentExists) {
+                console.log(`Recreating missing format and history tables for variation #${vId}...`);
+                await createFormatTable(vId, columns);
+            } else {
+                // Migrate existing tables to TEXT and DYNAMIC row format to avoid size limits
+                await migrateTableColumnsToText(tableName);
 
-                    const seedQuery = `
-                        INSERT INTO \`${historyTableName}\` (product_code, brand, icat_name, model_group_name, model_name, ${colsString}added_by, device_id, timestamp)
-                        SELECT product_code, brand, icat_name, model_group_name, model_name, ${colsString}added_by, device_id, timestamp
-                        FROM \`${tableName}\`
+                if (!historyExists) {
+                    console.log(`Migrating history table for variation #${vId}...`);
+                    const columnDefs = columns.map(col => {
+                        const safeName = sanitize(col.column_name);
+                        return `\`${safeName}\` TEXT NULL`;
+                    }).join(', ');
+
+                    const createHistQuery = `
+                        CREATE TABLE IF NOT EXISTS \`${historyTableName}\` (
+                            id INT AUTO_INCREMENT PRIMARY KEY,
+                            product_code VARCHAR(100) NOT NULL,
+                            brand VARCHAR(150) NOT NULL,
+                            icat_name VARCHAR(150) NOT NULL,
+                            model_group_name VARCHAR(255) NOT NULL,
+                            model_name VARCHAR(255) NOT NULL,
+                            ${columnDefs ? columnDefs + ',' : ''}
+                            added_by INT NULL,
+                            device_id VARCHAR(100) NULL,
+                            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE SET NULL
+                        ) ROW_FORMAT=DYNAMIC
                     `;
-                    await db.execute(seedQuery);
-                    console.log(`Seeded history table ${historyTableName} from current table ${tableName}`);
-                } catch (seedErr) {
-                    console.warn(`Could not seed initial baseline for ${historyTableName}:`, seedErr.message);
+                    await db.execute(createHistQuery);
+
+                    // Seed existing records as initial history baseline if rows exist
+                    try {
+                        const customCols = columns.map(c => `\`${sanitize(c.column_name)}\``);
+                        const colsString = customCols.length > 0 ? customCols.join(', ') + ', ' : '';
+
+                        const seedQuery = `
+                            INSERT INTO \`${historyTableName}\` (product_code, brand, icat_name, model_group_name, model_name, ${colsString}added_by, device_id, timestamp)
+                            SELECT product_code, brand, icat_name, model_group_name, model_name, ${colsString}added_by, device_id, timestamp
+                            FROM \`${tableName}\`
+                        `;
+                        await db.execute(seedQuery);
+                        console.log(`Seeded history table ${historyTableName} from current table ${tableName}`);
+                    } catch (seedErr) {
+                        console.warn(`Could not seed initial baseline for ${historyTableName}:`, seedErr.message);
+                    }
+                } else {
+                    // Ensure existing history table is migrated to TEXT and DYNAMIC
+                    await migrateTableColumnsToText(historyTableName);
                 }
             }
         }
@@ -141,13 +277,15 @@ const createVariationTable = async () => {
 
 // Helpers for dynamic table schema updates
 const checkTableExists = async (tableName) => {
-    const query = `
-        SELECT COUNT(*) as count 
-        FROM information_schema.tables 
-        WHERE table_schema = DATABASE() AND table_name = ?
-    `;
-    const [rows] = await db.execute(query, [tableName]);
-    return rows[0].count > 0;
+    try {
+        await db.execute(`SELECT 1 FROM \`${tableName}\` LIMIT 0`);
+        return true;
+    } catch (e) {
+        if (e.code === 'ER_NO_SUCH_TABLE') {
+            return false;
+        }
+        throw e;
+    }
 };
 
 const createFormatTable = async (variationId, columns) => {
@@ -156,7 +294,7 @@ const createFormatTable = async (variationId, columns) => {
 
     const columnDefs = columns.map(col => {
         const safeName = sanitize(col.column_name);
-        return `\`${safeName}\` VARCHAR(255) NULL`;
+        return `\`${safeName}\` TEXT NULL`;
     }).join(', ');
 
     // 1. Current Snapshot Table (product_code is UNIQUE)
@@ -174,7 +312,7 @@ const createFormatTable = async (variationId, columns) => {
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE SET NULL
-        )
+        ) ROW_FORMAT=DYNAMIC
     `;
     await db.execute(currentQuery);
     console.log(`Created dynamic price list format table: ${tableName}`);
@@ -193,7 +331,7 @@ const createFormatTable = async (variationId, columns) => {
             device_id VARCHAR(100) NULL,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE SET NULL
-        )
+        ) ROW_FORMAT=DYNAMIC
     `;
     await db.execute(historyQuery);
     console.log(`Created dynamic price list format history table: ${historyTableName}`);
@@ -212,6 +350,9 @@ const syncFormatTableSchema = async (variationId, oldColumns, newColumns) => {
     }
 
     for (const target of targetTables) {
+        // Migrate table to TEXT / DYNAMIC row format first to avoid size limit issues when adding columns
+        await migrateTableColumnsToText(target);
+
         // 1. Columns to Add or Rename
         for (const [colId, newName] of newColsMap.entries()) {
             const safeNewName = sanitize(newName);
@@ -226,7 +367,7 @@ const syncFormatTableSchema = async (variationId, oldColumns, newColumns) => {
                 }
             } else {
                 // Column is new
-                const query = `ALTER TABLE \`${target}\` ADD COLUMN \`${safeNewName}\` VARCHAR(255) NULL`;
+                const query = `ALTER TABLE \`${target}\` ADD COLUMN \`${safeNewName}\` TEXT NULL`;
                 await db.execute(query);
                 console.log(`Added column to ${target}: ${newName}`);
             }
@@ -277,6 +418,7 @@ const mapVariationStates = async (variations) => {
 };
 
 const createVariation = async (stateId, formatName, columns, brandConfigs, addedBy, deviceId, stateIds) => {
+    const { newColumns } = deduplicateColumns(columns);
     const query = `
         INSERT INTO variation_master (state_id, format_name, columns, brand_configs, added_by, device_id, state_ids)
         VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -284,7 +426,7 @@ const createVariation = async (stateId, formatName, columns, brandConfigs, added
     const [result] = await db.execute(query, [
         stateId,
         formatName,
-        JSON.stringify(columns),
+        JSON.stringify(newColumns),
         brandConfigs ? JSON.stringify(brandConfigs) : null,
         addedBy,
         deviceId,
@@ -292,7 +434,7 @@ const createVariation = async (stateId, formatName, columns, brandConfigs, added
     ]);
 
     const insertedId = result.insertId;
-    await createFormatTable(insertedId, columns);
+    await createFormatTable(insertedId, newColumns);
 
     return result;
 };
@@ -374,6 +516,8 @@ const updateVariation = async (id, stateId, formatName, newColumns, brandConfigs
         }
     });
 
+    const { newColumns: deduplicatedColumns } = deduplicateColumns(mergedColumns);
+
     const query = `
         UPDATE variation_master
         SET state_id = ?, format_name = ?, columns = ?, brand_configs = ?, state_ids = ?
@@ -382,7 +526,7 @@ const updateVariation = async (id, stateId, formatName, newColumns, brandConfigs
     const [result] = await db.execute(query, [
         stateId,
         formatName,
-        JSON.stringify(mergedColumns),
+        JSON.stringify(deduplicatedColumns),
         brandConfigs ? JSON.stringify(brandConfigs) : null,
         stateIds ? JSON.stringify(stateIds) : JSON.stringify([stateId]),
         id
@@ -392,9 +536,9 @@ const updateVariation = async (id, stateId, formatName, newColumns, brandConfigs
     const tableName = `price_list_format_${id}`;
     const exists = await checkTableExists(tableName);
     if (exists) {
-        await syncFormatTableSchema(id, oldColumns, mergedColumns);
+        await syncFormatTableSchema(id, oldColumns, deduplicatedColumns);
     } else {
-        await createFormatTable(id, mergedColumns);
+        await createFormatTable(id, deduplicatedColumns);
     }
 
     return result;

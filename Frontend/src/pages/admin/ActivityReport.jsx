@@ -48,6 +48,7 @@ function DetailModal({ isOpen, row, onClose }) {
         variation_master: "Pricing Formula Master",
         price_list: "Price List",
         price_list_report: "Price List Report",
+        price_list_view: "Price List View",
         landing_type_master: "Landing Type Master",
         target_vs_achievement: "Target vs Achievement",
         stock_vs_cash_deposit: "Stock vs Cash Deposit",

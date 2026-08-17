@@ -198,16 +198,16 @@ export default function PricingFormulaMasterList() {
             const headerRow = worksheet.getRow(1);
             headerRow.height = 26;
             headerRow.eachCell((cell) => {
-                cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+                cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FF1E293B" } };
                 cell.fill = {
                     type: "pattern",
                     pattern: "solid",
-                    fgColor: { argb: "FF6804A1" }
+                    fgColor: { argb: "FFE9D5FF" }
                 };
                 cell.alignment = { horizontal: "center", vertical: "middle" };
                 cell.border = {
-                    top: { style: "medium", color: { argb: "FF4A0266" } },
-                    bottom: { style: "medium", color: { argb: "FF4A0266" } },
+                    top: { style: "medium", color: { argb: "FFC084FC" } },
+                    bottom: { style: "medium", color: { argb: "FFC084FC" } },
                     left: { style: "thin", color: { argb: "FFE2E8F0" } },
                     right: { style: "thin", color: { argb: "FFE2E8F0" } }
                 };

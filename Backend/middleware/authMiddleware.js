@@ -97,20 +97,22 @@ const verifyPermission = (masterName, action) => {
                 });
             }
 
+            const masterNames = Array.isArray(masterName) ? masterName : [masterName];
+            const placeholders = masterNames.map(() => "?").join(", ");
             const query = `
                 SELECT ${column} AS permitted 
                 FROM user_type_permissions 
-                WHERE user_type_id = ? AND master_name = ?
+                WHERE user_type_id = ? AND master_name IN (${placeholders})
             `;
-            const [permRows] = await db.execute(query, [userTypeId, masterName]);
+            const [permRows] = await db.execute(query, [userTypeId, ...masterNames]);
 
-            if (permRows.length > 0 && permRows[0].permitted === 1) {
+            if (permRows.some(row => row.permitted === 1)) {
                 return next();
             }
 
             return res.status(403).json({
                 success: false,
-                message: `Access Denied. Insufficient permissions for ${masterName} (${action}).`
+                message: `Access Denied. Insufficient permissions for ${masterNames.join(" or ")} (${action}).`
             });
 
         } catch (error) {

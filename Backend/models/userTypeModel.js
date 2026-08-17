@@ -19,6 +19,7 @@ const MASTERS = [
     { key: 'variation_master', label: 'Pricing Formula Master' },
     { key: 'price_list', label: 'Price List' },
     { key: 'price_list_report', label: 'Price List Report' },
+    { key: 'price_list_view', label: 'Price List View' },
     { key: 'landing_type_master', label: 'Landing Type Master' },
     { key: 'target_vs_achievement', label: 'Target vs Achievement' },
     { key: 'stock_vs_cash_deposit', label: 'Stock vs Cash Deposit' },
@@ -86,7 +87,7 @@ const createUserTypePermissionsTable = async () => {
         await db.execute("UPDATE IGNORE user_type_permissions SET master_name = 'user_branch_mapping' WHERE master_name = 'abm_branch_mapping'");
         await db.execute("DELETE FROM user_type_permissions WHERE master_name = 'abm_branch_mapping'");
 
-        // Seed initial price_list and price_list_report permission rows from variation_master for existing user types
+        // Seed initial price_list, price_list_report, and price_list_view permission rows from variation_master for existing user types
         await db.execute(`
             INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete)
             SELECT user_type_id, 'price_list', can_read, can_write, can_update, can_delete
@@ -96,6 +97,12 @@ const createUserTypePermissionsTable = async () => {
         await db.execute(`
             INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete)
             SELECT user_type_id, 'price_list_report', can_read, can_write, can_update, can_delete
+            FROM user_type_permissions
+            WHERE master_name = 'variation_master'
+        `);
+        await db.execute(`
+            INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete)
+            SELECT user_type_id, 'price_list_view', can_read, can_write, can_update, can_delete
             FROM user_type_permissions
             WHERE master_name = 'variation_master'
         `);

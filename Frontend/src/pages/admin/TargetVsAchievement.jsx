@@ -132,16 +132,16 @@ export default function TargetVsAchievement() {
       const headerRow = worksheet.getRow(1);
       headerRow.height = 26;
       headerRow.eachCell((cell) => {
-        cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+        cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FF1E293B" } };
         cell.fill = {
           type: "pattern",
           pattern: "solid",
-          fgColor: { argb: "FF6804A1" } // Purple background
+          fgColor: { argb: "FFE9D5FF" } // Light purple background
         };
         cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
         cell.border = {
-          top: { style: "medium", color: { argb: "FF4A0266" } },
-          bottom: { style: "medium", color: { argb: "FF4A0266" } },
+          top: { style: "medium", color: { argb: "FFC084FC" } },
+          bottom: { style: "medium", color: { argb: "FFC084FC" } },
           left: { style: "thin", color: { argb: "FFE2E8F0" } },
           right: { style: "thin", color: { argb: "FFE2E8F0" } }
         };
@@ -345,12 +345,12 @@ export default function TargetVsAchievement() {
 
           if (r === 0) {
             // Header styling
-            cell.s.font = { name: "Segoe UI", sz: 10, bold: true, color: { rgb: "FFFFFF" } };
-            cell.s.fill = { fgColor: { rgb: "4F46E5" } };
+            cell.s.font = { name: "Segoe UI", sz: 10, bold: true, color: { rgb: "1E293B" } };
+            cell.s.fill = { fgColor: { rgb: "E0E7FF" } };
             cell.s.alignment = { horizontal: "center", vertical: "center", wrapText: true };
             cell.s.border = {
-              top: { style: "medium", color: { rgb: "3730A3" } },
-              bottom: { style: "medium", color: { rgb: "3730A3" } }
+              top: { style: "medium", color: { rgb: "A5B4FC" } },
+              bottom: { style: "medium", color: { rgb: "A5B4FC" } }
             };
           } else if (r === range.e.r) {
             // Total row styling

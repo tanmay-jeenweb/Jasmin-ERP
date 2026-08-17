@@ -6,7 +6,9 @@ import {
     approveDevice,
     revokeDevice,
     fetchAuditLogs,
-    toggleUserActive
+    toggleUserActive,
+    fetchUserActiveDevices,
+    revokeSpecificDevice
 } from "../../api/authApi";
 import Navbar from "../../components/Navbar";
 import DataTable from "../../components/DataTable";
@@ -30,6 +32,11 @@ export default function AdminDashboard() {
 
     const [showInactive, setShowInactive] = useState(false);
     const [saving, setSaving] = useState(false);
+
+    // Manage devices modal state
+    const [manageUser, setManageUser] = useState(null);
+    const [userDevices, setUserDevices] = useState([]);
+    const [loadingDevices, setLoadingDevices] = useState(false);
 
     const fetchData = async () => {
         if (permissionLoading) return;
@@ -118,6 +125,47 @@ export default function AdminDashboard() {
             fetchData();
         } catch (error) {
             toast.error(error.response?.data?.message || "Failed to approve device");
+        }
+    };
+
+    const handleOpenManageDevicesModal = async (userRow) => {
+        setManageUser(userRow);
+        setLoadingDevices(true);
+        try {
+            const res = await fetchUserActiveDevices(userRow.id);
+            setUserDevices(res.data.devices || []);
+        } catch (error) {
+            toast.error("Failed to load user devices");
+        } finally {
+            setLoadingDevices(false);
+        }
+    };
+
+    const handleRevokeSpecificDevice = async (deviceRowId) => {
+        if (!window.confirm("Are you sure you want to revoke this specific device?")) return;
+        try {
+            await revokeSpecificDevice(deviceRowId);
+            toast.success("Device revoked successfully");
+            if (manageUser) {
+                const res = await fetchUserActiveDevices(manageUser.id);
+                setUserDevices(res.data.devices || []);
+            }
+            fetchData();
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Failed to revoke device");
+        }
+    };
+
+    const handleBulkRevokeDevices = async () => {
+        if (!manageUser) return;
+        if (!window.confirm("Are you sure you want to revoke ALL active devices for this user?")) return;
+        try {
+            await revokeDevice(manageUser.id);
+            toast.success("All devices revoked successfully");
+            setManageUser(null);
+            fetchData();
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Failed to revoke devices");
         }
     };
 
@@ -277,18 +325,29 @@ export default function AdminDashboard() {
         {
             key: 'device_status',
             label: 'Device Status',
-            render: (row) => (
-                <div className="flex flex-col items-start gap-1">
-                    {row.device_status === 'approved' ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Approved </span>
-                    ) : row.device_status === 'pending' ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">Pending ⏳</span>
-                    ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">No Device —</span>
-                    )}
-                    {row.device_id && <div className="text-xs text-slate-400 font-mono max-w-[120px] truncate" title={row.device_id}>{row.device_id}</div>}
-                </div>
-            )
+            render: (row) => {
+                const approvedCount = row.approved_devices_count || 0;
+                const pendingCount = row.pending_devices_count || 0;
+                return (
+                    <div className="flex flex-col items-start gap-1">
+                        {approvedCount > 0 && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5" />{approvedCount} Approved
+                            </span>
+                        )}
+                        {pendingCount > 0 && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200 animate-pulse">
+                                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mr-1.5" />{pendingCount} Pending ⏳
+                            </span>
+                        )}
+                        {approvedCount === 0 && pendingCount === 0 && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-50 text-slate-655 border border-slate-200">
+                                No Device —
+                            </span>
+                        )}
+                    </div>
+                );
+            }
         },
         {
             key: 'actions',
@@ -302,17 +361,17 @@ export default function AdminDashboard() {
                     <div className="flex items-center gap-3">
                         {canRevoke && (
                             <button
-                                onClick={() => handleRevokeDevice(row.id)}
-                                disabled={!row.device_status}
-                                className="text-red-600 hover:text-red-900 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-medium"
+                                onClick={() => handleOpenManageDevicesModal(row)}
+                                disabled={(row.approved_devices_count || 0) === 0 && (row.pending_devices_count || 0) === 0}
+                                className="text-[#6804a1] hover:text-[#52037e] disabled:opacity-30 disabled:cursor-not-allowed text-xs font-semibold"
                             >
-                                Revoke Device
+                                Manage Devices
                             </button>
                         )}
                         {canMap && (
                             <button
                                 onClick={() => navigate(`/admin/user-branch-mapping?userId=${row.id}`)}
-                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-indigo-650 hover:bg-purple-100 transition-colors"
+                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
                                 title="User Branch Mapping"
                             >
                                 <svg
@@ -388,6 +447,24 @@ export default function AdminDashboard() {
             key: 'device_id',
             label: 'Device ID',
             render: (row) => <span className="font-mono text-sm text-slate-600">{row.device_id}</span>
+        },
+        {
+            key: 'replaced_device_id',
+            label: 'Action / Replaces',
+            render: (row) => row.replaced_device_id ? (
+                <div className="flex flex-col">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 w-max">
+                        REPLACEMENT
+                    </span>
+                    <span className="font-mono text-xs text-slate-400 mt-1 truncate max-w-[150px] block" title={row.replaced_device_id}>
+                        Replaces: {row.replaced_device_id}
+                    </span>
+                </div>
+            ) : (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-green-150 text-green-800 w-max">
+                    NEW DEVICE
+                </span>
+            )
         },
         {
             key: 'submitted_at',
@@ -590,6 +667,101 @@ export default function AdminDashboard() {
                 )}
             </main>
 
+            {/* Manage Devices Modal */}
+            {manageUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none">
+                    {/* Backdrop */}
+                    <div 
+                        className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity animate-fade-in"
+                        onClick={() => setManageUser(null)}
+                    />
+                    
+                    {/* Modal Box */}
+                    <div className="relative w-full max-w-lg mx-auto my-6 z-50 px-4">
+                        <div className="relative flex flex-col w-full bg-white border border-slate-200 rounded-2xl shadow-xl outline-none focus:outline-none overflow-hidden">
+                            {/* Header */}
+                            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+                                <h3 className="text-lg font-bold text-slate-900">
+                                    Manage Devices for {manageUser.name || manageUser.username}
+                                </h3>
+                                <button
+                                    onClick={() => setManageUser(null)}
+                                    className="text-slate-400 hover:text-slate-600 transition-colors"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                            
+                            {/* Body */}
+                            <div className="relative p-6 flex-auto max-h-[400px] overflow-y-auto">
+                                {loadingDevices ? (
+                                    <div className="flex flex-col items-center justify-center py-12 gap-3">
+                                        <div className="animate-spin h-8 w-8 border-3 border-[#6804a1] rounded-full border-t-transparent"></div>
+                                        <p className="text-sm text-slate-500 font-medium">Loading devices...</p>
+                                    </div>
+                                ) : userDevices.length === 0 ? (
+                                    <p className="text-center text-sm text-slate-500 py-8">
+                                        No active devices found for this user.
+                                    </p>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {userDevices.map((dev, index) => (
+                                            <div key={dev.id} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-150 rounded-xl">
+                                                <div className="flex-1 min-w-0 pr-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                                            Device {index + 1}
+                                                        </span>
+                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold leading-4 ${
+                                                            dev.status === "approved" 
+                                                                ? "bg-green-150 text-green-800" 
+                                                                : "bg-orange-100 text-orange-850"
+                                                        }`}>
+                                                            {dev.status}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm font-semibold text-slate-800 font-mono mt-1 truncate" title={dev.device_id}>
+                                                        {dev.device_id}
+                                                    </p>
+                                                    <p className="text-[10px] text-slate-400 mt-1">
+                                                        Registered: {new Date(dev.submitted_at).toLocaleString()}
+                                                    </p>
+                                                </div>
+                                                
+                                                <button
+                                                    onClick={() => handleRevokeSpecificDevice(dev.id)}
+                                                    className="inline-flex items-center justify-center px-3 py-1.5 border border-red-200 text-xs font-semibold rounded-lg text-red-650 bg-red-50/50 hover:bg-red-50 hover:text-red-700 transition-colors shadow-sm"
+                                                >
+                                                    Revoke
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {/* Footer */}
+                            <div className="flex items-center justify-between p-5 border-t border-slate-100 bg-slate-50/50">
+                                <button
+                                    onClick={handleBulkRevokeDevices}
+                                    disabled={userDevices.length === 0}
+                                    className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-semibold rounded-lg text-white bg-red-650 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Revoke All Devices
+                                </button>
+                                <button
+                                    onClick={() => setManageUser(null)}
+                                    className="inline-flex items-center justify-center px-4 py-2 border border-slate-300 text-sm font-semibold rounded-lg text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#6804a1] transition-colors shadow-sm"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

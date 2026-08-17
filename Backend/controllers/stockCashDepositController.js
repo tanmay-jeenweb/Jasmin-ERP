@@ -239,10 +239,87 @@ const importCashDepositController = async (req, res) => {
     }
 };
 
+const getAbmWiseCashDepositReportController = async (req, res) => {
+    try {
+        const { state } = req.query; // e.g. "All" or a state name like "Punjab"
+        let records = await getStockCashDepositReportData();
+        const allowedBranchNames = await getUserAllowedBranchNames(req.user);
+
+        // 1. Filter by allowed branch mapping
+        if (allowedBranchNames !== null) {
+            records = records.filter(r => r.branch_name && allowedBranchNames.includes(String(r.branch_name).trim().toUpperCase()));
+        }
+
+        // 2. Filter by selected state if not 'All'
+        if (state && state !== 'All') {
+            records = records.filter(r => r.state_name && String(r.state_name).trim().toLowerCase() === String(state).trim().toLowerCase());
+        }
+
+        // 3. Perform ABM-wise aggregation
+        const summaryMap = {};
+        records.forEach(item => {
+            const abm = item.abm_name || "—";
+            if (!summaryMap[abm]) {
+                summaryMap[abm] = {
+                    abm_name: abm,
+                    opening_cash: 0,
+                    cash_deposit: 0,
+                    pending_cash_deposit: 0
+                };
+            }
+            summaryMap[abm].opening_cash += Number(item.opening_cash_deposit_pending || 0);
+            summaryMap[abm].cash_deposit += Number(item.cash_deposit || 0);
+            summaryMap[abm].pending_cash_deposit += Number(item.pending_cash_deposit || 0);
+        });
+
+        const abmGroups = Object.values(summaryMap).map(group => {
+            const pending_pct = group.opening_cash > 0
+                ? (group.pending_cash_deposit / group.opening_cash) * 100
+                : 0.00;
+            return {
+                ...group,
+                pending_pct
+            };
+        });
+
+        // 4. Calculate overall totals
+        const totals = {
+            opening_cash: 0,
+            cash_deposit: 0,
+            pending_cash_deposit: 0,
+            pending_pct: 0
+        };
+
+        abmGroups.forEach(item => {
+            totals.opening_cash += item.opening_cash;
+            totals.cash_deposit += item.cash_deposit;
+            totals.pending_cash_deposit += item.pending_cash_deposit;
+        });
+
+        totals.pending_pct = totals.opening_cash > 0
+            ? (totals.pending_cash_deposit / totals.opening_cash) * 100
+            : 0.00;
+
+        res.status(200).json({
+            success: true,
+            message: 'ABM Wise Cash Deposit report data retrieved successfully',
+            data: abmGroups,
+            totals
+        });
+    } catch (error) {
+        console.error('Error retrieving ABM Wise Cash Deposit report data:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+
 module.exports = {
     getStockCashDepositReportController,
     importStockCashDepositController,
     importCurrentStockController,
     importOpeningCashAndCreditController,
-    importCashDepositController
+    importCashDepositController,
+    getAbmWiseCashDepositReportController
 };

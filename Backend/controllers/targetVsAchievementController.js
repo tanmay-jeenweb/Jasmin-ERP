@@ -760,9 +760,166 @@ const syncTargetVsAchievementsController = async (req, res) => {
     }
 };
 
+const getABMWiseTargetVsAchievementsSummaryController = async (req, res) => {
+    try {
+        let records = await getABMWiseTargetVsAchievements();
+        const allowedBranchNames = await getUserAllowedBranchNames(req.user);
+
+        // 1. Filter by allowed branch mapping
+        if (allowedBranchNames !== null) {
+            records = records.filter(r => r.branch_name && allowedBranchNames.includes(String(r.branch_name).trim().toUpperCase()));
+        }
+
+        // Extract all unique states before any state filtering
+        const uniqueStates = Array.from(new Set(
+            records
+                .map(r => r.state_name)
+                .filter(state => state && state !== "—")
+        )).sort((a, b) => a.localeCompare(b));
+
+        // 2. Filter by state if provided in query parameters (e.g. ?states=Punjab,Haryana or ?state=Punjab)
+        const { state, states } = req.query;
+        let selectedStates = [];
+        if (states) {
+            selectedStates = states.split(',').map(s => s.trim().toLowerCase());
+        } else if (state && state !== 'All') {
+            selectedStates = [state.trim().toLowerCase()];
+        }
+
+        if (selectedStates.length > 0) {
+            records = records.filter(r => r.state_name && selectedStates.includes(String(r.state_name).trim().toLowerCase()));
+        }
+
+        // 3. Perform ABM-wise aggregation
+        const groups = {};
+        records.forEach(item => {
+            const abm = item.abm_name || "—";
+            if (!groups[abm]) {
+                groups[abm] = {
+                    abm_name: abm,
+                    qty_tgt: 0,
+                    value_tgt: 0,
+                    ftd_qty_ach: 0,
+                    ftd_value_ach: 0,
+                    lmftd_qty_ach: 0,
+                    lmftd_value_ach: 0,
+                    mtd_qty_ach: 0,
+                    mtd_value_ach: 0,
+                    lmtd_qty_ach: 0,
+                    lmtd_value_ach: 0,
+                    btd_qty: 0,
+                    btd_value: 0,
+                    ddr_qty: 0,
+                    ddr_value: 0
+                };
+            }
+
+            groups[abm].qty_tgt += Number(item.qty_tgt || 0);
+            groups[abm].value_tgt += Number(item.value_tgt || 0);
+            groups[abm].ftd_qty_ach += Number(item.ftd_qty_ach || 0);
+            groups[abm].ftd_value_ach += Number(item.ftd_value_ach || 0);
+            groups[abm].lmftd_qty_ach += Number(item.lmftd_qty_ach || 0);
+            groups[abm].lmftd_value_ach += Number(item.lmftd_value_ach || 0);
+            groups[abm].mtd_qty_ach += Number(item.mtd_qty_ach || 0);
+            groups[abm].mtd_value_ach += Number(item.mtd_value_ach || 0);
+            groups[abm].lmtd_qty_ach += Number(item.lmtd_qty_ach || 0);
+            groups[abm].lmtd_value_ach += Number(item.lmtd_value_ach || 0);
+            groups[abm].btd_qty += Number(item.btd_qty || 0);
+            groups[abm].btd_value += Number(item.btd_value || 0);
+            groups[abm].ddr_qty += Number(item.ddr_qty || 0);
+            groups[abm].ddr_value += Number(item.ddr_value || 0);
+        });
+
+        // 4. Calculate group percentages
+        const abmGroups = Object.values(groups).map((group, index) => {
+            const qtyTgt = group.qty_tgt;
+            const valueTgt = group.value_tgt;
+            const mtdQty = group.mtd_qty_ach;
+            const mtdVal = group.mtd_value_ach;
+            const lmtdQty = group.lmtd_qty_ach;
+            const lmtdVal = group.lmtd_value_ach;
+
+            const mtd_qty_percentage_ach = qtyTgt > 0 ? (mtdQty / qtyTgt) * 100 : 0;
+            const mtd_value_percentage_ach = valueTgt > 0 ? (mtdVal / valueTgt) * 100 : 0;
+
+            const growth_qty_percentage = mtdQty !== 0 ? ((mtdQty - lmtdQty) / mtdQty) * 100 : 0;
+            const growth_value_percentage = mtdVal !== 0 ? ((mtdVal - lmtdVal) / mtdVal) * 100 : 0;
+
+            return {
+                ...group,
+                id: index + 1,
+                sr_no: index + 1,
+                mtd_qty_percentage_ach,
+                mtd_value_percentage_ach,
+                growth_qty_percentage,
+                growth_value_percentage
+            };
+        });
+
+        // 5. Calculate overall totals
+        const totals = {
+            qty_tgt: 0,
+            value_tgt: 0,
+            ftd_qty_ach: 0,
+            ftd_value_ach: 0,
+            lmftd_qty_ach: 0,
+            lmftd_value_ach: 0,
+            mtd_qty_ach: 0,
+            mtd_value_ach: 0,
+            lmtd_qty_ach: 0,
+            lmtd_value_ach: 0,
+            btd_qty: 0,
+            btd_value: 0,
+            ddr_qty: 0,
+            ddr_value: 0,
+            mtd_qty_percentage_ach: 0,
+            mtd_value_percentage_ach: 0,
+            growth_qty_percentage: 0,
+            growth_value_percentage: 0
+        };
+
+        abmGroups.forEach(g => {
+            totals.qty_tgt += g.qty_tgt;
+            totals.value_tgt += g.value_tgt;
+            totals.ftd_qty_ach += g.ftd_qty_ach;
+            totals.ftd_value_ach += g.ftd_value_ach;
+            totals.lmftd_qty_ach += g.lmftd_qty_ach;
+            totals.lmftd_value_ach += g.lmftd_value_ach;
+            totals.mtd_qty_ach += g.mtd_qty_ach;
+            totals.mtd_value_ach += g.mtd_value_ach;
+            totals.lmtd_qty_ach += g.lmtd_qty_ach;
+            totals.lmtd_value_ach += g.lmtd_value_ach;
+            totals.btd_qty += g.btd_qty;
+            totals.btd_value += g.btd_value;
+            totals.ddr_qty += g.ddr_qty;
+            totals.ddr_value += g.ddr_value;
+        });
+
+        totals.mtd_qty_percentage_ach = totals.qty_tgt > 0 ? (totals.mtd_qty_ach / totals.qty_tgt) * 100 : 0;
+        totals.mtd_value_percentage_ach = totals.value_tgt > 0 ? (totals.mtd_value_ach / totals.value_tgt) * 100 : 0;
+        totals.growth_qty_percentage = totals.mtd_qty_ach !== 0 ? ((totals.mtd_qty_ach - totals.lmtd_qty_ach) / totals.mtd_qty_ach) * 100 : 0;
+        totals.growth_value_percentage = totals.mtd_value_ach !== 0 ? ((totals.mtd_value_ach - totals.lmtd_value_ach) / totals.mtd_value_ach) * 100 : 0;
+
+        res.status(200).json({
+            success: true,
+            message: 'ABM Wise Target vs Achievement summary retrieved successfully',
+            data: abmGroups,
+            totals,
+            states: uniqueStates
+        });
+    } catch (error) {
+        console.error('Error retrieving ABM wise target vs achievement summary:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+
 module.exports = {
     getAllTargetVsAchievementsController,
     getABMWiseTargetVsAchievementsController,
+    getABMWiseTargetVsAchievementsSummaryController,
     importTargetVsAchievementsController,
     syncTargetVsAchievementsController
 };

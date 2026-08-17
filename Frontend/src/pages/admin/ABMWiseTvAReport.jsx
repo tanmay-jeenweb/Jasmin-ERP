@@ -303,12 +303,12 @@ export default function ABMWiseTvAReport() {
 
           if (r === 0) {
             // Header styling
-            cell.s.font = { name: "Segoe UI", sz: 10, bold: true, color: { rgb: "FFFFFF" } };
-            cell.s.fill = { fgColor: { rgb: "4F46E5" } };
+            cell.s.font = { name: "Segoe UI", sz: 10, bold: true, color: { rgb: "1E293B" } };
+            cell.s.fill = { fgColor: { rgb: "E0E7FF" } };
             cell.s.alignment = { horizontal: "center", vertical: "center", wrapText: true };
             cell.s.border = {
-              top: { style: "medium", color: { rgb: "3730A3" } },
-              bottom: { style: "medium", color: { rgb: "3730A3" } }
+              top: { style: "medium", color: { rgb: "A5B4FC" } },
+              bottom: { style: "medium", color: { rgb: "A5B4FC" } }
             };
           } else if (r === range.e.r) {
             // Total row styling

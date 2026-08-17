@@ -9,8 +9,13 @@ const db = mysql.createPool({
     port: process.env.DB_PORT,
 
     waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
+    connectionLimit: 5,       // Keep low for shared CPanel hosting
+    queueLimit: 0,
+    connectTimeout: 30000,    // 30s to establish a new connection
+
+    // Keep connections alive via TCP keepalive packets
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 5000  // Start sending keepalives after 5s of idle
 });
 
 const connectDB = async () => {
