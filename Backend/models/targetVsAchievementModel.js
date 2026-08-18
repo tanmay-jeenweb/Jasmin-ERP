@@ -125,30 +125,6 @@ const getAllTargetVsAchievements = async () => {
             t.*,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             COALESCE(abm_u.name, bm.abm, t.updated_abm_name, '—') AS abm_name,
-            bm.id AS branch_id
-        FROM target_vs_achievements t
-        LEFT JOIN branch_master bm ON t.branch_name = bm.name
-        LEFT JOIN user_branch_mappings abm_m ON bm.id = abm_m.branch_id AND abm_m.user_id IN (
-            SELECT u.id FROM users u
-            JOIN user_types ut ON u.user_type_id = ut.id
-            WHERE ut.user_role = 'ABM' OR ut.type_name = 'ABM'
-        )
-        LEFT JOIN users abm_u ON abm_m.user_id = abm_u.id
-        LEFT JOIN users u ON t.added_by = u.id
-        ORDER BY 
-            (t.qty_tgt IS NULL OR t.value_tgt IS NULL) ASC,
-            t.timestamp DESC
-    `;
-    const [results] = await db.execute(query);
-    return results;
-};
-
-const getABMWiseTargetVsAchievements = async () => {
-    const query = `
-        SELECT 
-            t.*,
-            COALESCE(u.name, 'Unknown') AS added_by_name,
-            COALESCE(abm_u.name, bm.abm, t.updated_abm_name, '—') AS abm_name,
             bm.id AS branch_id,
             COALESCE(sm.name, '—') AS state_name
         FROM target_vs_achievements t
@@ -166,6 +142,54 @@ const getABMWiseTargetVsAchievements = async () => {
             t.timestamp DESC
     `;
     const [results] = await db.execute(query);
+    return results;
+};
+
+const getABMWiseTargetVsAchievements = async (state = null, states = null) => {
+    let query = `
+        SELECT 
+            t.*,
+            COALESCE(u.name, 'Unknown') AS added_by_name,
+            COALESCE(abm_u.name, bm.abm, t.updated_abm_name, '—') AS abm_name,
+            bm.id AS branch_id,
+            COALESCE(sm.name, '—') AS state_name
+        FROM target_vs_achievements t
+        LEFT JOIN branch_master bm ON t.branch_name = bm.name
+        LEFT JOIN state_master sm ON bm.state_id = sm.id
+        LEFT JOIN user_branch_mappings abm_m ON bm.id = abm_m.branch_id AND abm_m.user_id IN (
+            SELECT u.id FROM users u
+            JOIN user_types ut ON u.user_type_id = ut.id
+            WHERE ut.user_role = 'ABM' OR ut.type_name = 'ABM'
+        )
+        LEFT JOIN users abm_u ON abm_m.user_id = abm_u.id
+        LEFT JOIN users u ON t.added_by = u.id
+    `;
+    
+    const params = [];
+    const conditions = [];
+
+    if (states) {
+        const stateList = states.split(',').map(s => s.trim());
+        if (stateList.length > 0) {
+            const placeholders = stateList.map(() => '?').join(',');
+            conditions.push(`sm.name IN (${placeholders})`);
+            params.push(...stateList);
+        }
+    } else if (state && state !== 'All') {
+        conditions.push(`sm.name = ?`);
+        params.push(state.trim());
+    }
+
+    if (conditions.length > 0) {
+        query += ` WHERE ` + conditions.join(' AND ');
+    }
+
+    query += `
+        ORDER BY 
+            (t.qty_tgt IS NULL OR t.value_tgt IS NULL) ASC,
+            t.timestamp DESC
+    `;
+    const [results] = await db.execute(query, params);
     return results;
 };
 
