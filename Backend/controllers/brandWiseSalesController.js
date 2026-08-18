@@ -742,7 +742,244 @@ const getBrandWiseSalesController = async (req, res) => {
     }
 };
 
+const getBrandWiseSalesTotalsController = async (req, res) => {
+    try {
+        // 1. Determine target date (default to today)
+        let targetYear, targetMonth, targetDay;
+        if (req.query.date) {
+            const parts = req.query.date.split('-');
+            if (parts.length === 3) {
+                targetYear  = parseInt(parts[0], 10);
+                targetMonth = parseInt(parts[1], 10) - 1;
+                targetDay   = parseInt(parts[2], 10);
+            }
+        }
+
+        if (targetYear === undefined) {
+            const now = new Date();
+            targetYear  = now.getFullYear();
+            targetMonth = now.getMonth();
+            targetDay   = now.getDate();
+        }
+
+        const targetDate           = new Date(targetYear, targetMonth, targetDay);
+        const lmTargetDate         = new Date(targetYear, targetMonth - 1, targetDay);
+        const firstDayCurrentMonth = new Date(targetYear, targetMonth, 1);
+        const firstDayLastMonth    = new Date(targetYear, targetMonth - 1, 1);
+
+        const firstDayLastMonthStr = formatToDbDateStr(firstDayLastMonth);
+        const targetDateStr        = formatToDbDateStr(targetDate);
+
+        const ftdYYYYMMDD      = formatToYYYYMMDD(targetDate);
+        const lmftdYYYYMMDD    = formatToYYYYMMDD(lmTargetDate);
+        const mtdStartYYYYMMDD = formatToYYYYMMDD(firstDayCurrentMonth);
+        const lmtdStartYYYYMMDD= formatToYYYYMMDD(firstDayLastMonth);
+
+        // 2. Fetch Model Master for brand resolution
+        const [models] = await db.execute("SELECT item_code, brand_name FROM item_model_master");
+        const modelMap = {};
+        for (const m of models) {
+            if (m.item_code) modelMap[m.item_code.trim()] = m.brand_name ? m.brand_name.trim() : null;
+        }
+
+        const getBrandName = (itemCode, itemDescription) => {
+            const code = (itemCode || '').trim();
+            if (code && modelMap[code]) return modelMap[code];
+            const desc = (itemDescription || '').toLowerCase();
+            if (desc.includes('samsung'))  return 'Samsung';
+            if (desc.includes('vivo'))     return 'Vivo';
+            if (desc.includes('oppo'))     return 'Oppo';
+            if (desc.includes('realme'))   return 'Realme';
+            if (desc.includes('apple') || desc.includes('iphone') || desc.includes('ipad')) return 'Apple';
+            if (desc.includes('oneplus'))  return 'OnePlus';
+            if (desc.includes('xiaomi') || desc.includes('redmi') || desc.includes(' mi ')) return 'Xiaomi';
+            const parts = (itemDescription || '').split(':');
+            if (parts.length > 2) return parts[parts.length - 2].trim();
+            return 'Others';
+        };
+
+        const standardizeBrand = (brand) => {
+            if (!brand) return 'Others';
+            const b = brand.trim().toLowerCase();
+            if (b.includes('vivo'))    return 'Vivo';
+            if (b.includes('oppo'))    return 'Oppo';
+            if (b.includes('samsung')) return 'Samsung';
+            if (b.includes('apple') || b.includes('iphone')) return 'Apple';
+            if (b.includes('realme'))  return 'Realme';
+            if (b.includes('xiaomi') || b.includes('redmi') || b === 'mi') return 'Xiaomi';
+            if (b.includes('oneplus')) return 'OnePlus';
+            return brand.trim().charAt(0).toUpperCase() + brand.trim().slice(1).toLowerCase();
+        };
+
+        // 3. Query sales_invoice_cache
+        const allowedBranchCodes = await getUserAllowedBranchCodes(req.user);
+
+        let dbRows = [], dbSrnRows = [];
+
+        if (Array.isArray(allowedBranchCodes) && allowedBranchCodes.length === 0) {
+            dbRows = [];
+            dbSrnRows = [];
+        } else if (allowedBranchCodes !== null) {
+            const placeholders = allowedBranchCodes.map(() => '?').join(',');
+
+            if (req.query.state && req.query.state !== 'All') {
+                [dbRows] = await db.execute(
+                    `SELECT sic.invoice_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
+                     FROM sales_invoice_cache sic
+                     INNER JOIN branch_master bm ON sic.branch_code = bm.code
+                     INNER JOIN state_master sm ON bm.state_id = sm.id
+                     WHERE sic.invoice_date BETWEEN ? AND ?
+                       AND sic.record_type = 'INVOICE'
+                       AND sic.invoice_no NOT LIKE 'ISBS%'
+                       AND sm.name = ?
+                       AND sic.branch_code IN (${placeholders})`,
+                    [firstDayLastMonthStr, targetDateStr, req.query.state, ...allowedBranchCodes]
+                );
+                [dbSrnRows] = await db.execute(
+                    `SELECT sic.invoice_date AS sales_return_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
+                     FROM sales_invoice_cache sic
+                     INNER JOIN branch_master bm ON sic.branch_code = bm.code
+                     INNER JOIN state_master sm ON bm.state_id = sm.id
+                     WHERE sic.invoice_date BETWEEN ? AND ?
+                       AND sic.record_type = 'RETURN'
+                       AND sm.name = ?
+                       AND sic.branch_code IN (${placeholders})`,
+                    [firstDayLastMonthStr, targetDateStr, req.query.state, ...allowedBranchCodes]
+                );
+            } else {
+                [dbRows] = await db.execute(
+                    `SELECT invoice_date, item_code, item_model_name AS item_description, qty, amount AS net_amount
+                     FROM sales_invoice_cache
+                     WHERE invoice_date BETWEEN ? AND ?
+                       AND record_type = 'INVOICE'
+                       AND invoice_no NOT LIKE 'ISBS%'
+                       AND branch_code IN (${placeholders})`,
+                    [firstDayLastMonthStr, targetDateStr, ...allowedBranchCodes]
+                );
+                [dbSrnRows] = await db.execute(
+                    `SELECT invoice_date AS sales_return_date, item_code, item_model_name AS item_description, qty, amount AS net_amount
+                     FROM sales_invoice_cache
+                     WHERE invoice_date BETWEEN ? AND ?
+                       AND record_type = 'RETURN'
+                       AND branch_code IN (${placeholders})`,
+                    [firstDayLastMonthStr, targetDateStr, ...allowedBranchCodes]
+                );
+            }
+        } else {
+            // Admin: all branches
+            if (req.query.state && req.query.state !== 'All') {
+                [dbRows] = await db.execute(
+                    `SELECT sic.invoice_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
+                     FROM sales_invoice_cache sic
+                     INNER JOIN branch_master bm ON sic.branch_code = bm.code
+                     INNER JOIN state_master sm ON bm.state_id = sm.id
+                     WHERE sic.invoice_date BETWEEN ? AND ?
+                       AND sic.record_type = 'INVOICE'
+                       AND sic.invoice_no NOT LIKE 'ISBS%'
+                       AND sm.name = ?`,
+                    [firstDayLastMonthStr, targetDateStr, req.query.state]
+                );
+                [dbSrnRows] = await db.execute(
+                    `SELECT sic.invoice_date AS sales_return_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
+                     FROM sales_invoice_cache sic
+                     INNER JOIN branch_master bm ON sic.branch_code = bm.code
+                     INNER JOIN state_master sm ON bm.state_id = sm.id
+                     WHERE sic.invoice_date BETWEEN ? AND ?
+                       AND sic.record_type = 'RETURN'
+                       AND sm.name = ?`,
+                    [firstDayLastMonthStr, targetDateStr, req.query.state]
+                );
+            } else {
+                [dbRows] = await db.execute(
+                    `SELECT invoice_date, item_code, item_model_name AS item_description, qty, amount AS net_amount
+                     FROM sales_invoice_cache
+                     WHERE invoice_date BETWEEN ? AND ?
+                       AND record_type = 'INVOICE'
+                       AND invoice_no NOT LIKE 'ISBS%'`,
+                    [firstDayLastMonthStr, targetDateStr]
+                );
+                [dbSrnRows] = await db.execute(
+                    `SELECT invoice_date AS sales_return_date, item_code, item_model_name AS item_description, qty, amount AS net_amount
+                     FROM sales_invoice_cache
+                     WHERE invoice_date BETWEEN ? AND ?
+                       AND record_type = 'RETURN'`,
+                    [firstDayLastMonthStr, targetDateStr]
+                );
+            }
+        }
+
+        // 4. Accumulate totals directly (no brand map needed)
+        const totals = {
+            brand_name: 'Total',
+            ftd_qty_ach: 0,
+            ftd_value_ach: 0.00,
+            lmftd_qty_ach: 0,
+            lmftd_value_ach: 0.00,
+            mtd_qty_ach: 0,
+            mtd_value_ach: 0.00,
+            lmtd_qty_ach: 0,
+            lmtd_value_ach: 0.00,
+            growth_qty_percentage: 0.00,
+            growth_value_percentage: 0.00
+        };
+
+        // Add invoices
+        for (const row of dbRows) {
+            const invDate    = new Date(row.invoice_date);
+            const invYYYYMMDD = formatToYYYYMMDD(invDate);
+            const qty = parseFloat(row.qty) || 0;
+            const val = parseFloat(row.net_amount) || 0;
+
+            if (invYYYYMMDD === ftdYYYYMMDD)                                               { totals.ftd_qty_ach   += qty; totals.ftd_value_ach   += val; }
+            if (invYYYYMMDD === lmftdYYYYMMDD)                                             { totals.lmftd_qty_ach += qty; totals.lmftd_value_ach += val; }
+            if (invYYYYMMDD >= mtdStartYYYYMMDD && invYYYYMMDD <= ftdYYYYMMDD)            { totals.mtd_qty_ach   += qty; totals.mtd_value_ach   += val; }
+            if (invYYYYMMDD >= lmtdStartYYYYMMDD && invYYYYMMDD <= lmftdYYYYMMDD)         { totals.lmtd_qty_ach  += qty; totals.lmtd_value_ach  += val; }
+        }
+
+        // Subtract returns
+        for (const row of dbSrnRows) {
+            const retDate    = new Date(row.sales_return_date);
+            const retYYYYMMDD = formatToYYYYMMDD(retDate);
+            const qty = parseFloat(row.qty) || 0;
+            const val = parseFloat(row.net_amount) || 0;
+
+            if (retYYYYMMDD === ftdYYYYMMDD)                                               { totals.ftd_qty_ach   -= qty; totals.ftd_value_ach   -= val; }
+            if (retYYYYMMDD === lmftdYYYYMMDD)                                             { totals.lmftd_qty_ach -= qty; totals.lmftd_value_ach -= val; }
+            if (retYYYYMMDD >= mtdStartYYYYMMDD && retYYYYMMDD <= ftdYYYYMMDD)            { totals.mtd_qty_ach   -= qty; totals.mtd_value_ach   -= val; }
+            if (retYYYYMMDD >= lmtdStartYYYYMMDD && retYYYYMMDD <= lmftdYYYYMMDD)         { totals.lmtd_qty_ach  -= qty; totals.lmtd_value_ach  -= val; }
+        }
+
+        // Clamp negatives to 0
+        if (totals.ftd_qty_ach   < 0) totals.ftd_qty_ach   = 0;
+        if (totals.ftd_value_ach < 0) totals.ftd_value_ach = 0;
+        if (totals.lmftd_qty_ach   < 0) totals.lmftd_qty_ach   = 0;
+        if (totals.lmftd_value_ach < 0) totals.lmftd_value_ach = 0;
+        if (totals.mtd_qty_ach   < 0) totals.mtd_qty_ach   = 0;
+        if (totals.mtd_value_ach < 0) totals.mtd_value_ach = 0;
+        if (totals.lmtd_qty_ach  < 0) totals.lmtd_qty_ach  = 0;
+        if (totals.lmtd_value_ach < 0) totals.lmtd_value_ach = 0;
+
+        // Growth %
+        totals.growth_qty_percentage   = totals.mtd_qty_ach   !== 0 ? ((totals.mtd_qty_ach   - totals.lmtd_qty_ach)   / totals.mtd_qty_ach)   * 100 : 0.00;
+        totals.growth_value_percentage = totals.mtd_value_ach !== 0 ? ((totals.mtd_value_ach - totals.lmtd_value_ach) / totals.mtd_value_ach) * 100 : 0.00;
+
+        res.status(200).json({
+            success: true,
+            message: 'Brand Wise Sales Totals aggregated successfully',
+            totals
+        });
+
+    } catch (error) {
+        console.error('Error in getBrandWiseSalesTotalsController:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error while retrieving brand wise sales totals'
+        });
+    }
+};
+
 module.exports = {
     syncBrandWiseSalesController,
-    getBrandWiseSalesController
+    getBrandWiseSalesController,
+    getBrandWiseSalesTotalsController
 };
