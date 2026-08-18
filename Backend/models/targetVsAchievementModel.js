@@ -125,9 +125,11 @@ const getAllTargetVsAchievements = async () => {
             t.*,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             COALESCE(abm_u.name, bm.abm, t.updated_abm_name, '—') AS abm_name,
-            bm.id AS branch_id
+            bm.id AS branch_id,
+            COALESCE(sm.name, '—') AS state_name
         FROM target_vs_achievements t
         LEFT JOIN branch_master bm ON t.branch_name = bm.name
+        LEFT JOIN state_master sm ON bm.state_id = sm.id
         LEFT JOIN user_branch_mappings abm_m ON bm.id = abm_m.branch_id AND abm_m.user_id IN (
             SELECT u.id FROM users u
             JOIN user_types ut ON u.user_type_id = ut.id

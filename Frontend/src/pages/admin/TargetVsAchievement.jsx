@@ -33,10 +33,28 @@ export default function TargetVsAchievement() {
   // Filter States
   const [selectedBranches, setSelectedBranches] = useState([]);
   const [selectedAbms, setSelectedAbms] = useState([]);
+  const [selectedStates, setSelectedStates] = useState([]);
   const [branchSearchText, setBranchSearchText] = useState("");
   const [abmSearchText, setAbmSearchText] = useState("");
-  const [isBranchFilterOpen, setIsBranchFilterOpen] = useState(false);
-  const [isAbmFilterOpen, setIsAbmFilterOpen] = useState(false);
+  const [stateSearchText, setStateSearchText] = useState("");
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+  const totalActiveFilters = useMemo(() => {
+    let count = 0;
+    if (selectedStates.length > 0) count += 1;
+    if (selectedBranches.length > 0) count += 1;
+    if (selectedAbms.length > 0) count += 1;
+    return count;
+  }, [selectedStates, selectedBranches, selectedAbms]);
+
+  const handleClearAllFilters = () => {
+    setSelectedStates([]);
+    setSelectedBranches([]);
+    setSelectedAbms([]);
+    setStateSearchText("");
+    setBranchSearchText("");
+    setAbmSearchText("");
+  };
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -596,14 +614,23 @@ export default function TargetVsAchievement() {
     return Array.from(new Set(list)).sort((a, b) => a.localeCompare(b));
   }, [data]);
 
+  // Extract unique States
+  const uniqueStates = useMemo(() => {
+    const list = data
+      .map(r => r.state_name)
+      .filter(name => name && name !== "—");
+    return Array.from(new Set(list)).sort((a, b) => a.localeCompare(b));
+  }, [data]);
+
   // Filtered dataset
   const filteredData = useMemo(() => {
     return data.filter(item => {
       const branchMatch = selectedBranches.length === 0 || selectedBranches.includes(item.branch_name);
       const abmMatch = selectedAbms.length === 0 || selectedAbms.includes(item.abm_name);
-      return branchMatch && abmMatch;
+      const stateMatch = selectedStates.length === 0 || selectedStates.includes(item.state_name);
+      return branchMatch && abmMatch && stateMatch;
     });
-  }, [data, selectedBranches, selectedAbms]);
+  }, [data, selectedBranches, selectedAbms, selectedStates]);
 
   // Add serial number (Sr. No) sequentially based on row index
   const formattedData = useMemo(() => {
@@ -761,162 +788,256 @@ export default function TargetVsAchievement() {
   // Filters Component
   const filtersElement = (
     <div className="flex flex-wrap items-center gap-3">
-      {/* Branch Multi-select Dropdown */}
       <div className="relative">
         <button
           type="button"
-          onClick={() => {
-            setIsBranchFilterOpen(!isBranchFilterOpen);
-            setIsAbmFilterOpen(false);
-          }}
+          onClick={() => setIsFilterOpen(!isFilterOpen)}
           className="flex items-center justify-between gap-2 h-10 px-3 rounded-lg border border-slate-300 bg-white hover:border-slate-400 text-sm font-semibold transition-colors duration-150 cursor-pointer focus:outline-none"
         >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-slate-500">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591l-5.432 5.432a2.25 2.25 0 0 0-.659 1.591v2.927a2.25 2.25 0 0 1-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 0 0-.659-1.591L3.659 7.409A2.25 2.25 0 0 1 3 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z" />
+          </svg>
           <span className="text-slate-700">
-            {selectedBranches.length === 0
-              ? "All Branches"
-              : `${selectedBranches.length} Branch${selectedBranches.length > 1 ? 'es' : ''}`}
+            {totalActiveFilters === 0 ? "Filters" : `Filters (${totalActiveFilters})`}
           </span>
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 text-slate-400">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isFilterOpen ? 'rotate-180' : ''}`}>
             <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
           </svg>
         </button>
 
-        {isBranchFilterOpen && (
+        {isFilterOpen && (
           <>
-            <div className="fixed inset-0 z-45" onClick={() => setIsBranchFilterOpen(false)}></div>
-            <div className="absolute left-0 mt-1 w-64 rounded-xl border border-slate-200 bg-white shadow-xl py-2 z-50 flex flex-col">
-              <div className="px-3 py-1.5 border-b border-slate-100 flex items-center gap-1.5">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.602 10.602Z" />
-                </svg>
-                <input
-                  type="text"
-                  placeholder="Search branches..."
-                  value={branchSearchText}
-                  onChange={(e) => setBranchSearchText(e.target.value)}
-                  className="w-full text-xs border-none outline-none bg-transparent"
-                />
+            <div className="fixed inset-0 z-45" onClick={() => setIsFilterOpen(false)}></div>
+            <div className="absolute right-0 mt-1.5 w-[750px] max-w-[90vw] rounded-xl border border-slate-200 bg-white shadow-2xl p-4 z-50 flex flex-col gap-4">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <span className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-indigo-650">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591l-5.432 5.432a2.25 2.25 0 0 0-.659 1.591v2.927a2.25 2.25 0 0 1-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 0 0-.659-1.591L3.659 7.409A2.25 2.25 0 0 1 3 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z" />
+                  </svg>
+                  Filter Options
+                </span>
+                {totalActiveFilters > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearAllFilters}
+                    className="bg-transparent border-none cursor-pointer text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                    </svg>
+                    Clear All
+                  </button>
+                )}
               </div>
-              <div className="px-2 py-1 border-b border-slate-100 flex items-center justify-between text-[11px] font-bold text-indigo-650">
-                <button
-                  type="button"
-                  onClick={() => setSelectedBranches(uniqueBranches.map(b => b.name))}
-                  className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
-                >
-                  Select All
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedBranches([])}
-                  className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
-                >
-                  Deselect All
-                </button>
-              </div>
-              <div className="max-h-48 overflow-y-auto px-1 py-1 space-y-0.5">
-                {uniqueBranches
-                  .filter(b => b.name.toLowerCase().includes(branchSearchText.toLowerCase()))
-                  .map(branch => {
-                    const isChecked = selectedBranches.includes(branch.name);
-                    return (
-                      <label key={branch.name} className="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {
-                            if (isChecked) {
-                              setSelectedBranches(selectedBranches.filter(name => name !== branch.name));
-                            } else {
-                              setSelectedBranches([...selectedBranches, branch.name]);
-                            }
-                          }}
-                          className="accent-[#6804a1] h-3.5 w-3.5 flex-shrink-0"
-                        />
-                        <span className="truncate">{branch.name}</span>
-                      </label>
-                    );
-                  })}
-              </div>
-            </div>
-          </>
-        )}
-      </div>
 
-      {/* ABM Multi-select Dropdown */}
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => {
-            setIsAbmFilterOpen(!isAbmFilterOpen);
-            setIsBranchFilterOpen(false);
-          }}
-          className="flex items-center justify-between gap-2 h-10 px-3 rounded-lg border border-slate-300 bg-white hover:border-slate-400 text-sm font-semibold transition-colors duration-150 cursor-pointer focus:outline-none"
-        >
-          <span className="text-slate-700">
-            {selectedAbms.length === 0
-              ? "All ABMs"
-              : `${selectedAbms.length} ABM${selectedAbms.length > 1 ? 's' : ''}`}
-          </span>
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 text-slate-400">
-            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-          </svg>
-        </button>
+              {/* 3-Column Layout */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                {/* Column 1: States */}
+                <div className="flex flex-col md:border-r md:border-slate-100 pr-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">States</span>
+                    <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-semibold">
+                      {selectedStates.length === 0 ? "All" : selectedStates.length}
+                    </span>
+                  </div>
+                  
+                  {/* Search box */}
+                  <div className="px-2 py-1.5 border border-slate-200 rounded-lg flex items-center gap-1.5 mb-2 bg-slate-50">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.602 10.602Z" />
+                    </svg>
+                    <input
+                      type="text"
+                      placeholder="Search states..."
+                      value={stateSearchText}
+                      onChange={(e) => setStateSearchText(e.target.value)}
+                      className="w-full text-xs border-none outline-none bg-transparent"
+                    />
+                  </div>
 
-        {isAbmFilterOpen && (
-          <>
-            <div className="fixed inset-0 z-45" onClick={() => setIsAbmFilterOpen(false)}></div>
-            <div className="absolute left-0 mt-1 w-64 rounded-xl border border-slate-200 bg-white shadow-xl py-2 z-50 flex flex-col">
-              <div className="px-3 py-1.5 border-b border-slate-100 flex items-center gap-1.5">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.602 10.602Z" />
-                </svg>
-                <input
-                  type="text"
-                  placeholder="Search ABMs..."
-                  value={abmSearchText}
-                  onChange={(e) => setAbmSearchText(e.target.value)}
-                  className="w-full text-xs border-none outline-none bg-transparent"
-                />
-              </div>
-              <div className="px-2 py-1 border-b border-slate-100 flex items-center justify-between text-[11px] font-bold text-indigo-650">
-                <button
-                  type="button"
-                  onClick={() => setSelectedAbms(uniqueAbms)}
-                  className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
-                >
-                  Select All
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedAbms([])}
-                  className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
-                >
-                  Deselect All
-                </button>
-              </div>
-              <div className="max-h-48 overflow-y-auto px-1 py-1 space-y-0.5">
-                {uniqueAbms
-                  .filter(name => name.toLowerCase().includes(abmSearchText.toLowerCase()))
-                  .map(abmName => {
-                    const isChecked = selectedAbms.includes(abmName);
-                    return (
-                      <label key={abmName} className="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {
-                            if (isChecked) {
-                              setSelectedAbms(selectedAbms.filter(name => name !== abmName));
-                            } else {
-                              setSelectedAbms([...selectedAbms, abmName]);
-                            }
-                          }}
-                          className="accent-[#6804a1] h-3.5 w-3.5 flex-shrink-0"
-                        />
-                        <span className="truncate">{abmName}</span>
-                      </label>
-                    );
-                  })}
+                  {/* Bulk Actions */}
+                  <div className="flex justify-between items-center text-[10px] font-bold text-indigo-650 mb-2 px-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStates(uniqueStates)}
+                      className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStates([])}
+                      className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                    >
+                      Deselect All
+                    </button>
+                  </div>
+
+                  {/* Checklist */}
+                  <div className="max-h-48 overflow-y-auto px-1 py-1 space-y-0.5 border border-slate-100 rounded-lg">
+                    {uniqueStates
+                      .filter(name => name.toLowerCase().includes(stateSearchText.toLowerCase()))
+                      .map(stateName => {
+                        const isChecked = selectedStates.includes(stateName);
+                        return (
+                          <label key={stateName} className="flex items-center gap-2 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 rounded cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                if (isChecked) {
+                                  setSelectedStates(selectedStates.filter(name => name !== stateName));
+                                } else {
+                                  setSelectedStates([...selectedStates, stateName]);
+                                }
+                              }}
+                              className="accent-[#6804a1] h-3.5 w-3.5 flex-shrink-0"
+                            />
+                            <span className="truncate">{stateName}</span>
+                          </label>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                {/* Column 2: Branches */}
+                <div className="flex flex-col md:border-r md:border-slate-100 pr-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">Branches</span>
+                    <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-semibold">
+                      {selectedBranches.length === 0 ? "All" : selectedBranches.length}
+                    </span>
+                  </div>
+                  
+                  {/* Search box */}
+                  <div className="px-2 py-1.5 border border-slate-200 rounded-lg flex items-center gap-1.5 mb-2 bg-slate-50">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.602 10.602Z" />
+                    </svg>
+                    <input
+                      type="text"
+                      placeholder="Search branches..."
+                      value={branchSearchText}
+                      onChange={(e) => setBranchSearchText(e.target.value)}
+                      className="w-full text-xs border-none outline-none bg-transparent"
+                    />
+                  </div>
+
+                  {/* Bulk Actions */}
+                  <div className="flex justify-between items-center text-[10px] font-bold text-indigo-650 mb-2 px-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedBranches(uniqueBranches.map(b => b.name))}
+                      className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedBranches([])}
+                      className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                    >
+                      Deselect All
+                    </button>
+                  </div>
+
+                  {/* Checklist */}
+                  <div className="max-h-48 overflow-y-auto px-1 py-1 space-y-0.5 border border-slate-100 rounded-lg">
+                    {uniqueBranches
+                      .filter(b => b.name.toLowerCase().includes(branchSearchText.toLowerCase()))
+                      .map(branch => {
+                        const isChecked = selectedBranches.includes(branch.name);
+                        return (
+                          <label key={branch.name} className="flex items-center gap-2 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 rounded cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                if (isChecked) {
+                                  setSelectedBranches(selectedBranches.filter(name => name !== branch.name));
+                                } else {
+                                  setSelectedBranches([...selectedBranches, branch.name]);
+                                }
+                              }}
+                              className="accent-[#6804a1] h-3.5 w-3.5 flex-shrink-0"
+                            />
+                            <span className="truncate">{branch.name}</span>
+                          </label>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                {/* Column 3: ABMs */}
+                <div className="flex flex-col">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">ABMs</span>
+                    <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-semibold">
+                      {selectedAbms.length === 0 ? "All" : selectedAbms.length}
+                    </span>
+                  </div>
+                  
+                  {/* Search box */}
+                  <div className="px-2 py-1.5 border border-slate-200 rounded-lg flex items-center gap-1.5 mb-2 bg-slate-50">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.602 10.602Z" />
+                    </svg>
+                    <input
+                      type="text"
+                      placeholder="Search ABMs..."
+                      value={abmSearchText}
+                      onChange={(e) => setAbmSearchText(e.target.value)}
+                      className="w-full text-xs border-none outline-none bg-transparent"
+                    />
+                  </div>
+
+                  {/* Bulk Actions */}
+                  <div className="flex justify-between items-center text-[10px] font-bold text-indigo-650 mb-2 px-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAbms(uniqueAbms)}
+                      className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAbms([])}
+                      className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                    >
+                      Deselect All
+                    </button>
+                  </div>
+
+                  {/* Checklist */}
+                  <div className="max-h-48 overflow-y-auto px-1 py-1 space-y-0.5 border border-slate-100 rounded-lg">
+                    {uniqueAbms
+                      .filter(name => name.toLowerCase().includes(abmSearchText.toLowerCase()))
+                      .map(abmName => {
+                        const isChecked = selectedAbms.includes(abmName);
+                        return (
+                          <label key={abmName} className="flex items-center gap-2 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 rounded cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                if (isChecked) {
+                                  setSelectedAbms(selectedAbms.filter(name => name !== abmName));
+                                } else {
+                                  setSelectedAbms([...selectedAbms, abmName]);
+                                }
+                              }}
+                              className="accent-[#6804a1] h-3.5 w-3.5 flex-shrink-0"
+                            />
+                            <span className="truncate">{abmName}</span>
+                          </label>
+                        );
+                      })}
+                  </div>
+                </div>
+
               </div>
             </div>
           </>
