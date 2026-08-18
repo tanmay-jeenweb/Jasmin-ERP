@@ -762,32 +762,36 @@ const syncTargetVsAchievementsController = async (req, res) => {
 
 const getABMWiseTargetVsAchievementsSummaryController = async (req, res) => {
     try {
-        let records = await getABMWiseTargetVsAchievements();
+        const { state, states } = req.query;
         const allowedBranchNames = await getUserAllowedBranchNames(req.user);
+
+        // Fetch unique states restricted by allowed branch mapping
+        let stateQuery = `
+            SELECT DISTINCT sm.name AS state_name 
+            FROM target_vs_achievements t
+            JOIN branch_master bm ON t.branch_name = bm.name
+            JOIN state_master sm ON bm.state_id = sm.id
+        `;
+        const stateParams = [];
+        if (allowedBranchNames !== null) {
+            if (allowedBranchNames.length > 0) {
+                const placeholders = allowedBranchNames.map(() => '?').join(',');
+                stateQuery += ` WHERE bm.name IN (${placeholders}) `;
+                stateParams.push(...allowedBranchNames);
+            } else {
+                stateQuery += ` WHERE 1=0 `;
+            }
+        }
+        stateQuery += ` ORDER BY sm.name ASC `;
+        const [stateRows] = await db.execute(stateQuery, stateParams);
+        const uniqueStates = stateRows.map(r => r.state_name);
+
+        // Fetch target achievements records filtered by state/states at the DB level
+        let records = await getABMWiseTargetVsAchievements(state, states);
 
         // 1. Filter by allowed branch mapping
         if (allowedBranchNames !== null) {
             records = records.filter(r => r.branch_name && allowedBranchNames.includes(String(r.branch_name).trim().toUpperCase()));
-        }
-
-        // Extract all unique states before any state filtering
-        const uniqueStates = Array.from(new Set(
-            records
-                .map(r => r.state_name)
-                .filter(state => state && state !== "—")
-        )).sort((a, b) => a.localeCompare(b));
-
-        // 2. Filter by state if provided in query parameters (e.g. ?states=Punjab,Haryana or ?state=Punjab)
-        const { state, states } = req.query;
-        let selectedStates = [];
-        if (states) {
-            selectedStates = states.split(',').map(s => s.trim().toLowerCase());
-        } else if (state && state !== 'All') {
-            selectedStates = [state.trim().toLowerCase()];
-        }
-
-        if (selectedStates.length > 0) {
-            records = records.filter(r => r.state_name && selectedStates.includes(String(r.state_name).trim().toLowerCase()));
         }
 
         // 3. Perform ABM-wise aggregation

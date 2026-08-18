@@ -143,8 +143,8 @@ const getAllTargetVsAchievements = async () => {
     return results;
 };
 
-const getABMWiseTargetVsAchievements = async () => {
-    const query = `
+const getABMWiseTargetVsAchievements = async (state = null, states = null) => {
+    let query = `
         SELECT 
             t.*,
             COALESCE(u.name, 'Unknown') AS added_by_name,
@@ -161,11 +161,33 @@ const getABMWiseTargetVsAchievements = async () => {
         )
         LEFT JOIN users abm_u ON abm_m.user_id = abm_u.id
         LEFT JOIN users u ON t.added_by = u.id
+    `;
+    
+    const params = [];
+    const conditions = [];
+
+    if (states) {
+        const stateList = states.split(',').map(s => s.trim());
+        if (stateList.length > 0) {
+            const placeholders = stateList.map(() => '?').join(',');
+            conditions.push(`sm.name IN (${placeholders})`);
+            params.push(...stateList);
+        }
+    } else if (state && state !== 'All') {
+        conditions.push(`sm.name = ?`);
+        params.push(state.trim());
+    }
+
+    if (conditions.length > 0) {
+        query += ` WHERE ` + conditions.join(' AND ');
+    }
+
+    query += `
         ORDER BY 
             (t.qty_tgt IS NULL OR t.value_tgt IS NULL) ASC,
             t.timestamp DESC
     `;
-    const [results] = await db.execute(query);
+    const [results] = await db.execute(query, params);
     return results;
 };
 
