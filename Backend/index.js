@@ -57,6 +57,7 @@ const priceListRoutes = require("./routes/priceListRoutes.js");
 const { createLandingTypeTable } = require("./models/landingTypeModel.js");
 const landingTypeRoutes = require("./routes/landingTypeRoutes.js");
 const { createStockCacheTable } = require("./models/stockCacheModel.js");
+const { createRefreshTokensTable } = require("./models/refreshTokenModel.js");
 
 
 
@@ -174,6 +175,7 @@ const startServer = async () => {
         await createVariationTable();
         await createLandingTypeTable();
         await createStockCacheTable();
+        await createRefreshTokensTable();
 
 
 

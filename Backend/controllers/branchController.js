@@ -8,6 +8,7 @@ const {
 } = require('../models/branchModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
 const { getEligibleAbms } = require('../models/userBranchMappingModel.js');
+const db = require('../config/db.js');
 
 const addBranchController = async (req, res) => {
     try {
@@ -56,7 +57,24 @@ const addBranchController = async (req, res) => {
 
 const getAllBranchesController = async (req, res) => {
     try {
-        const branches = await getAllBranches();
+        let branches = await getAllBranches();
+
+        // Fetch user's state restriction from DB
+        const [userRows] = await db.execute("SELECT state FROM users WHERE id = ?", [req.user.id]);
+        let userStates = null;
+        if (userRows.length > 0 && userRows[0].state) {
+            try {
+                userStates = typeof userRows[0].state === 'string' ? JSON.parse(userRows[0].state) : userRows[0].state;
+            } catch (e) {
+                userStates = null;
+            }
+        }
+
+        if (userStates && Array.isArray(userStates) && userStates.length > 0 && !userStates.includes("All")) {
+            const upperUserStates = userStates.map(s => String(s).trim().toUpperCase());
+            branches = branches.filter(b => b.state_name && upperUserStates.includes(String(b.state_name).trim().toUpperCase()));
+        }
+
         res.status(200).json({
             success: true,
             message: 'Branches retrieved successfully',

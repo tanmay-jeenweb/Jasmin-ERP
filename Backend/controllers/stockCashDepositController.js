@@ -10,6 +10,25 @@ const db = require('../config/db.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
 
 // Helper to retrieve allowed branch names for a user based on User Branch Mapping
+// Helper to filter records by user's state restrictions
+const filterRecordsByUserState = async (userId, records) => {
+    const [userRows] = await db.execute("SELECT state FROM users WHERE id = ?", [userId]);
+    let userStates = null;
+    if (userRows.length > 0 && userRows[0].state) {
+        try {
+            userStates = typeof userRows[0].state === 'string' ? JSON.parse(userRows[0].state) : userRows[0].state;
+        } catch (e) {
+            userStates = null;
+        }
+    }
+
+    if (userStates && Array.isArray(userStates) && userStates.length > 0 && !userStates.includes("All")) {
+        const upperUserStates = userStates.map(s => String(s).trim().toUpperCase());
+        return records.filter(r => r.state_name && upperUserStates.includes(String(r.state_name).trim().toUpperCase()));
+    }
+    return records;
+};
+
 const getUserAllowedBranchNames = async (user) => {
     if (!user || !user.id) return [];
 
@@ -19,7 +38,7 @@ const getUserAllowedBranchNames = async (user) => {
     }
 
     const [userRows] = await db.execute(
-        `SELECT u.id, u.role, ut.user_role, ut.type_name 
+        `SELECT u.id, u.role, ut.user_role, ut.type_name, u.state 
          FROM users u 
          LEFT JOIN user_types ut ON u.user_type_id = ut.id 
          WHERE u.id = ?`,
@@ -41,7 +60,23 @@ const getUserAllowedBranchNames = async (user) => {
         [user.id]
     );
 
-    return mappingRows.map(r => String(r.branch_name).trim().toUpperCase());
+    if (mappingRows.length > 0) {
+        return mappingRows.map(r => String(r.branch_name).trim().toUpperCase());
+    }
+
+    // If no branch mappings exist, check if the user has state restrictions
+    if (userRows.length > 0 && userRows[0].state) {
+        try {
+            const userStates = typeof userRows[0].state === 'string' ? JSON.parse(userRows[0].state) : userRows[0].state;
+            if (userStates && Array.isArray(userStates) && userStates.length > 0 && !userStates.includes("All")) {
+                return null;
+            }
+        } catch (e) {
+            console.error("Error parsing user state in getUserAllowedBranchNames:", e);
+        }
+    }
+
+    return [];
 };
 
 const getStockCashDepositReportController = async (req, res) => {
@@ -52,6 +87,9 @@ const getStockCashDepositReportController = async (req, res) => {
         if (allowedBranchNames !== null) {
             records = records.filter(r => r.branch_name && allowedBranchNames.includes(String(r.branch_name).trim().toUpperCase()));
         }
+
+        // Apply user state restrictions
+        records = await filterRecordsByUserState(req.user.id, records);
 
         res.status(200).json({
             success: true,
@@ -250,7 +288,10 @@ const getAbmWiseCashDepositReportController = async (req, res) => {
             records = records.filter(r => r.branch_name && allowedBranchNames.includes(String(r.branch_name).trim().toUpperCase()));
         }
 
-        // 2. Filter by selected state if not 'All'
+        // 2. Filter by user state restrictions
+        records = await filterRecordsByUserState(req.user.id, records);
+
+        // 3. Filter by selected state if not 'All'
         if (state && state !== 'All') {
             records = records.filter(r => r.state_name && String(r.state_name).trim().toLowerCase() === String(state).trim().toLowerCase());
         }
