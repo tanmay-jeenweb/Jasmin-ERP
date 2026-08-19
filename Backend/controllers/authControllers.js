@@ -7,6 +7,13 @@ const {
     updateUserProfile
 } = require("../models/userModel.js");
 
+const {
+    addRefreshToken,
+    findRefreshToken,
+    deleteRefreshToken,
+    deleteExpiredRefreshTokens
+} = require("../models/refreshTokenModel.js");
+
 const { createAuditLog } = require("../models/auditLogModel.js");
 
 const {
@@ -14,6 +21,72 @@ const {
     getPendingDevice,
     createPendingDevice
 } = require("../models/deviceModel.js");
+
+// Helper to generate access and refresh tokens, set cookie, and respond
+const generateTokensAndRespond = async (user, userLandingType, userState, deviceId, res, message) => {
+    // Generate Access Token (short-lived, configured in env, default 15m)
+    const token = jwt.sign(
+        { id: user.id, role: user.role, name: user.name, username: user.username, mob_no: user.mob_no },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_ACCESS_EXPIRATION || "15m" }
+    );
+
+    // Generate Refresh Token (long-lived, configured in env, default 7d)
+    const refreshExpiresIn = process.env.JWT_REFRESH_EXPIRATION || "7d";
+    const refreshToken = jwt.sign(
+        { id: user.id },
+        process.env.JWT_REFRESH_SECRET,
+        { expiresIn: refreshExpiresIn }
+    );
+
+    // Calculate expiration timestamp
+    let durationMs = 7 * 24 * 60 * 60 * 1000; // default 7 days
+    const match = refreshExpiresIn.match(/^(\d+)([dhm])$/);
+    if (match) {
+        const val = parseInt(match[1], 10);
+        const unit = match[2];
+        if (unit === 'd') durationMs = val * 24 * 60 * 60 * 1000;
+        else if (unit === 'h') durationMs = val * 60 * 60 * 1000;
+        else if (unit === 'm') durationMs = val * 60 * 1000;
+    }
+    const expiresAt = new Date(Date.now() + durationMs);
+
+    // Save Refresh Token to database
+    await addRefreshToken(user.id, refreshToken, deviceId || null, expiresAt);
+
+    // Set Refresh Token in HTTP-only cookie
+    res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: durationMs
+    });
+
+    // Clean up expired tokens in background
+    try {
+        await deleteExpiredRefreshTokens();
+    } catch (e) {
+        console.error("Failed to delete expired refresh tokens:", e);
+    }
+
+    return res.status(200).json({
+        success: true,
+        message,
+        token,
+        refreshToken, // Fallback for client applications not using cookies
+        user: {
+            id: user.id,
+            name: user.name,
+            username: user.username,
+            email: user.email,
+            role: user.role,
+            mob_no: user.mob_no,
+            modules: user.modules || [],
+            landing_type: userLandingType,
+            state: userState
+        }
+    });
+};
 
 // ================= LOGIN =================
 
@@ -72,54 +145,12 @@ const login = async (req, res) => {
 
         // ================= ADMIN LOGIN =================
         if (user.role === "admin" && (user.device_verification_required === 0 || user.device_verification_required === false)) {
-            const token = jwt.sign(
-                { id: user.id, role: user.role, name: user.name, username: user.username, mob_no: user.mob_no },
-                process.env.JWT_SECRET,
-                { expiresIn: "1d" }
-            );
-
-            return res.status(200).json({
-                success: true,
-                message: "Admin login successful",
-                token,
-                user: {
-                    id: user.id,
-                    name: user.name,
-                    username: user.username,
-                    email: user.email,
-                    role: user.role,
-                    mob_no: user.mob_no,
-                    modules: user.modules || [],
-                    landing_type: userLandingType,
-                    state: userState
-                }
-            });
+            return await generateTokensAndRespond(user, userLandingType, userState, deviceId, res, "Admin login successful");
         }
 
         // ================= DEVICE MATCHING =================
         if (user.device_verification_required === 0 || user.device_verification_required === false) {
-            const token = jwt.sign(
-                { id: user.id, role: user.role, name: user.name, username: user.username, mob_no: user.mob_no },
-                process.env.JWT_SECRET,
-                { expiresIn: "1d" }
-            );
-
-            return res.status(200).json({
-                success: true,
-                message: "Login successful",
-                token,
-                user: {
-                    id: user.id,
-                    name: user.name,
-                    username: user.username,
-                    email: user.email,
-                    role: user.role,
-                    mob_no: user.mob_no,
-                    modules: user.modules || [],
-                    landing_type: userLandingType,
-                    state: userState
-                }
-            });
+            return await generateTokensAndRespond(user, userLandingType, userState, deviceId, res, "Login successful");
         }
 
         const approvedDevices = await getApprovedDevices(user.id);
@@ -127,28 +158,7 @@ const login = async (req, res) => {
 
         if (isDeviceApproved) {
             // Device matches, login successful
-            const token = jwt.sign(
-                { id: user.id, role: user.role, name: user.name, username: user.username, mob_no: user.mob_no },
-                process.env.JWT_SECRET,
-                { expiresIn: "1d" }
-            );
-
-            return res.status(200).json({
-                success: true,
-                message: "Login successful",
-                token,
-                user: {
-                    id: user.id,
-                    name: user.name,
-                    username: user.username,
-                    email: user.email,
-                    role: user.role,
-                    mob_no: user.mob_no,
-                    modules: user.modules || [],
-                    landing_type: userLandingType,
-                    state: userState
-                }
-            });
+            return await generateTokensAndRespond(user, userLandingType, userState, deviceId, res, "Login successful");
         }
 
         // If the current device is not approved, check if there is a pending registration request for this device
@@ -278,12 +288,116 @@ const requestDeviceRegistration = async (req, res) => {
 
 const logout = async (req, res) => {
     try {
+        const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+        if (refreshToken) {
+            await deleteRefreshToken(refreshToken);
+        }
+        res.clearCookie("refreshToken");
         return res.status(200).json({
             success: true,
             message: "Logged out successfully"
         });
     } catch (error) {
         console.error("Logout Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal Server Error"
+        });
+    }
+};
+
+// ================= REFRESH TOKEN =================
+
+const refresh = async (req, res) => {
+    try {
+        // Extract token from cookie or body
+        const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+
+        if (!refreshToken) {
+            return res.status(400).json({
+                success: false,
+                message: "Refresh token is required"
+            });
+        }
+
+        // Verify token signature and expiration
+        let decoded;
+        try {
+            decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        } catch (err) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid or expired refresh token"
+            });
+        }
+
+        // Verify token exists in database and is not expired
+        const dbToken = await findRefreshToken(refreshToken);
+        if (!dbToken) {
+            return res.status(401).json({
+                success: false,
+                message: "Refresh token is invalid or has been revoked"
+            });
+        }
+
+        // Get the user information
+        const { getUserById } = require("../models/userModel.js");
+        const user = await getUserById(decoded.id);
+
+        if (!user || user.active === 0 || user.active === false) {
+            return res.status(403).json({
+                success: false,
+                message: "User account deactivated or not found"
+            });
+        }
+
+        // Generate new Access Token (short-lived)
+        const newAccessToken = jwt.sign(
+            { id: user.id, role: user.role, name: user.name, username: user.username, mob_no: user.mob_no },
+            process.env.JWT_SECRET,
+            { expiresIn: process.env.JWT_ACCESS_EXPIRATION || "15m" }
+        );
+
+        // Rotate the Refresh Token
+        const refreshExpiresIn = process.env.JWT_REFRESH_EXPIRATION || "7d";
+        const newRefreshToken = jwt.sign(
+            { id: user.id },
+            process.env.JWT_REFRESH_SECRET,
+            { expiresIn: refreshExpiresIn }
+        );
+
+        // Calculate expiration timestamp
+        let durationMs = 7 * 24 * 60 * 60 * 1000; // default 7 days
+        const match = refreshExpiresIn.match(/^(\d+)([dhm])$/);
+        if (match) {
+            const val = parseInt(match[1], 10);
+            const unit = match[2];
+            if (unit === 'd') durationMs = val * 24 * 60 * 60 * 1000;
+            else if (unit === 'h') durationMs = val * 60 * 60 * 1000;
+            else if (unit === 'm') durationMs = val * 60 * 1000;
+        }
+        const expiresAt = new Date(Date.now() + durationMs);
+
+        // Delete old token and insert new token into database
+        await deleteRefreshToken(refreshToken);
+        await addRefreshToken(user.id, newRefreshToken, dbToken.device_id, expiresAt);
+
+        // Set the new refresh token in HTTP-only cookie
+        res.cookie("refreshToken", newRefreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            maxAge: durationMs
+        });
+
+        return res.status(200).json({
+            success: true,
+            token: newAccessToken,
+            refreshToken: newRefreshToken
+        });
+
+    } catch (error) {
+        console.error("Refresh Token Error:", error);
         return res.status(500).json({
             success: false,
             message: "Internal Server Error"
@@ -466,6 +580,7 @@ const getApprovedDevicesController = async (req, res) => {
 module.exports = {
     login,
     logout,
+    refresh,
     updateProfileController,
     requestDeviceRegistration,
     getMyPermissions,
