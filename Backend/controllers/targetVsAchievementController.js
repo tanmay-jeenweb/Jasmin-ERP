@@ -67,6 +67,25 @@ function nativeFetch(url, options = {}) {
     });
 }
 
+// Helper to filter records by user's state restrictions
+const filterRecordsByUserState = async (userId, records) => {
+    const [userRows] = await db.execute("SELECT state FROM users WHERE id = ?", [userId]);
+    let userStates = null;
+    if (userRows.length > 0 && userRows[0].state) {
+        try {
+            userStates = typeof userRows[0].state === 'string' ? JSON.parse(userRows[0].state) : userRows[0].state;
+        } catch (e) {
+            userStates = null;
+        }
+    }
+
+    if (userStates && Array.isArray(userStates) && userStates.length > 0 && !userStates.includes("All")) {
+        const upperUserStates = userStates.map(s => String(s).trim().toUpperCase());
+        return records.filter(r => r.state_name && upperUserStates.includes(String(r.state_name).trim().toUpperCase()));
+    }
+    return records;
+};
+
 // Helper to retrieve allowed branch names for a user based on User Branch Mapping
 const getUserAllowedBranchNames = async (user) => {
     if (!user || !user.id) return [];
@@ -79,7 +98,7 @@ const getUserAllowedBranchNames = async (user) => {
 
     // Double check user role / user type in database
     const [userRows] = await db.execute(
-        `SELECT u.id, u.role, ut.user_role, ut.type_name 
+        `SELECT u.id, u.role, ut.user_role, ut.type_name, u.state 
          FROM users u 
          LEFT JOIN user_types ut ON u.user_type_id = ut.id 
          WHERE u.id = ?`,
@@ -102,7 +121,23 @@ const getUserAllowedBranchNames = async (user) => {
         [user.id]
     );
 
-    return mappingRows.map(r => String(r.branch_name).trim().toUpperCase());
+    if (mappingRows.length > 0) {
+        return mappingRows.map(r => String(r.branch_name).trim().toUpperCase());
+    }
+
+    // If no branch mappings exist, check if the user has state restrictions
+    if (userRows.length > 0 && userRows[0].state) {
+        try {
+            const userStates = typeof userRows[0].state === 'string' ? JSON.parse(userRows[0].state) : userRows[0].state;
+            if (userStates && Array.isArray(userStates) && userStates.length > 0 && !userStates.includes("All")) {
+                return null;
+            }
+        } catch (e) {
+            console.error("Error parsing user state in getUserAllowedBranchNames:", e);
+        }
+    }
+
+    return [];
 };
 
 const getAllTargetVsAchievementsController = async (req, res) => {
@@ -113,6 +148,9 @@ const getAllTargetVsAchievementsController = async (req, res) => {
         if (allowedBranchNames !== null) {
             records = records.filter(r => r.branch_name && allowedBranchNames.includes(String(r.branch_name).trim().toUpperCase()));
         }
+
+        // Apply user state restrictions
+        records = await filterRecordsByUserState(req.user.id, records);
 
         res.status(200).json({
             success: true,
@@ -136,6 +174,9 @@ const getABMWiseTargetVsAchievementsController = async (req, res) => {
         if (allowedBranchNames !== null) {
             records = records.filter(r => r.branch_name && allowedBranchNames.includes(String(r.branch_name).trim().toUpperCase()));
         }
+
+        // Apply user state restrictions
+        records = await filterRecordsByUserState(req.user.id, records);
 
         res.status(200).json({
             success: true,
@@ -164,9 +205,35 @@ const importTargetVsAchievementsController = async (req, res) => {
             });
         }
 
+        // Fetch user's state restriction from DB
+        const [userRows] = await db.execute("SELECT state FROM users WHERE id = ?", [req.user.id]);
+        let userStates = null;
+        if (userRows.length > 0 && userRows[0].state) {
+            try {
+                userStates = typeof userRows[0].state === 'string' ? JSON.parse(userRows[0].state) : userRows[0].state;
+            } catch (e) {
+                userStates = null;
+            }
+        }
+
         const allowedBranchNames = await getUserAllowedBranchNames(req.user);
 
-        // Validate branch name is present in all rows and user has mapping access
+        // Pre-fetch all branch names in allowed states if state restriction exists
+        let allowedStateBranchNames = null;
+        if (userStates && Array.isArray(userStates) && userStates.length > 0 && !userStates.includes("All")) {
+            const upperUserStates = userStates.map(s => String(s).trim().toUpperCase());
+            const placeholders = upperUserStates.map(() => '?').join(',');
+            const [branchRows] = await db.execute(
+                `SELECT UPPER(bm.name) AS name 
+                 FROM branch_master bm
+                 JOIN state_master sm ON bm.state_id = sm.id
+                 WHERE UPPER(sm.name) IN (${placeholders})`,
+                upperUserStates
+            );
+            allowedStateBranchNames = new Set(branchRows.map(b => b.name));
+        }
+
+        // Validate branch name is present in all rows and user has mapping/state access
         for (const r of records) {
             if (!r.branch_name) {
                 return res.status(400).json({
@@ -175,12 +242,24 @@ const importTargetVsAchievementsController = async (req, res) => {
                 });
             }
 
+            const branchUpper = String(r.branch_name).trim().toUpperCase();
+
+            // 1. Check branch mapping permission (if not admin/state manager)
             if (allowedBranchNames !== null) {
-                const branchUpper = String(r.branch_name).trim().toUpperCase();
                 if (!allowedBranchNames.includes(branchUpper)) {
                     return res.status(403).json({
                         success: false,
                         message: `Access Denied: You do not have permission to import target data for branch "${r.branch_name}".`
+                    });
+                }
+            }
+
+            // 2. Check state restriction permission
+            if (allowedStateBranchNames !== null) {
+                if (!allowedStateBranchNames.has(branchUpper)) {
+                    return res.status(403).json({
+                        success: false,
+                        message: `Access Denied: Branch "${r.branch_name}" is outside your permitted states (${userStates.join(', ')}).`
                     });
                 }
             }
@@ -763,9 +842,21 @@ const syncTargetVsAchievementsController = async (req, res) => {
 const getABMWiseTargetVsAchievementsSummaryController = async (req, res) => {
     try {
         const { state, states } = req.query;
+
+        // Fetch user's state restriction from DB
+        const [userRows] = await db.execute("SELECT state FROM users WHERE id = ?", [req.user.id]);
+        let userStates = null;
+        if (userRows.length > 0 && userRows[0].state) {
+            try {
+                userStates = typeof userRows[0].state === 'string' ? JSON.parse(userRows[0].state) : userRows[0].state;
+            } catch (e) {
+                userStates = null;
+            }
+        }
+
         const allowedBranchNames = await getUserAllowedBranchNames(req.user);
 
-        // Fetch unique states restricted by allowed branch mapping
+        // Fetch unique states restricted by allowed branch mapping and user state restrictions
         let stateQuery = `
             SELECT DISTINCT sm.name AS state_name 
             FROM target_vs_achievements t
@@ -773,14 +864,26 @@ const getABMWiseTargetVsAchievementsSummaryController = async (req, res) => {
             JOIN state_master sm ON bm.state_id = sm.id
         `;
         const stateParams = [];
+        const stateWhereClauses = [];
+
         if (allowedBranchNames !== null) {
             if (allowedBranchNames.length > 0) {
                 const placeholders = allowedBranchNames.map(() => '?').join(',');
-                stateQuery += ` WHERE bm.name IN (${placeholders}) `;
+                stateWhereClauses.push(` bm.name IN (${placeholders}) `);
                 stateParams.push(...allowedBranchNames);
             } else {
-                stateQuery += ` WHERE 1=0 `;
+                stateWhereClauses.push(` 1=0 `);
             }
+        }
+
+        if (userStates && Array.isArray(userStates) && userStates.length > 0 && !userStates.includes("All")) {
+            const placeholders = userStates.map(() => '?').join(',');
+            stateWhereClauses.push(` sm.name IN (${placeholders}) `);
+            stateParams.push(...userStates);
+        }
+
+        if (stateWhereClauses.length > 0) {
+            stateQuery += ` WHERE ` + stateWhereClauses.join(' AND ');
         }
         stateQuery += ` ORDER BY sm.name ASC `;
         const [stateRows] = await db.execute(stateQuery, stateParams);
@@ -792,6 +895,12 @@ const getABMWiseTargetVsAchievementsSummaryController = async (req, res) => {
         // 1. Filter by allowed branch mapping
         if (allowedBranchNames !== null) {
             records = records.filter(r => r.branch_name && allowedBranchNames.includes(String(r.branch_name).trim().toUpperCase()));
+        }
+
+        // 2. Filter by user state restrictions
+        if (userStates && Array.isArray(userStates) && userStates.length > 0 && !userStates.includes("All")) {
+            const upperUserStates = userStates.map(s => String(s).trim().toUpperCase());
+            records = records.filter(r => r.state_name && upperUserStates.includes(String(r.state_name).trim().toUpperCase()));
         }
 
         // 3. Perform ABM-wise aggregation
