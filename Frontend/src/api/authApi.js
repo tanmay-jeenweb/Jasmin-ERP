@@ -38,6 +38,88 @@ apiClient.interceptors.request.use(async (config) => {
     return Promise.reject(error);
 });
 
+// Queue to hold pending requests while token is refreshing
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+    failedQueue.forEach(prom => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
+        }
+    });
+    failedQueue = [];
+};
+
+// Response interceptor to handle 401 Unauthorized errors (expired tokens)
+apiClient.interceptors.response.use(
+    (response) => {
+        return response;
+    },
+    async (error) => {
+        const originalRequest = error.config;
+
+        // Check if error is 401 and request has not been retried yet
+        if (error.response?.status === 401 && !originalRequest._retry) {
+            // Avoid infinite loop for auth endpoints
+            const isAuthRoute = originalRequest.url.includes("/auth/login") || 
+                                originalRequest.url.includes("/auth/refresh") || 
+                                originalRequest.url.includes("/auth/logout");
+
+            if (isAuthRoute) {
+                return Promise.reject(error);
+            }
+
+            // If another request is currently refreshing the token, queue this request
+            if (isRefreshing) {
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                })
+                .then((token) => {
+                    originalRequest.headers.Authorization = `Bearer ${token}`;
+                    return apiClient(originalRequest);
+                })
+                .catch((err) => {
+                    return Promise.reject(err);
+                });
+            }
+
+            originalRequest._retry = true;
+            isRefreshing = true;
+
+            try {
+                // Call refresh token endpoint (sends HttpOnly cookie automatically)
+                const response = await apiClient.post("/auth/refresh");
+
+                if (response.data?.success) {
+                    const { token } = response.data;
+                    localStorage.setItem("token", token);
+                    
+                    // Retry original request with the new token
+                    originalRequest.headers.Authorization = `Bearer ${token}`;
+                    processQueue(null, token);
+                    return apiClient(originalRequest);
+                } else {
+                    throw new Error("Failed to refresh token");
+                }
+            } catch (refreshError) {
+                processQueue(refreshError, null);
+                // Clear tokens and session, then redirect to login
+                localStorage.removeItem("token");
+                localStorage.removeItem("user");
+                window.location.href = "/login";
+                return Promise.reject(refreshError);
+            } finally {
+                isRefreshing = false;
+            }
+        }
+
+        return Promise.reject(error);
+    }
+);
+
 export const loginUser = async (data) => {
     return apiClient.post("/auth/login", data);
 };
