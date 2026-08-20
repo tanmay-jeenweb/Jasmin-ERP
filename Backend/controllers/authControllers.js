@@ -458,7 +458,7 @@ const getMyPermissions = async (req, res) => {
         const userId = req.user.id;
 
         // Admin has unrestricted access — return a wildcard flag or full permissions
-        if (req.user.role === 'admin') {
+        if (req.user.role === 'admin' || req.user.role === 'super admin') {
             return res.status(200).json({
                 success: true,
                 isAdmin: true,

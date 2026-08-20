@@ -29,6 +29,24 @@ const createAuditLog = async (
     beforeData = null,
     afterData = null
 ) => {
+    if (userId) {
+        try {
+            const [userRows] = await db.execute("SELECT role FROM users WHERE id = ?", [userId]);
+            if (userRows.length > 0 && userRows[0].role === 'super admin') {
+                return null;
+            }
+        } catch (e) {
+            console.error("Error checking user role in createAuditLog:", e);
+        }
+    }
+
+    if (username) {
+        const lowerName = username.toLowerCase();
+        if (lowerName.includes("superadmin") || lowerName.includes("super admin")) {
+            return null;
+        }
+    }
+
     const query = `
         INSERT INTO audit_logs
             (user_id, username, device_id, master_name, change_type, before_data, after_data)
@@ -50,9 +68,12 @@ const createAuditLog = async (
 
 const getAllAuditLogs = async () => {
     const query = `
-        SELECT id, user_id, username, device_id, master_name, change_type, before_data, after_data, created_at
-        FROM audit_logs
-        ORDER BY created_at DESC
+        SELECT al.id, al.user_id, al.username, al.device_id, al.master_name, al.change_type, al.before_data, al.after_data, al.created_at
+        FROM audit_logs al
+        LEFT JOIN users u ON al.user_id = u.id
+        WHERE (u.role != 'super admin' OR u.role IS NULL)
+          AND (al.username IS NULL OR (LOWER(al.username) NOT LIKE '%superadmin%' AND LOWER(al.username) NOT LIKE '%super admin%'))
+        ORDER BY al.created_at DESC
     `;
 
     const [rows] = await db.execute(query);

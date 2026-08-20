@@ -11,7 +11,9 @@ const {
     fetchPendingDevices,
     toggleUserActiveController,
     fetchUserActiveDevicesController,
-    revokeSpecificDeviceController
+    revokeSpecificDeviceController,
+    fetchSuperAdminUsers,
+    updateUserBySuperAdmin
 } = require("../controllers/adminController.js");
 const { verifyToken, verifyAdmin, verifyPermission } = require("../middleware/authMiddleware.js");
 
@@ -20,6 +22,9 @@ const router = express.Router();
 router.get("/users", verifyToken, verifyPermission("user_master", "read"), fetchUsers);
 router.post("/create-user", verifyToken, verifyPermission("user_master", "write"), createUserByAdmin);
 router.patch("/user/:id/toggle-active", verifyToken, verifyPermission("user_master", "update"), toggleUserActiveController);
+
+router.get("/super-admin/users", verifyToken, verifyAdmin, fetchSuperAdminUsers);
+router.put("/super-admin/users/:userId", verifyToken, verifyAdmin, updateUserBySuperAdmin);
 
 router.get("/pending-devices", verifyToken, verifyPermission("device_approval", "read"), fetchPendingDevices);
 router.put("/approve-device/:deviceRowId", verifyToken, verifyPermission("device_approval", "write"), approveDeviceController);

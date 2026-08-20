@@ -141,9 +141,9 @@ export default function Navbar() {
     if (canSeePriceListReports) colsCount++;
     if (canSeePriceListView) colsCount++;
 
-    let dropdownWidthClass = "w-80";
-    if (colsCount === 2) dropdownWidthClass = "w-[640px]";
-    else if (colsCount === 3) dropdownWidthClass = "w-[960px]";
+    let dropdownWidthClass = "w-72";
+    if (colsCount === 2) dropdownWidthClass = "w-[540px]";
+    else if (colsCount === 3) dropdownWidthClass = "w-[800px]";
 
     let gridColsClass = "grid-cols-1 gap-3";
     if (colsCount === 2) gridColsClass = "grid-cols-2 divide-x divide-slate-100 gap-4";
@@ -302,6 +302,11 @@ export default function Navbar() {
         return true;
     });
 
+    const isPrecedingTabsHidden = !isAdmin && availableMasters.length === 0;
+    const priceListDropdownPositionClass = isPrecedingTabsHidden
+        ? "left-0 origin-top-left"
+        : "left-1/2 -translate-x-1/2 origin-top";
+
 
     const allReports = [
         {
@@ -337,8 +342,11 @@ export default function Navbar() {
     ];
 
     const availableReports = allReports.filter(r => {
-        if (r.path === "/admin/target-vs-achievement" || r.path === "/admin/abm-wise-tva") {
+        if (r.path === "/admin/target-vs-achievement") {
             return isAdmin || hasPermission("target_vs_achievement", "read");
+        }
+        if (r.path === "/admin/abm-wise-tva") {
+            return isAdmin || hasPermission("abm_wise_tva", "read");
         }
         if (r.path === "/admin/stock-vs-cash-deposit") {
             return isAdmin || hasPermission("stock_vs_cash_deposit", "read");
@@ -613,7 +621,7 @@ export default function Navbar() {
                                 </button>
 
                                 {isPriceListOpen && (
-                                    <div className={`absolute left-1/2 -translate-x-1/2 top-full mt-1.5 ${dropdownWidthClass} bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200`}>
+                                     <div className={`absolute ${priceListDropdownPositionClass} top-full mt-1.5 ${dropdownWidthClass} bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 animate-in fade-in slide-in-from-top-2 duration-200`}>
                                         {priceFormats.length === 0 ? (
                                             <p className="text-slate-500 text-xs text-center py-2">No formats configured</p>
                                         ) : (

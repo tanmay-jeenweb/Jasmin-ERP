@@ -2,7 +2,7 @@ import axios from "axios";
 import { getDeviceId } from "../utils/device";
 
 const getBaseURL = () => {
-    return import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+    return import.meta.env.VITE_API_URL || "http://localhost:5000/v1/api";
 };
 
 const apiClient = axios.create({
@@ -193,6 +193,14 @@ export const updateProfile = async (data) => {
 
 export const getMyPermissions = async () => {
     return apiClient.get("/auth/my-permissions");
+};
+
+export const getSuperAdminUsers = async () => {
+    return apiClient.get("/admin/super-admin/users");
+};
+
+export const updateUserBySuperAdmin = async (userId, data) => {
+    return apiClient.put(`/admin/super-admin/users/${userId}`, data);
 };
 
 export default apiClient;
