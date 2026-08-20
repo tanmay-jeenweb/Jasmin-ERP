@@ -106,11 +106,18 @@ apiClient.interceptors.response.use(
                 }
             } catch (refreshError) {
                 processQueue(refreshError, null);
-                // Clear tokens and session, then redirect to login
+                // Clear all auth state immediately
                 localStorage.removeItem("token");
                 localStorage.removeItem("user");
-                window.location.href = "/login";
-                return Promise.reject(refreshError);
+                sessionStorage.removeItem("loginTime");
+                sessionStorage.removeItem("alertShown");
+                // Notify React components so they unmount before redirect
+                window.dispatchEvent(new Event("auth-change"));
+                // Force redirect — use replace to prevent back-button returning to stale page
+                window.location.replace("/");
+                // Return a never-resolving promise so no component error handler
+                // runs and shows stale UI (e.g. "No records found") before the redirect
+                return new Promise(() => {});
             } finally {
                 isRefreshing = false;
             }

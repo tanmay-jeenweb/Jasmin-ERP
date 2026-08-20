@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const db = require("../config/db.js");
+const { findRefreshToken } = require("../models/refreshTokenModel.js");
 
 const verifyToken = async (req, res, next) => {
     const authHeader = req.headers.authorization;
@@ -16,6 +17,19 @@ const verifyToken = async (req, res, next) => {
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.user = decoded;
+
+        // Validate that the user's refresh token still exists in the database.
+        // If an admin revoked/changed it, this will fail and force immediate logout.
+        const refreshToken = req.cookies?.refreshToken;
+        if (refreshToken) {
+            const dbToken = await findRefreshToken(refreshToken);
+            if (!dbToken) {
+                return res.status(401).json({
+                    success: false,
+                    message: "Session revoked. Please login again."
+                });
+            }
+        }
 
         if (!req.user.username || !req.user.name) {
             const [rows] = await db.execute(
@@ -41,6 +55,7 @@ const verifyToken = async (req, res, next) => {
         });
     }
 };
+
 
 const verifyAdmin = (req, res, next) => {
     if (!req.user || (req.user.role !== "admin" && req.user.role !== "super admin")) {
