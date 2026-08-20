@@ -53,6 +53,13 @@ const MASTER_GROUPS = [
     ]
   },
   {
+    category: "📈 Dashboard Reports",
+    masters: [
+      { key: "brand_wise_sales", label: "Brand Wise Sales", note: "Write = Trigger Sync" },
+      { key: "abm_wise_cash_deposit", label: "ABM Wise Cash Deposit Report", note: "Read Only" }
+    ]
+  },
+  {
     category: "⚙️ System Operations & Support",
     masters: [
       { key: "support_master", label: "Support Master" },

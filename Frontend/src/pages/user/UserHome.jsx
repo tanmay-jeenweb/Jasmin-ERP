@@ -8,11 +8,17 @@ import { getMobileBrands } from "../../api/mobileBrandApi";
 import { getBrandWiseSales, syncBrandWiseSales } from "../../api/brandWiseSalesApi";
 import toast from "react-hot-toast";
 import * as XLSX from "xlsx-js-style";
+import { usePermission } from "../../context/PermissionContext";
 
 export default function UserHome() {
     const user = useMemo(() => JSON.parse(localStorage.getItem("user") || "{}"), []);
+    const { hasPermission, loading: permissionLoading } = usePermission();
 
-        const [data, setData] = useState([]);
+    const canViewCashDeposit = useMemo(() => hasPermission("abm_wise_cash_deposit", "read"), [hasPermission]);
+    const canViewBrandSales = useMemo(() => hasPermission("brand_wise_sales", "read"), [hasPermission]);
+    const canSyncBrandSales = useMemo(() => hasPermission("brand_wise_sales", "write"), [hasPermission]);
+
+    const [data, setData] = useState([]);
     const [states, setStates] = useState([]);
     const [selectedState, setSelectedState] = useState("All");
     const [loading, setLoading] = useState(false);
@@ -21,7 +27,7 @@ export default function UserHome() {
     const [targetData, setTargetData] = useState([]);
     const [brandsList, setBrandsList] = useState([]);
     const [brandSalesData, setBrandSalesData] = useState([]);
-    const [activeTab, setActiveTab] = useState("cash_deposit");
+    const [activeTab, setActiveTab] = useState("");
     const [brandSyncDate, setBrandSyncDate] = useState(() => {
         const d = new Date();
         const year = d.getFullYear();
@@ -87,10 +93,14 @@ export default function UserHome() {
             setTargetData(targetRes.data.data || []);
             setBrandsList(brandsRes.data.data || []);
             
-            await Promise.all([
-                loadCashDepositData(selectedState),
-                loadBrandSalesData(brandSyncDate, selectedState)
-            ]);
+            const promises = [];
+            if (canViewCashDeposit) {
+                promises.push(loadCashDepositData(selectedState));
+            }
+            if (canViewBrandSales) {
+                promises.push(loadBrandSalesData(brandSyncDate, selectedState));
+            }
+            await Promise.all(promises);
         } catch (err) {
             console.error("Failed to load dashboard data:", err);
             toast.error("Failed to load dashboard data");
@@ -100,20 +110,27 @@ export default function UserHome() {
     };
 
     useEffect(() => {
-        loadData();
-    }, []);
+        if (!permissionLoading) {
+            loadData();
+            if (canViewCashDeposit) {
+                setActiveTab("cash_deposit");
+            } else if (canViewBrandSales) {
+                setActiveTab("brand_sales");
+            }
+        }
+    }, [permissionLoading]);
 
     useEffect(() => {
-        if (states.length > 0) {
+        if (states.length > 0 && canViewCashDeposit) {
             loadCashDepositData(selectedState);
         }
-    }, [selectedState]);
+    }, [selectedState, canViewCashDeposit, states]);
 
     useEffect(() => {
-        if (brandSyncDate && states.length > 0) {
+        if (brandSyncDate && states.length > 0 && canViewBrandSales) {
             loadBrandSalesData(brandSyncDate, selectedState);
         }
-    }, [brandSyncDate, selectedState]);
+    }, [brandSyncDate, selectedState, canViewBrandSales, states]);
 
     // Get list of states that actually have data in the report as fallback/helper
     const activeStates = useMemo(() => {
@@ -614,14 +631,16 @@ export default function UserHome() {
 
     const brandActionButton = (
         <div className="flex items-center gap-3">
-            <button
-                onClick={handleBrandSync}
-                disabled={brandSyncing || loading}
-                className="flex items-center gap-2 h-10 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none focus:outline-none"
-                title="Sync Brand Wise Sales from External API"
-            >
-                {brandSyncing ? "Syncing..." : "Sync"}
-            </button>
+            {canSyncBrandSales && (
+                <button
+                    onClick={handleBrandSync}
+                    disabled={brandSyncing || loading}
+                    className="flex items-center gap-2 h-10 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none focus:outline-none"
+                    title="Sync Brand Wise Sales from External API"
+                >
+                    {brandSyncing ? "Syncing..." : "Sync"}
+                </button>
+            )}
             <button
                 onClick={handleExportBrandExcel}
                 className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-lg bg-[#6804a1] hover:bg-[#520380] text-white text-sm font-semibold shadow-md transition-all duration-200 cursor-pointer border-none focus:outline-none"
@@ -645,62 +664,82 @@ export default function UserHome() {
                     </p>
                 </div>
 
-                {/* Tabs */}
-                <div className="border-b border-slate-200 mb-6">
-                    <nav className="-mb-px flex space-x-8">
-                        <button
-                            onClick={() => setActiveTab("cash_deposit")}
-                            className={`whitespace-nowrap pb-4 px-1 border-b-2 font-semibold text-sm transition-colors cursor-pointer focus:outline-none
-                                ${activeTab === 'cash_deposit'
-                                    ? 'border-[#6804a1] text-[#6804a1]'
-                                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                                }`}
-                        >
-                            Cash Deposit Report (ABM Wise)
-                        </button>
-                        <button
-                            onClick={() => setActiveTab("brand_sales")}
-                            className={`whitespace-nowrap pb-4 px-1 border-b-2 font-semibold text-sm transition-colors cursor-pointer focus:outline-none
-                                ${activeTab === 'brand_sales'
-                                    ? 'border-[#6804a1] text-[#6804a1]'
-                                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                                }`}
-                        >
-                            Brand Wise Sales
-                        </button>
-                    </nav>
-                </div>
-
-                {/* Tab 1: Cash Deposit Report */}
-                {activeTab === "cash_deposit" && (
-                    <div className="flex-1 flex flex-col mb-8">
-                        <DataTable
-                            tableId="abm_wise_cash_deposit_report"
-                            title="ABM Wise Cash Deposit Report"
-                            data={formattedData}
-                            columns={columns}
-                            loading={loading}
-                            toggleActions={filtersElement}
-                            actionButton={exportButton}
-                            searchPlaceholder="Search ABM names..."
-                        />
+                {permissionLoading ? (
+                    <div className="flex items-center justify-center py-20 bg-white rounded-xl shadow-sm border border-slate-200">
+                        <div className="flex flex-col items-center gap-3">
+                            <div className="w-10 h-10 border-4 border-[#6804a1] border-t-transparent rounded-full animate-spin"></div>
+                            <p className="text-slate-500 text-sm font-semibold">Verifying permissions...</p>
+                        </div>
                     </div>
-                )}
-
-                {/* Tab 2: Brand Wise Sales */}
-                {activeTab === "brand_sales" && (
-                    <div className="flex-1 flex flex-col mb-8">
-                        <DataTable
-                            tableId="brand_wise_sales_report"
-                            title="Brand Wise Sales"
-                            data={formattedBrandData}
-                            columns={brandColumns}
-                            loading={loading}
-                            toggleActions={brandSyncElement}
-                            actionButton={brandActionButton}
-                            searchPlaceholder="Search brand name..."
-                        />
+                ) : !canViewCashDeposit && !canViewBrandSales ? (
+                    <div className="text-center py-20 bg-white rounded-xl shadow-sm border border-slate-200">
+                        <i className="fa-solid fa-lock text-slate-400 text-3xl mb-3"></i>
+                        <p className="text-slate-500 font-semibold">You do not have permission to view dashboard reports.</p>
                     </div>
+                ) : (
+                    <>
+                        {/* Tabs */}
+                        <div className="border-b border-slate-200 mb-6">
+                            <nav className="-mb-px flex space-x-8">
+                                {canViewCashDeposit && (
+                                    <button
+                                        onClick={() => setActiveTab("cash_deposit")}
+                                        className={`whitespace-nowrap pb-4 px-1 border-b-2 font-semibold text-sm transition-colors cursor-pointer focus:outline-none
+                                            ${activeTab === 'cash_deposit'
+                                                ? 'border-[#6804a1] text-[#6804a1]'
+                                                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                                            }`}
+                                    >
+                                        Cash Deposit Report (ABM Wise)
+                                    </button>
+                                )}
+                                {canViewBrandSales && (
+                                    <button
+                                        onClick={() => setActiveTab("brand_sales")}
+                                        className={`whitespace-nowrap pb-4 px-1 border-b-2 font-semibold text-sm transition-colors cursor-pointer focus:outline-none
+                                            ${activeTab === 'brand_sales'
+                                                ? 'border-[#6804a1] text-[#6804a1]'
+                                                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                                            }`}
+                                    >
+                                        Brand Wise Sales
+                                    </button>
+                                )}
+                            </nav>
+                        </div>
+
+                        {/* Tab 1: Cash Deposit Report */}
+                        {activeTab === "cash_deposit" && canViewCashDeposit && (
+                            <div className="flex-1 flex flex-col mb-8">
+                                <DataTable
+                                    tableId="abm_wise_cash_deposit_report"
+                                    title="ABM Wise Cash Deposit Report"
+                                    data={formattedData}
+                                    columns={columns}
+                                    loading={loading}
+                                    toggleActions={filtersElement}
+                                    actionButton={exportButton}
+                                    searchPlaceholder="Search ABM names..."
+                                />
+                            </div>
+                        )}
+
+                        {/* Tab 2: Brand Wise Sales */}
+                        {activeTab === "brand_sales" && canViewBrandSales && (
+                            <div className="flex-1 flex flex-col mb-8">
+                                <DataTable
+                                    tableId="brand_wise_sales_report"
+                                    title="Brand Wise Sales"
+                                    data={formattedBrandData}
+                                    columns={brandColumns}
+                                    loading={loading}
+                                    toggleActions={brandSyncElement}
+                                    actionButton={brandActionButton}
+                                    searchPlaceholder="Search brand name..."
+                                />
+                            </div>
+                        )}
+                    </>
                 )}
             </main>
         </div>
