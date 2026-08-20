@@ -19,7 +19,9 @@ const { getAllAuditLogs, createAuditLog } = require("../models/auditLogModel.js"
 const fetchUsers = async (req, res) => {
     try {
         const includeInactive = req.query.includeInactive === 'true';
-        const whereClause = includeInactive ? '' : 'WHERE u.active = TRUE';
+        const whereClause = includeInactive 
+            ? "WHERE u.role != 'super admin' OR u.role IS NULL" 
+            : "WHERE (u.role != 'super admin' OR u.role IS NULL) AND u.active = TRUE";
         // Fetch users along with device counts using subqueries to prevent duplicate user rows
         const query = `
             SELECT 
@@ -87,7 +89,8 @@ const createUserByAdmin = async (req, res) => {
             branch || null,
             productType || null,
             landingType || null,
-            brand || null
+            brand || null,
+            password
         );
 
         const adminDeviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
@@ -307,6 +310,134 @@ const revokeSpecificDeviceController = async (req, res) => {
     }
 };
 
+const fetchSuperAdminUsers = async (req, res) => {
+    try {
+        if (req.user.role !== 'super admin') {
+            return res.status(403).json({ success: false, message: "Forbidden. Super Admin only." });
+        }
+
+        const query = `
+            SELECT 
+                u.id, u.name, u.username, u.email, u.mob_no, u.role,
+                u.user_type_id, ut.type_name,
+                u.device_verification_required, u.active,
+                u.state, u.city, u.branch, u.product_type, u.landing_type, u.brand,
+                u.plain_password
+            FROM users u
+            LEFT JOIN user_types ut ON u.user_type_id = ut.id
+            WHERE u.role != 'super admin' OR u.role IS NULL
+            ORDER BY u.name ASC
+        `;
+        const [users] = await db.execute(query);
+
+        return res.status(200).json({
+            success: true,
+            users
+        });
+    } catch (error) {
+        console.log("Fetch Super Admin Users Error:", error);
+        return res.status(500).json({ success: false, message: "Server Error" });
+    }
+};
+
+const updateUserBySuperAdmin = async (req, res) => {
+    try {
+        if (req.user.role !== 'super admin') {
+            return res.status(403).json({ success: false, message: "Forbidden. Super Admin only." });
+        }
+
+        const { userId } = req.params;
+        const {
+            name,
+            username,
+            email,
+            password,
+            userTypeId,
+            mobNo,
+            deviceVerificationRequired,
+            active,
+            role,
+            state,
+            city,
+            branch,
+            productType,
+            landingType,
+            brand
+        } = req.body;
+
+        const [userRows] = await db.execute("SELECT * FROM users WHERE id = ?", [userId]);
+        if (userRows.length === 0) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        const currentUser = userRows[0];
+
+        if (currentUser.role === 'super admin' && currentUser.id !== req.user.id) {
+            return res.status(403).json({ success: false, message: "Cannot modify super admin" });
+        }
+
+        let query = `
+            UPDATE users SET 
+                name = ?,
+                username = ?,
+                email = ?,
+                user_type_id = ?,
+                mob_no = ?,
+                device_verification_required = ?,
+                active = ?,
+                role = ?,
+                state = ?,
+                city = ?,
+                branch = ?,
+                product_type = ?,
+                landing_type = ?,
+                brand = ?
+        `;
+        const queryParams = [
+            name !== undefined ? name : currentUser.name,
+            username !== undefined ? username : currentUser.username,
+            email !== undefined ? email : currentUser.email,
+            userTypeId !== undefined ? userTypeId : currentUser.user_type_id,
+            mobNo !== undefined ? mobNo : currentUser.mob_no,
+            deviceVerificationRequired !== undefined ? (deviceVerificationRequired ? 1 : 0) : currentUser.device_verification_required,
+            active !== undefined ? (active ? 1 : 0) : currentUser.active,
+            role !== undefined ? role : currentUser.role,
+            state !== undefined ? (state ? JSON.stringify(state) : null) : currentUser.state,
+            city !== undefined ? city : currentUser.city,
+            branch !== undefined ? (branch ? JSON.stringify(branch) : null) : currentUser.branch,
+            productType !== undefined ? (productType ? JSON.stringify(productType) : null) : currentUser.product_type,
+            landingType !== undefined ? (landingType ? JSON.stringify(landingType) : null) : currentUser.landing_type,
+            brand !== undefined ? (brand ? JSON.stringify(brand) : null) : currentUser.brand
+        ];
+
+        if (password) {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            query += `, password = ?, plain_password = ?`;
+            queryParams.push(hashedPassword, password);
+        }
+
+        query += ` WHERE id = ?`;
+        queryParams.push(userId);
+
+        await db.execute(query, queryParams);
+
+        return res.status(200).json({ success: true, message: "User updated successfully" });
+    } catch (error) {
+        console.log("Update User By Super Admin Error:", error);
+        if (error.code === 'ER_DUP_ENTRY') {
+            const message = error.sqlMessage || error.message || '';
+            if (message.includes('username')) {
+                return res.status(400).json({ success: false, message: "Username already exists" });
+            }
+            if (message.includes('email')) {
+                return res.status(400).json({ success: false, message: "Email already exists" });
+            }
+            return res.status(400).json({ success: false, message: "Username or email already exists" });
+        }
+        return res.status(500).json({ success: false, message: "Server Error" });
+    }
+};
+
 module.exports = {
     fetchUsers,
     createUserByAdmin,
@@ -318,5 +449,7 @@ module.exports = {
     fetchPendingDevices,
     toggleUserActiveController,
     fetchUserActiveDevicesController,
-    revokeSpecificDeviceController
+    revokeSpecificDeviceController,
+    fetchSuperAdminUsers,
+    updateUserBySuperAdmin
 };

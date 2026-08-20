@@ -19,7 +19,7 @@ export function PermissionProvider({ children }) {
             return;
         }
 
-        if (user.role === "admin") {
+        if (user.role === "admin" || user.role === "super admin") {
             setIsAdmin(true);
             setPermissions({});
             setLoading(false);
@@ -65,7 +65,7 @@ export function PermissionProvider({ children }) {
         // Admins always have all permissions
         if (isAdmin) return true;
         const user = JSON.parse(localStorage.getItem("user") || "null");
-        if (user && user.role === "admin") return true;
+        if (user && (user.role === "admin" || user.role === "super admin")) return true;
 
         const perm = permissions[masterName];
         if (!perm) return false;
