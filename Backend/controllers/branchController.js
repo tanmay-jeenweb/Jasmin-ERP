@@ -59,20 +59,48 @@ const getAllBranchesController = async (req, res) => {
     try {
         let branches = await getAllBranches();
 
-        // Fetch user's state restriction from DB
-        const [userRows] = await db.execute("SELECT state FROM users WHERE id = ?", [req.user.id]);
-        let userStates = null;
-        if (userRows.length > 0 && userRows[0].state) {
-            try {
-                userStates = typeof userRows[0].state === 'string' ? JSON.parse(userRows[0].state) : userRows[0].state;
-            } catch (e) {
-                userStates = null;
+        // Check if the user is admin/super admin
+        const [userRows] = await db.execute(
+            `SELECT u.id, u.role, u.state, ut.user_role, ut.type_name
+             FROM users u
+             LEFT JOIN user_types ut ON u.user_type_id = ut.id
+             WHERE u.id = ?`,
+            [req.user.id]
+        );
+
+        let isAdmin = false;
+        if (userRows.length > 0) {
+            const u = userRows[0];
+            if (u.role === 'admin' || u.role === 'super admin' || u.user_role === 'Admin' || u.type_name === 'Admin') {
+                isAdmin = true;
             }
         }
 
-        if (userStates && Array.isArray(userStates) && userStates.length > 0 && !userStates.includes("All")) {
-            const upperUserStates = userStates.map(s => String(s).trim().toUpperCase());
-            branches = branches.filter(b => b.state_name && upperUserStates.includes(String(b.state_name).trim().toUpperCase()));
+        const assignedOnly = req.query.assignedOnly === 'true';
+
+        if (assignedOnly && !isAdmin) {
+            // Fetch mapped branch IDs from user_branch_mappings
+            const [mappingRows] = await db.execute(
+                `SELECT branch_id FROM user_branch_mappings WHERE user_id = ?`,
+                [req.user.id]
+            );
+            const mappedBranchIds = mappingRows.map(r => r.branch_id);
+            branches = branches.filter(b => mappedBranchIds.includes(b.id));
+        } else {
+            // Apply existing state restriction logic
+            let userStates = null;
+            if (userRows.length > 0 && userRows[0].state) {
+                try {
+                    userStates = typeof userRows[0].state === 'string' ? JSON.parse(userRows[0].state) : userRows[0].state;
+                } catch (e) {
+                    userStates = null;
+                }
+            }
+
+            if (userStates && Array.isArray(userStates) && userStates.length > 0 && !userStates.includes("All")) {
+                const upperUserStates = userStates.map(s => String(s).trim().toUpperCase());
+                branches = branches.filter(b => b.state_name && upperUserStates.includes(String(b.state_name).trim().toUpperCase()));
+            }
         }
 
         res.status(200).json({

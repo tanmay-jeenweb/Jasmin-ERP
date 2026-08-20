@@ -6,6 +6,7 @@ const {
     saveBranchBrandFinanceMappings
 } = require('../models/branchBrandFinanceMappingModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
+const db = require('../config/db.js');
 
 const getBranchMappingsController = async (req, res) => {
     try {
@@ -13,6 +14,33 @@ const getBranchMappingsController = async (req, res) => {
         const branch = await getBranchById(branchId);
         if (!branch) {
             return res.status(404).json({ success: false, message: 'Branch not found' });
+        }
+
+        // Check if the user is admin/super admin
+        const [userRows] = await db.execute(
+            `SELECT u.id, u.role, ut.user_role, ut.type_name
+             FROM users u
+             LEFT JOIN user_types ut ON u.user_type_id = ut.id
+             WHERE u.id = ?`,
+            [req.user.id]
+        );
+
+        let isAdmin = false;
+        if (userRows.length > 0) {
+            const u = userRows[0];
+            if (u.role === 'admin' || u.role === 'super admin' || u.user_role === 'Admin' || u.type_name === 'Admin') {
+                isAdmin = true;
+            }
+        }
+
+        if (!isAdmin) {
+            const [mappingRows] = await db.execute(
+                `SELECT 1 FROM user_branch_mappings WHERE user_id = ? AND branch_id = ?`,
+                [req.user.id, branchId]
+            );
+            if (mappingRows.length === 0) {
+                return res.status(403).json({ success: false, message: 'Access Denied: You do not have access to this branch mapping' });
+            }
         }
 
         // Fetch all active finance companies (bank_master)
@@ -51,6 +79,33 @@ const saveBranchMappingsController = async (req, res) => {
         const branch = await getBranchById(branchId);
         if (!branch) {
             return res.status(404).json({ success: false, message: 'Branch not found' });
+        }
+
+        // Check if the user is admin/super admin
+        const [userRows] = await db.execute(
+            `SELECT u.id, u.role, ut.user_role, ut.type_name
+             FROM users u
+             LEFT JOIN user_types ut ON u.user_type_id = ut.id
+             WHERE u.id = ?`,
+            [req.user.id]
+        );
+
+        let isAdmin = false;
+        if (userRows.length > 0) {
+            const u = userRows[0];
+            if (u.role === 'admin' || u.role === 'super admin' || u.user_role === 'Admin' || u.type_name === 'Admin') {
+                isAdmin = true;
+            }
+        }
+
+        if (!isAdmin) {
+            const [mappingRows] = await db.execute(
+                `SELECT 1 FROM user_branch_mappings WHERE user_id = ? AND branch_id = ?`,
+                [req.user.id, branchId]
+            );
+            if (mappingRows.length === 0) {
+                return res.status(403).json({ success: false, message: 'Access Denied: You do not have access to this branch mapping' });
+            }
         }
 
         if (!Array.isArray(mappings)) {
