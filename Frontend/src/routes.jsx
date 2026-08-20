@@ -121,6 +121,9 @@ export default function AppRoutes() {
                     path="/admin/target-vs-achievement"
                     element={<TargetVsAchievement />}
                 />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredMaster="abm_wise_tva" requiredAction="read" />}>
                 <Route
                     path="/admin/abm-wise-tva"
                     element={<ABMWiseTvAReport />}

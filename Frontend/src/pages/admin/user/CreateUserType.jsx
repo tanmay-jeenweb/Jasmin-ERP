@@ -47,6 +47,7 @@ const MASTER_GROUPS = [
     category: "📊 Reports & Analytics",
     masters: [
       { key: "target_vs_achievement", label: "Target vs Achievement", note: "Write = Import/Export Template & Sync" },
+      { key: "abm_wise_tva", label: "ABM Wise TvA Report" },
       { key: "stock_vs_cash_deposit", label: "Stock vs Cash Deposit", note: "Write = Import/Export Template" },
       { key: "finance_brand_report", label: "Finance Brand Report" },
       { key: "activity_report", label: "Activity Log Report" },

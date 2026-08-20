@@ -51,6 +51,7 @@ function DetailModal({ isOpen, row, onClose }) {
         price_list_view: "Price List View",
         landing_type_master: "Landing Type Master",
         target_vs_achievement: "Target vs Achievement",
+        abm_wise_tva: "ABM Wise TvA Report",
         stock_vs_cash_deposit: "Stock vs Cash Deposit",
         offer_master: "Offers Master",
         finance_brand_mapping: "Finance Brand Mapping",
