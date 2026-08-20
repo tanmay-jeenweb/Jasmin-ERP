@@ -49,7 +49,7 @@ const getEligibleUsers = async () => {
                ut.user_role AS user_role
         FROM users u
         INNER JOIN user_types ut ON u.user_type_id = ut.id
-        WHERE u.active = TRUE
+        WHERE u.active = TRUE AND (u.role != 'super admin' OR u.role IS NULL)
         ORDER BY u.name ASC
     `;
     const [rows] = await db.execute(query);
@@ -61,7 +61,7 @@ const getEligibleAbms = async () => {
         SELECT u.id, u.name, u.username, u.email, ut.type_name AS user_type_name
         FROM users u
         INNER JOIN user_types ut ON u.user_type_id = ut.id
-        WHERE u.active = TRUE AND (ut.user_role = 'ABM' OR ut.type_name = 'ABM')
+        WHERE u.active = TRUE AND (ut.user_role = 'ABM' OR ut.type_name = 'ABM') AND (u.role != 'super admin' OR u.role IS NULL)
         ORDER BY u.name ASC
     `;
     const [rows] = await db.execute(query);
@@ -103,6 +103,7 @@ const getAllUserMappings = async () => {
         LEFT JOIN user_types ut ON u.user_type_id = ut.id
         JOIN branch_master bm ON ubm.branch_id = bm.id
         LEFT JOIN users added_u ON ubm.added_by = added_u.id
+        WHERE u.role != 'super admin' OR u.role IS NULL
         GROUP BY u.id, u.name, u.username, u.email, ut.type_name, ut.user_role, added_u.name
         ORDER BY timestamp DESC
     `;

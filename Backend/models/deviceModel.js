@@ -138,6 +138,11 @@ const revokeAllActiveDevices = async (userId, adminId) => {
 
 // Get all device history for a specific user
 const getDeviceHistoryForUser = async (userId) => {
+    const [userRows] = await db.execute("SELECT role FROM users WHERE id = ?", [userId]);
+    if (userRows.length > 0 && userRows[0].role === 'super admin') {
+        return [];
+    }
+
     const query = `
         SELECT
             d.*,
@@ -166,6 +171,7 @@ const getAllDeviceHistory = async () => {
         JOIN users u ON u.id = d.user_id
         LEFT JOIN users approver ON approver.id = d.approved_by
         LEFT JOIN users closer ON closer.id = d.closed_by
+        WHERE u.role != 'super admin' OR u.role IS NULL
         ORDER BY d.submitted_at DESC
     `;
     const [rows] = await db.execute(query);
@@ -183,7 +189,7 @@ const getPendingDevicesAllUsers = async () => {
         FROM user_devices d
         JOIN users u ON u.id = d.user_id
         LEFT JOIN user_devices rd ON rd.id = d.replaces_device_id
-        WHERE d.status = 'pending' AND d.closed_at IS NULL
+        WHERE d.status = 'pending' AND d.closed_at IS NULL AND (u.role != 'super admin' OR u.role IS NULL)
         ORDER BY d.submitted_at DESC
     `;
     const [rows] = await db.execute(query);

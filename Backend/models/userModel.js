@@ -78,6 +78,10 @@ const createUsersTable = async () => {
         {
             name: 'brand',
             query: 'ALTER TABLE users ADD COLUMN brand JSON DEFAULT NULL'
+        },
+        {
+            name: 'plain_password',
+            query: 'ALTER TABLE users ADD COLUMN plain_password VARCHAR(255) DEFAULT NULL'
         }
     ];
 
@@ -154,13 +158,14 @@ const createUser = async (
     branch = null,
     productType = null,
     landingType = null,
-    brand = null
+    brand = null,
+    plainPassword = null
 ) => {
 
     const query = `
         INSERT INTO users
-        (name, username, email, password, user_type_id, mob_no, date_of_join, device_verification_required, active, role, state, city, branch, product_type, landing_type, brand)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (name, username, email, password, user_type_id, mob_no, date_of_join, device_verification_required, active, role, state, city, branch, product_type, landing_type, brand, plain_password)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const [result] = await db.execute(query, [
@@ -179,7 +184,8 @@ const createUser = async (
         branch ? JSON.stringify(branch) : null,
         productType ? JSON.stringify(productType) : null,
         landingType ? JSON.stringify(landingType) : null,
-        brand ? JSON.stringify(brand) : null
+        brand ? JSON.stringify(brand) : null,
+        plainPassword
     ]);
 
     return result;
@@ -208,7 +214,9 @@ const findUserByUsername = async (username) => {
 };
 
 const getAllUsers = async (includeInactive = false) => {
-    const whereClause = includeInactive ? '' : 'WHERE u.active = TRUE';
+    const whereClause = includeInactive 
+        ? "WHERE u.role != 'super admin' OR u.role IS NULL" 
+        : "WHERE u.active = TRUE AND (u.role != 'super admin' OR u.role IS NULL)";
     const query = `
         SELECT 
             u.id, u.name, u.username, u.email,
@@ -240,6 +248,9 @@ const updateUserProfile = async (userId, name, email, mob_no) => {
 const getUserById = async (id) => {
     const query = `SELECT * FROM users WHERE id = ?`;
     const [rows] = await db.execute(query, [id]);
+    if (rows[0] && rows[0].role === 'super admin') {
+        return null;
+    }
     return rows[0];
 };
 

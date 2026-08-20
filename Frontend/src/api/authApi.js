@@ -195,4 +195,12 @@ export const getMyPermissions = async () => {
     return apiClient.get("/auth/my-permissions");
 };
 
+export const getSuperAdminUsers = async () => {
+    return apiClient.get("/admin/super-admin/users");
+};
+
+export const updateUserBySuperAdmin = async (userId, data) => {
+    return apiClient.put(`/admin/super-admin/users/${userId}`, data);
+};
+
 export default apiClient;

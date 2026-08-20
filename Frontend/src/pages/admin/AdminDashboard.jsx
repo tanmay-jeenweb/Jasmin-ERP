@@ -8,8 +8,11 @@ import {
     fetchAuditLogs,
     toggleUserActive,
     fetchUserActiveDevices,
-    revokeSpecificDevice
+    revokeSpecificDevice,
+    getSuperAdminUsers,
+    updateUserBySuperAdmin
 } from "../../api/authApi";
+import { getUserTypes } from "../../api/userTypeMasterApi";
 import Navbar from "../../components/Navbar";
 import DataTable from "../../components/DataTable";
 import { useNavigate } from "react-router-dom";
@@ -26,6 +29,25 @@ export default function AdminDashboard() {
     const [users, setUsers] = useState([]);
     const [pendingDevices, setPendingDevices] = useState([]);
     const [auditLogs, setAuditLogs] = useState([]);
+
+    // Super admin panel state
+    const [superAdminUsers, setSuperAdminUsers] = useState([]);
+    const [userTypes, setUserTypes] = useState([]);
+    const [isSuperAdminModalOpen, setIsSuperAdminModalOpen] = useState(false);
+    const [selectedUser, setSelectedUser] = useState(null);
+    const [visiblePasswords, setVisiblePasswords] = useState({});
+    const [editForm, setEditForm] = useState({
+        name: "",
+        username: "",
+        email: "",
+        mobNo: "",
+        role: "user",
+        userTypeId: "",
+        password: "",
+        confirmPassword: "",
+        deviceVerificationRequired: true,
+        active: true
+    });
 
     // Filter/Search states
     const [auditUserFilter, setAuditUserFilter] = useState("all");
@@ -61,6 +83,13 @@ export default function AdminDashboard() {
                         .catch(err => { console.error("Error fetching audit logs:", err); return null; })
                 );
             }
+            if (user.role === "super admin") {
+                promises.push(
+                    getSuperAdminUsers()
+                        .then(res => ({ type: "superAdminUsers", data: res.data.users }))
+                        .catch(err => { console.error("Error fetching super admin users:", err); return null; })
+                );
+            }
 
             const results = await Promise.all(promises);
             results.forEach(res => {
@@ -68,12 +97,21 @@ export default function AdminDashboard() {
                 if (res.type === "users") setUsers(res.data);
                 if (res.type === "pending") setPendingDevices(res.data);
                 if (res.type === "audit") setAuditLogs(res.data);
+                if (res.type === "superAdminUsers") setSuperAdminUsers(res.data);
             });
         } catch (error) {
             console.error("Error fetching data:", error);
             toast.error("Failed to load dashboard data");
         }
     };
+
+    useEffect(() => {
+        if (user.role === "super admin") {
+            getUserTypes()
+                .then(res => setUserTypes(res.data.data || []))
+                .catch(err => console.error("Error loading user types:", err));
+        }
+    }, [user.role]);
 
     useEffect(() => {
         if (!permissionLoading) {
@@ -113,6 +151,53 @@ export default function AdminDashboard() {
         } catch (error) {
             console.error(error);
             toast.error(error.response?.data?.message || "Failed to update user status");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleOpenSuperAdminModal = (userRow) => {
+        setSelectedUser(userRow);
+        setEditForm({
+            name: userRow.name || "",
+            username: userRow.username || "",
+            email: userRow.email || "",
+            mobNo: userRow.mob_no || "",
+            role: userRow.role || "user",
+            userTypeId: userRow.user_type_id || "",
+            password: "",
+            confirmPassword: "",
+            deviceVerificationRequired: !!userRow.device_verification_required,
+            active: !!userRow.active
+        });
+        setIsSuperAdminModalOpen(true);
+    };
+
+    const handleUpdateUserBySuperAdmin = async (e) => {
+        e.preventDefault();
+        if (editForm.password !== editForm.confirmPassword) {
+            toast.error("New Password and Confirm Password do not match.");
+            return;
+        }
+        setSaving(true);
+        try {
+            await updateUserBySuperAdmin(selectedUser.id, {
+                name: editForm.name,
+                username: editForm.username,
+                email: editForm.email,
+                mobNo: editForm.mobNo || null,
+                role: editForm.role,
+                userTypeId: editForm.userTypeId || null,
+                password: editForm.password || undefined,
+                deviceVerificationRequired: editForm.deviceVerificationRequired,
+                active: editForm.active
+            });
+            toast.success("User updated successfully");
+            setIsSuperAdminModalOpen(false);
+            fetchData();
+        } catch (error) {
+            console.error(error);
+            toast.error(error.response?.data?.message || "Failed to update user");
         } finally {
             setSaving(false);
         }
@@ -432,6 +517,73 @@ export default function AdminDashboard() {
         }
     ], [users, saving, user, hasPermission]);
 
+    const superAdminColumns = useMemo(() => [
+        {
+            key: 'name',
+            label: 'Name',
+            render: (row) => (
+                <div className="flex flex-col">
+                    <span className="text-sm font-semibold text-slate-900">{row.name}</span>
+                    <span className="text-xs text-slate-500">{row.email}</span>
+                </div>
+            )
+        },
+        {
+            key: 'username',
+            label: 'Username',
+            render: (row) => <span className="font-mono text-xs">{row.username}</span>
+        },
+        {
+            key: 'role',
+            label: 'Role',
+            render: (row) => (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    {row.role}
+                </span>
+            )
+        },
+        {
+            key: 'mob_no',
+            label: 'Mobile No',
+            render: (row) => row.mob_no || '—'
+        },
+        {
+            key: 'active',
+            label: 'Status',
+            render: (row) => row.active ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Active
+                </span>
+            ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                    Deactivated
+                </span>
+            )
+        },
+        {
+            key: 'device_verification_required',
+            label: 'Device Verification',
+            render: (row) => (
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${row.device_verification_required ? 'bg-green-150 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    {row.device_verification_required ? 'Required' : 'Bypassed'}
+                </span>
+            )
+        },
+        {
+            key: 'actions',
+            label: 'Actions',
+            sortable: false,
+            render: (row) => (
+                <button
+                    onClick={() => handleOpenSuperAdminModal(row)}
+                    className="text-[#6804a1] hover:text-[#52037e] text-xs font-semibold"
+                >
+                    Edit User
+                </button>
+            )
+        }
+    ], []);
+
     const pendingColumns = useMemo(() => [
         {
             key: 'user',
@@ -557,6 +709,9 @@ export default function AdminDashboard() {
                                 tabs.push("pending");
                                 tabs.push("history");
                             }
+                            if (user.role === "super admin") {
+                                tabs.push("super_admin");
+                            }
                             return tabs.map((tab) => (
                                 <button
                                     key={tab}
@@ -579,6 +734,7 @@ export default function AdminDashboard() {
                                         </span>
                                     )}
                                     {tab === 'history' && 'Device History'}
+                                    {tab === 'super_admin' && 'Super Admin Panel'}
                                 </button>
                             ));
                         })()}
@@ -660,8 +816,20 @@ export default function AdminDashboard() {
                             title="Device History"
                             data={filteredAuditLogs}
                             columns={historyColumns}
-
                             searchPlaceholder="Search history logs..."
+                        />
+                    </div>
+                )}
+
+                {/* Tab Content: Super Admin Panel */}
+                {activeTab === 'super_admin' && user.role === 'super admin' && (
+                    <div className="flex-1 flex flex-col mb-8">
+                        <DataTable
+                            tableId="super_admin_user_management"
+                            title="Super Admin - User & Password Management"
+                            data={superAdminUsers}
+                            columns={superAdminColumns}
+                            searchPlaceholder="Search users by name, username, or email..."
                         />
                     </div>
                 )}
@@ -758,6 +926,161 @@ export default function AdminDashboard() {
                                     Close
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Super Admin Edit User Modal */}
+            {isSuperAdminModalOpen && selectedUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none">
+                    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity" onClick={() => setIsSuperAdminModalOpen(false)} />
+                    <div className="relative w-full max-w-4xl mx-auto my-6 z-50 px-4">
+                        <div className="relative flex flex-col w-full bg-white border border-slate-200 rounded-2xl shadow-xl outline-none focus:outline-none overflow-hidden">
+                            {/* Header */}
+                            <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-[#6804a1]/5">
+                                <h3 className="text-lg font-bold text-[#6804a1]">
+                                    Super Admin settings for {selectedUser.name} ({selectedUser.username})
+                                </h3>
+                                <button onClick={() => setIsSuperAdminModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                            {/* Form Body */}
+                            <form onSubmit={handleUpdateUserBySuperAdmin}>
+                                <div className="p-6 space-y-4 max-h-[400px] overflow-y-auto">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Full Name</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={editForm.name}
+                                                onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                                                className="w-full h-10 px-3 border border-slate-300 rounded-lg text-sm focus:border-[#6804a1] outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Username</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={editForm.username}
+                                                onChange={(e) => setEditForm(prev => ({ ...prev, username: e.target.value }))}
+                                                className="w-full h-10 px-3 border border-slate-300 rounded-lg text-sm focus:border-[#6804a1] outline-none"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Email Address</label>
+                                            <input
+                                                type="email"
+                                                required
+                                                value={editForm.email}
+                                                onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                                                className="w-full h-10 px-3 border border-slate-300 rounded-lg text-sm focus:border-[#6804a1] outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Mobile Number</label>
+                                            <input
+                                                type="text"
+                                                value={editForm.mobNo}
+                                                onChange={(e) => setEditForm(prev => ({ ...prev, mobNo: e.target.value }))}
+                                                className="w-full h-10 px-3 border border-slate-300 rounded-lg text-sm focus:border-[#6804a1] outline-none"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">User Role</label>
+                                            <select
+                                                value={editForm.role}
+                                                onChange={(e) => setEditForm(prev => ({ ...prev, role: e.target.value }))}
+                                                className="w-full h-10 px-3 border border-slate-300 rounded-lg text-sm focus:border-[#6804a1] outline-none bg-white"
+                                            >
+                                                <option value="user">User</option>
+                                                <option value="admin">Admin</option>
+                                                <option value="super admin">Super Admin</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">User Type Group</label>
+                                            <select
+                                                value={editForm.userTypeId}
+                                                onChange={(e) => setEditForm(prev => ({ ...prev, userTypeId: e.target.value }))}
+                                                className="w-full h-10 px-3 border border-slate-300 rounded-lg text-sm focus:border-[#6804a1] outline-none bg-white"
+                                            >
+                                                <option value="">None (No Permissions Group)</option>
+                                                {userTypes.map(t => (
+                                                    <option key={t.id} value={t.id}>{t.type_name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">New Password</label>
+                                            <input
+                                                type="password"
+                                                placeholder="New password (leave empty to keep current)"
+                                                value={editForm.password}
+                                                onChange={(e) => setEditForm(prev => ({ ...prev, password: e.target.value }))}
+                                                className="w-full h-10 px-3 border border-slate-300 rounded-lg text-sm focus:border-[#6804a1] outline-none font-mono"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Confirm Password</label>
+                                            <input
+                                                type="password"
+                                                placeholder="Confirm password"
+                                                value={editForm.confirmPassword}
+                                                onChange={(e) => setEditForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                                                className="w-full h-10 px-3 border border-slate-300 rounded-lg text-sm focus:border-[#6804a1] outline-none font-mono"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                                        <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700 select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={editForm.deviceVerificationRequired}
+                                                onChange={(e) => setEditForm(prev => ({ ...prev, deviceVerificationRequired: e.target.checked }))}
+                                                className="accent-[#6804a1] h-4 w-4"
+                                            />
+                                            Device Verification Required
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700 select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={editForm.active}
+                                                onChange={(e) => setEditForm(prev => ({ ...prev, active: e.target.checked }))}
+                                                className="accent-[#6804a1] h-4 w-4"
+                                            />
+                                            Account Active
+                                        </label>
+                                    </div>
+                                </div>
+                                {/* Footer */}
+                                <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-100 bg-slate-50/50">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsSuperAdminModalOpen(false)}
+                                        className="inline-flex items-center justify-center px-4 py-2 border border-slate-300 text-sm font-semibold rounded-lg text-slate-700 bg-white hover:bg-slate-50 focus:outline-none transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={saving}
+                                        className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-semibold rounded-lg text-white bg-[#6804a1] hover:bg-[#52037e] focus:outline-none transition-colors shadow-sm disabled:opacity-50"
+                                    >
+                                        {saving ? "Saving..." : "Save Changes"}
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 </div>
