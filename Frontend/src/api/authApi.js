@@ -2,7 +2,7 @@ import axios from "axios";
 import { getDeviceId } from "../utils/device";
 
 const getBaseURL = () => {
-    return import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+    return import.meta.env.VITE_API_URL || "http://localhost:5000/v1/api";
 };
 
 const apiClient = axios.create({

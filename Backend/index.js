@@ -107,30 +107,30 @@ app.use((req, res, next) => {
     next();
 });
 
-app.use(["/api/auth", "/auth"], authRoutes);
-app.use(["/api/admin", "/admin"], adminRoutes);
-app.use(["/api/usertypes", "/usertypes"], userTypeMasterRoutes);
-app.use(["/api/mobilebrands", "/mobilebrands"], mobileBrandRoutes);
-app.use(["/api/banks", "/banks"], bankRoutes);
-app.use(["/api/financemachines", "/financemachines"], financeMachineRoutes);
-app.use(["/api/states", "/states"], stateRoutes);
-app.use(["/api/support", "/support"], supportRoutes);
-app.use(["/api/producttypes", "/producttypes"], productTypeRoutes);
-app.use(["/api/itemmodels", "/itemmodels"], itemModelRoutes);
-app.use(["/api/modelgroups", "/modelgroups"], modelGroupRoutes);
-app.use(["/api/branches", "/branches"], branchRoutes);
-app.use(["/api/branches/finance-codes", "/branches/finance-codes"], branchFinanceRoutes);
-app.use(["/api/offers", "/offers"], offerRoutes);
-app.use(["/api/target-vs-achievement", "/target-vs-achievement"], targetVsAchievementRoutes);
-app.use(["/api/stock-cash-deposit", "/stock-cash-deposit"], stockCashDepositRoutes);
-app.use(["/api/user-branch-mappings", "/user-branch-mappings", "/api/user-branch-mapping", "/user-branch-mapping"], userBranchMappingRoutes);
-app.use(["/api/brand-wise-sales", "/brand-wise-sales"], brandWiseSalesRoutes);
-app.use(["/api/alerts", "/alerts"], alertRoutes);
-app.use(["/api/branch-brand-finance-mapping", "/branch-brand-finance-mapping"], branchBrandFinanceMappingRoutes);
-app.use(["/api/reports", "/reports"], branchBrandFinanceReportRoutes);
-app.use(["/api/variations", "/variations"], variationRoutes);
-app.use(["/api/price-lists", "/price-lists"], priceListRoutes);
-app.use(["/api/landingtypes", "/landingtypes"], landingTypeRoutes);
+app.use("/v1/api/auth", authRoutes);
+app.use("/v1/api/admin", adminRoutes);
+app.use("/v1/api/usertypes", userTypeMasterRoutes);
+app.use("/v1/api/mobilebrands", mobileBrandRoutes);
+app.use("/v1/api/banks", bankRoutes);
+app.use("/v1/api/financemachines", financeMachineRoutes);
+app.use("/v1/api/states", stateRoutes);
+app.use("/v1/api/support", supportRoutes);
+app.use("/v1/api/producttypes", productTypeRoutes);
+app.use("/v1/api/itemmodels", itemModelRoutes);
+app.use("/v1/api/modelgroups", modelGroupRoutes);
+app.use("/v1/api/branches", branchRoutes);
+app.use("/v1/api/branches/finance-codes", branchFinanceRoutes);
+app.use("/v1/api/offers", offerRoutes);
+app.use("/v1/api/target-vs-achievement", targetVsAchievementRoutes);
+app.use("/v1/api/stock-cash-deposit", stockCashDepositRoutes);
+app.use("/v1/api/user-branch-mappings", userBranchMappingRoutes);
+app.use("/v1/api/brand-wise-sales", brandWiseSalesRoutes);
+app.use("/v1/api/alerts", alertRoutes);
+app.use("/v1/api/branch-brand-finance-mapping", branchBrandFinanceMappingRoutes);
+app.use("/v1/api/reports", branchBrandFinanceReportRoutes);
+app.use("/v1/api/variations", variationRoutes);
+app.use("/v1/api/price-lists", priceListRoutes);
+app.use("/v1/api/landingtypes", landingTypeRoutes);
 
 
 
