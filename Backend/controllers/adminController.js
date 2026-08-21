@@ -246,6 +246,12 @@ const toggleUserActiveController = async (req, res) => {
 
         await toggleUserActive(id, active);
 
+        // If user is deactivated, immediately delete their active refresh tokens to force logout on next token refresh
+        if (active === 0 || active === false || !active) {
+            const { deleteUserRefreshTokens } = require("../models/refreshTokenModel.js");
+            await deleteUserRefreshTokens(id);
+        }
+
         await createAuditLog(
             adminId,
             req.user?.name || req.user?.username || 'Unknown',
