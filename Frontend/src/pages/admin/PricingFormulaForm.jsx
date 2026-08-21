@@ -11,7 +11,7 @@ import toast from "react-hot-toast";
 const FIXED_COLUMNS = [
     { column_id: "A", column_name: "Product Code", type: "Standard Field" },
     { column_id: "B", column_name: "Brand", type: "Standard Field" },
-    { column_id: "C", column_name: "ICAT Name", type: "Standard Field" },
+    { column_id: "C", column_name: "Product Category", type: "Standard Field" },
     { column_id: "D", column_name: "Model Group Name", type: "Standard Field" },
     { column_id: "E", column_name: "Model Name", type: "Standard Field" }
 ];

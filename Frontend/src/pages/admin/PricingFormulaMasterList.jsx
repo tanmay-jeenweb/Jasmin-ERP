@@ -146,7 +146,7 @@ export default function PricingFormulaMasterList() {
             const excelColumns = [
                 { header: "Product Code", key: "product_code", width: 18 },
                 { header: "Brand", key: "brand", width: 18 },
-                { header: "ICAT Name", key: "icat_name", width: 25 },
+                { header: "Product Category", key: "icat_name", width: 25 },
                 { header: "Model Group Name", key: "model_group_name", width: 25 },
                 { header: "Model", key: "model", width: 25 }
             ];
