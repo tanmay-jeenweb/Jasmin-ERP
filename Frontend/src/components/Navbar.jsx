@@ -302,6 +302,9 @@ export default function Navbar() {
         return true;
     });
 
+    const mastersDropdownWidth = availableMasters.length <= 3 ? "w-80" : "w-140";
+    const mastersGridCols = availableMasters.length <= 3 ? "grid-cols-1" : "grid-cols-2";
+
     const isPrecedingTabsHidden = !isAdmin && availableMasters.length === 0;
     const priceListDropdownPositionClass = isPrecedingTabsHidden
         ? "left-0 origin-top-left"
@@ -555,8 +558,8 @@ export default function Navbar() {
                                 </button>
 
                                 {isOpen && (
-                                    <div className="absolute left-0 top-full mt-1.5 w-140 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
-                                        <div className="grid grid-cols-2 gap-1.5">
+                                    <div className={`absolute left-0 top-full mt-1.5 ${mastersDropdownWidth} bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200`}>
+                                        <div className={`grid ${mastersGridCols} gap-1.5`}>
                                             {availableMasters.map((m, idx) => {
                                                 const isActive = location.pathname === m.path;
                                                 return (
