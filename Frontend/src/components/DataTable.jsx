@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 
 // Save and retrieve table column preferences locally in localStorage
 const getTablePreference = async (tableId) => {
@@ -181,12 +181,13 @@ export default function DataTable({
     let filtered = [...normalRows];
 
     if (search) {
+      const cleanSearch = search.replace(/\*/g, ' ').toLowerCase();
       filtered = filtered.filter(row => {
         const searchableValues = Object.values(row)
           .filter(val => typeof val === 'string' || typeof val === 'number')
           .join(' ')
           .toLowerCase();
-        return searchableValues.includes(search.toLowerCase());
+        return searchableValues.includes(cleanSearch);
       });
     }
 
