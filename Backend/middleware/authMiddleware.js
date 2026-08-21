@@ -31,21 +31,26 @@ const verifyToken = async (req, res, next) => {
             }
         }
 
-        if (!req.user.username || !req.user.name) {
-            const [rows] = await db.execute(
-                "SELECT name, username, role FROM users WHERE id = ?",
-                [req.user.id]
-            );
+        // Get user details and check active status from database to enforce instant logout on deactivation
+        const [rows] = await db.execute(
+            "SELECT name, username, role, active, user_type_id FROM users WHERE id = ?",
+            [req.user.id]
+        );
 
-            if (rows.length) {
-                req.user = {
-                    ...req.user,
-                    name: rows[0].name,
-                    username: rows[0].username,
-                    role: rows[0].role || req.user.role
-                };
-            }
+        if (!rows.length || rows[0].active === 0 || rows[0].active === false) {
+            return res.status(401).json({
+                success: false,
+                message: "User account deactivated or not found."
+            });
         }
+
+        req.user = {
+            ...req.user,
+            name: rows[0].name,
+            username: rows[0].username,
+            role: rows[0].role || req.user.role,
+            user_type_id: rows[0].user_type_id
+        };
 
         next();
     } catch (error) {
@@ -84,20 +89,29 @@ const verifyPermission = (masterName, action) => {
 
             const userId = req.user.id;
 
-            // Get user's user_type_id
-            const [userRows] = await db.execute(
-                "SELECT user_type_id FROM users WHERE id = ?",
-                [userId]
-            );
+            let userTypeId = req.user.user_type_id;
 
-            if (userRows.length === 0 || userRows[0].user_type_id === null) {
+            if (userTypeId === undefined) {
+                // Get user's user_type_id if not cached in req.user
+                const [userRows] = await db.execute(
+                    "SELECT user_type_id FROM users WHERE id = ?",
+                    [userId]
+                );
+
+                if (userRows.length === 0 || userRows[0].user_type_id === null) {
+                    return res.status(403).json({
+                        success: false,
+                        message: `Access Denied. You do not have permission for ${masterName} (${action}).`
+                    });
+                }
+
+                userTypeId = userRows[0].user_type_id;
+            } else if (userTypeId === null) {
                 return res.status(403).json({
                     success: false,
                     message: `Access Denied. You do not have permission for ${masterName} (${action}).`
                 });
             }
-
-            const userTypeId = userRows[0].user_type_id;
 
             // Query permission table
             let column = "";

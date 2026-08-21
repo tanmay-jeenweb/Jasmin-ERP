@@ -160,7 +160,7 @@ export default function PriceListData() {
       },
       {
         key: "icat_name",
-        label: "Icat Name",
+        label: "Product Category",
         render: (row) => <span>{row.icat_name || "—"}</span>
       },
       {
@@ -268,7 +268,7 @@ export default function PriceListData() {
       const fixedHeaders = [
         { header: "Product Code", key: "product_code", width: 18 },
         { header: "Brand", key: "brand", width: 15 },
-        { header: "Icat Name", key: "icat_name", width: 18 },
+        { header: "Product Category", key: "icat_name", width: 18 },
         { header: "Model Group Name", key: "model_group_name", width: 25 },
         { header: "Model Name", key: "model_name", width: 35 },
       ];
@@ -427,7 +427,7 @@ export default function PriceListData() {
           // 1. Parse header row
           const headerRow = worksheet.getRow(1);
           const colHeaders = [];
-          const requiredFixed = ["Product Code", "Brand", "Icat Name", "Model Group Name", "Model Name"];
+          const requiredFixed = ["Product Code", "Brand", "Product Category", "Model Group Name", "Model Name"];
           const maxCols = Math.max(worksheet.columnCount, requiredFixed.length + visibleDynamicColumns.length);
           for (let colNum = 1; colNum <= maxCols; colNum++) {
             const cellVal = headerRow.getCell(colNum).value;

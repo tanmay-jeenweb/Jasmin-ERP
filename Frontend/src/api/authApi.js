@@ -61,8 +61,8 @@ apiClient.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
-        // Check if error is 401 and request has not been retried yet
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // Check if error is 401 or 403 and request has not been retried yet
+        if ((error.response?.status === 401 || error.response?.status === 403) && !originalRequest._retry) {
             // Avoid infinite loop for auth endpoints
             const isAuthRoute = originalRequest.url.includes("/auth/login") || 
                                 originalRequest.url.includes("/auth/refresh") || 

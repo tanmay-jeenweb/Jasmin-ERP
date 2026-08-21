@@ -259,7 +259,7 @@ export default function PriceListView() {
       },
       {
         key: "product_name",
-        label: "Product Name",
+        label: "Product Category",
         render: (row) => <span className="font-semibold text-slate-800">{row.product_name || row.icat_name || "—"}</span>
       },
       {
@@ -347,7 +347,7 @@ export default function PriceListView() {
           data={filteredData}
           columns={columns}
           loading={loading}
-          searchPlaceholder="Search Brand, Product Name, Model Group, or prices..."
+          searchPlaceholder="Search Brand, Product Category, Model Group, or prices..."
           actionButton={
             <div className="flex flex-wrap items-center gap-3">
               {/* Brand Multi-select Dropdown */}
@@ -431,7 +431,7 @@ export default function PriceListView() {
                 )}
               </div>
 
-              {/* Product Name Multi-select Dropdown */}
+              {/* Product Category Multi-select Dropdown */}
               <div className="relative">
                 <button
                   type="button"
@@ -443,8 +443,8 @@ export default function PriceListView() {
                 >
                   <span className="text-slate-700">
                     {selectedProductNames.length === 0
-                      ? "All Products"
-                      : `${selectedProductNames.length} Product${selectedProductNames.length > 1 ? 's' : ''}`}
+                      ? "All Categories"
+                      : `${selectedProductNames.length} Categor${selectedProductNames.length > 1 ? 'ies' : 'y'}`}
                   </span>
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 text-slate-400">
                     <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
@@ -461,7 +461,7 @@ export default function PriceListView() {
                         </svg>
                         <input
                           type="text"
-                          placeholder="Search products..."
+                          placeholder="Search categories..."
                           value={productSearchText}
                           onChange={(e) => setProductSearchText(e.target.value)}
                           className="w-full text-xs border-none outline-none bg-transparent"
