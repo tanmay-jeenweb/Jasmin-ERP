@@ -156,6 +156,20 @@ export default function DataTable({
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
+  // Separate the totals row from normal data records so it's not paginated or sorted
+  const { normalRows, totalRow } = useMemo(() => {
+    const normal = [];
+    let total = null;
+    data.forEach(row => {
+      if (row && row.id === "Total") {
+        total = row;
+      } else {
+        normal.push(row);
+      }
+    });
+    return { normalRows: normal, totalRow: total };
+  }, [data]);
+
   // ── Visible columns (used for rendering) ─────────────────────────────────
   const visibleColumns = useMemo(
     () => columns.filter(c => !hiddenColumns.has(c.key)),
@@ -164,7 +178,7 @@ export default function DataTable({
 
   // ── Filtered / sorted / paginated rows ───────────────────────────────────
   const filteredRows = useMemo(() => {
-    let filtered = [...data];
+    let filtered = [...normalRows];
 
     if (search) {
       filtered = filtered.filter(row => {
@@ -188,7 +202,7 @@ export default function DataTable({
     }
 
     return filtered;
-  }, [data, search, sortConfig]);
+  }, [normalRows, search, sortConfig]);
 
   const totalPages = pageSize === 'all' ? 1 : Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const paginatedRows = pageSize === 'all'
@@ -459,6 +473,24 @@ export default function DataTable({
                 </tr>
               )}
             </tbody>
+            {totalRow && (
+              <tfoot className="sticky bottom-0 z-10 bg-slate-100 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
+                <tr className="border-t-2 border-slate-350 bg-slate-100 font-bold">
+                  {visibleColumns.map((column) => {
+                    const originalColumn = initialColumns.find(c => c.key === column.key) || column;
+                    return (
+                      <td
+                        key={column.key}
+                        className="px-3 py-3 text-sm text-slate-900 border-t border-slate-350 sticky bottom-0 bg-slate-100"
+                        style={{ minWidth: originalColumn.minWidth || '140px' }}
+                      >
+                        {originalColumn.render ? originalColumn.render(totalRow) : totalRow[column.key]}
+                      </td>
+                    );
+                  })}
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 
