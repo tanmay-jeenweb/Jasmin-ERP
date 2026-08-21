@@ -123,7 +123,7 @@ app.use("/v1/api/branches/finance-codes", branchFinanceRoutes);
 app.use("/v1/api/offers", offerRoutes);
 app.use("/v1/api/target-vs-achievement", targetVsAchievementRoutes);
 app.use("/v1/api/stock-cash-deposit", stockCashDepositRoutes);
-app.use("/v1/api/user-branch-mappings", userBranchMappingRoutes);
+app.use("/v1/api/user-branch-mapping", userBranchMappingRoutes);
 app.use("/v1/api/brand-wise-sales", brandWiseSalesRoutes);
 app.use("/v1/api/alerts", alertRoutes);
 app.use("/v1/api/branch-brand-finance-mapping", branchBrandFinanceMappingRoutes);
