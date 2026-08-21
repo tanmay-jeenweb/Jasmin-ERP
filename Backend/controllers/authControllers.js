@@ -23,10 +23,10 @@ const {
 } = require("../models/deviceModel.js");
 
 // Helper to generate access and refresh tokens, set cookie, and respond
-const generateTokensAndRespond = async (user, userLandingType, userState, deviceId, res, message) => {
+const generateTokensAndRespond = async (req, user, userLandingType, userState, deviceId, res, message, isMobileLogin = false) => {
     // Generate Access Token (short-lived, configured in env, default 15m)
     const token = jwt.sign(
-        { id: user.id, role: user.role, name: user.name, username: user.username, mob_no: user.mob_no },
+        { id: user.id, role: user.role, name: user.name, username: user.username, mob_no: user.mob_no, mobile: isMobileLogin },
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_ACCESS_EXPIRATION || "15m" }
     );
@@ -34,7 +34,7 @@ const generateTokensAndRespond = async (user, userLandingType, userState, device
     // Generate Refresh Token (long-lived, configured in env, default 7d)
     const refreshExpiresIn = process.env.JWT_REFRESH_EXPIRATION || "7d";
     const refreshToken = jwt.sign(
-        { id: user.id },
+        { id: user.id, mobile: isMobileLogin },
         process.env.JWT_REFRESH_SECRET,
         { expiresIn: refreshExpiresIn }
     );
@@ -69,6 +69,24 @@ const generateTokensAndRespond = async (user, userLandingType, userState, device
         console.error("Failed to delete expired refresh tokens:", e);
     }
 
+    // Log login activity
+    try {
+        await createAuditLog(
+            user.id,
+            user.name || user.username || 'Unknown',
+            deviceId || null,
+            'User Authentication',
+            'login',
+            null,
+            {
+                platform: isMobileLogin ? "Mobile App" : "Web Application",
+                status: "Login successful"
+            }
+        );
+    } catch (logError) {
+        console.error("Failed to create login audit log:", logError);
+    }
+
     return res.status(200).json({
         success: true,
         message,
@@ -83,7 +101,8 @@ const generateTokensAndRespond = async (user, userLandingType, userState, device
             mob_no: user.mob_no,
             modules: user.modules || [],
             landing_type: userLandingType,
-            state: userState
+            state: userState,
+            mobile: isMobileLogin
         }
     });
 };
@@ -122,6 +141,24 @@ const login = async (req, res) => {
             });
         }
 
+        // Check Web/Mobile Access permission
+        const isMobileLogin = req.body.mobile === true || req.body.mobile === 'true';
+        if (isMobileLogin) {
+            if (user.mobile_access === 0 || user.mobile_access === false) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Mobile access is disabled for this account. Please contact an administrator."
+                });
+            }
+        } else {
+            if (user.web_access === 0 || user.web_access === false) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Web access is disabled for this account. Please contact an administrator."
+                });
+            }
+        }
+
         // Compare Password
         const isPasswordCorrect = await bcrypt.compare(password, user.password);
         if (!isPasswordCorrect) {
@@ -145,12 +182,12 @@ const login = async (req, res) => {
 
         // ================= ADMIN LOGIN =================
         if (user.role === "admin" && (user.device_verification_required === 0 || user.device_verification_required === false)) {
-            return await generateTokensAndRespond(user, userLandingType, userState, deviceId, res, "Admin login successful");
+            return await generateTokensAndRespond(req, user, userLandingType, userState, deviceId, res, "Admin login successful", isMobileLogin);
         }
 
         // ================= DEVICE MATCHING =================
         if (user.device_verification_required === 0 || user.device_verification_required === false) {
-            return await generateTokensAndRespond(user, userLandingType, userState, deviceId, res, "Login successful");
+            return await generateTokensAndRespond(req, user, userLandingType, userState, deviceId, res, "Login successful", isMobileLogin);
         }
 
         const approvedDevices = await getApprovedDevices(user.id);
@@ -158,7 +195,7 @@ const login = async (req, res) => {
 
         if (isDeviceApproved) {
             // Device matches, login successful
-            return await generateTokensAndRespond(user, userLandingType, userState, deviceId, res, "Login successful");
+            return await generateTokensAndRespond(req, user, userLandingType, userState, deviceId, res, "Login successful", isMobileLogin);
         }
 
         // If the current device is not approved, check if there is a pending registration request for this device
@@ -290,6 +327,76 @@ const logout = async (req, res) => {
     try {
         const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
         if (refreshToken) {
+            let userId = null;
+            let deviceId = null;
+            let username = 'Unknown';
+            let isMobile = false;
+
+            try {
+                // 1. Try to find the refresh token entry in DB to get user_id and device_id
+                const dbToken = await findRefreshToken(refreshToken);
+                if (dbToken) {
+                    userId = dbToken.user_id;
+                    deviceId = dbToken.device_id;
+                }
+                
+                // Decode the refresh token JWT to get user ID and isMobile flag
+                const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+                if (decoded) {
+                    userId = userId || decoded.id;
+                    isMobile = decoded.mobile === true || decoded.mobile === 'true';
+                }
+
+                if (userId) {
+                    // 2. Fetch the user details (name, username) from DB
+                    const [userRows] = await db.execute(
+                        "SELECT name, username FROM users WHERE id = ?",
+                        [userId]
+                    );
+                    if (userRows.length > 0) {
+                        username = userRows[0].name || userRows[0].username || 'Unknown';
+                    }
+                }
+            } catch (err) {
+                console.error("Error retrieving user info from refresh token for logout log:", err);
+            }
+
+            // Fallback: Try to decode authorization header if user ID is still not found
+            if (!userId) {
+                const authHeader = req.headers.authorization;
+                if (authHeader && authHeader.startsWith("Bearer ")) {
+                    try {
+                        const token = authHeader.split(" ")[1];
+                        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                        userId = decoded.id;
+                        username = decoded.name || decoded.username || 'Unknown';
+                        isMobile = decoded.mobile === true || decoded.mobile === 'true';
+                    } catch (e) {
+                        // Ignore decode errors
+                    }
+                }
+            }
+
+            // 3. Log logout activity before deleting the token from database
+            if (userId) {
+                try {
+                    await createAuditLog(
+                        userId,
+                        username,
+                        deviceId || null,
+                        'User Authentication',
+                        'logout',
+                        null,
+                        {
+                            platform: isMobile ? "Mobile App" : "Web Application",
+                            status: "Logged out successfully"
+                        }
+                    );
+                } catch (logError) {
+                    console.error("Failed to create logout audit log:", logError);
+                }
+            }
+
             await deleteRefreshToken(refreshToken);
         }
         res.clearCookie("refreshToken");
@@ -351,9 +458,27 @@ const refresh = async (req, res) => {
             });
         }
 
+        // Verify that they still have access
+        const isMobileRefresh = decoded.mobile === true || decoded.mobile === 'true';
+        if (isMobileRefresh) {
+            if (user.mobile_access === 0 || user.mobile_access === false) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Mobile access is disabled for this account."
+                });
+            }
+        } else {
+            if (user.web_access === 0 || user.web_access === false) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Web access is disabled for this account."
+                });
+            }
+        }
+
         // Generate new Access Token (short-lived)
         const newAccessToken = jwt.sign(
-            { id: user.id, role: user.role, name: user.name, username: user.username, mob_no: user.mob_no },
+            { id: user.id, role: user.role, name: user.name, username: user.username, mob_no: user.mob_no, mobile: isMobileRefresh },
             process.env.JWT_SECRET,
             { expiresIn: process.env.JWT_ACCESS_EXPIRATION || "15m" }
         );
@@ -361,7 +486,7 @@ const refresh = async (req, res) => {
         // Rotate the Refresh Token
         const refreshExpiresIn = process.env.JWT_REFRESH_EXPIRATION || "7d";
         const newRefreshToken = jwt.sign(
-            { id: user.id },
+            { id: user.id, mobile: isMobileRefresh },
             process.env.JWT_REFRESH_SECRET,
             { expiresIn: refreshExpiresIn }
         );
