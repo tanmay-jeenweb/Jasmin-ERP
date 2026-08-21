@@ -65,7 +65,9 @@ const createUserByAdmin = async (req, res) => {
             branch,
             productType,
             landingType,
-            brand
+            brand,
+            webAccess,
+            mobileAccess
         } = req.body;
 
         if (!name || !username || !email || !password) {
@@ -90,7 +92,9 @@ const createUserByAdmin = async (req, res) => {
             productType || null,
             landingType || null,
             brand || null,
-            password
+            password,
+            typeof webAccess === 'boolean' ? webAccess : true,
+            typeof mobileAccess === 'boolean' ? mobileAccess : true
         );
 
         const adminDeviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
@@ -116,7 +120,9 @@ const createUserByAdmin = async (req, res) => {
                 branch,
                 product_type: productType,
                 landing_type: landingType,
-                brand: brand
+                brand: brand,
+                web_access: typeof webAccess === 'boolean' ? webAccess : true,
+                mobile_access: typeof mobileAccess === 'boolean' ? mobileAccess : true
             }
         );
 
@@ -322,7 +328,7 @@ const fetchSuperAdminUsers = async (req, res) => {
                 u.user_type_id, ut.type_name,
                 u.device_verification_required, u.active,
                 u.state, u.city, u.branch, u.product_type, u.landing_type, u.brand,
-                u.plain_password
+                u.plain_password, u.web_access, u.mobile_access
             FROM users u
             LEFT JOIN user_types ut ON u.user_type_id = ut.id
             WHERE u.role != 'super admin' OR u.role IS NULL
@@ -362,7 +368,9 @@ const updateUserBySuperAdmin = async (req, res) => {
             branch,
             productType,
             landingType,
-            brand
+            brand,
+            webAccess,
+            mobileAccess
         } = req.body;
 
         const [userRows] = await db.execute("SELECT * FROM users WHERE id = ?", [userId]);
@@ -391,7 +399,9 @@ const updateUserBySuperAdmin = async (req, res) => {
                 branch = ?,
                 product_type = ?,
                 landing_type = ?,
-                brand = ?
+                brand = ?,
+                web_access = ?,
+                mobile_access = ?
         `;
         const queryParams = [
             name !== undefined ? name : currentUser.name,
@@ -407,7 +417,9 @@ const updateUserBySuperAdmin = async (req, res) => {
             branch !== undefined ? (branch ? JSON.stringify(branch) : null) : currentUser.branch,
             productType !== undefined ? (productType ? JSON.stringify(productType) : null) : currentUser.product_type,
             landingType !== undefined ? (landingType ? JSON.stringify(landingType) : null) : currentUser.landing_type,
-            brand !== undefined ? (brand ? JSON.stringify(brand) : null) : currentUser.brand
+            brand !== undefined ? (brand ? JSON.stringify(brand) : null) : currentUser.brand,
+            webAccess !== undefined ? (webAccess ? 1 : 0) : currentUser.web_access,
+            mobileAccess !== undefined ? (mobileAccess ? 1 : 0) : currentUser.mobile_access
         ];
 
         if (password) {

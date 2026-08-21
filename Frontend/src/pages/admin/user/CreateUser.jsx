@@ -53,7 +53,9 @@ export default function CreateUser() {
         mobNo: "",
         dateOfJoin: "",
         deviceVerificationRequired: true,
-        role: "user"
+        role: "user",
+        webAccess: true,
+        mobileAccess: true
     });
     const [creatingUser, setCreatingUser] = useState(false);
 
@@ -271,7 +273,9 @@ export default function CreateUser() {
                 mobNo: "",
                 dateOfJoin: "",
                 deviceVerificationRequired: true,
-                role: "user"
+                role: "user",
+                webAccess: true,
+                mobileAccess: true
             });
             setSelectedStates([]);
             setCity("");
@@ -664,17 +668,43 @@ export default function CreateUser() {
                              </div>
                         </div>
 
-                        <div className="flex items-center gap-3 pt-2">
-                            <input
-                                id="deviceVerification"
-                                type="checkbox"
-                                checked={newUserForm.deviceVerificationRequired}
-                                onChange={(e) => setNewUserForm({ ...newUserForm, deviceVerificationRequired: e.target.checked })}
-                                className="h-4 w-4 text-[#6804a1] border-slate-300 rounded focus:ring-[#6804a1]"
-                            />
-                            <label htmlFor="deviceVerification" className="text-sm font-medium text-slate-700">
-                                Require device verification for this user
-                            </label>
+                        <div className="flex flex-col gap-3 pt-2">
+                            <div className="flex items-center gap-3">
+                                <input
+                                    id="deviceVerification"
+                                    type="checkbox"
+                                    checked={newUserForm.deviceVerificationRequired}
+                                    onChange={(e) => setNewUserForm({ ...newUserForm, deviceVerificationRequired: e.target.checked })}
+                                    className="h-4 w-4 text-[#6804a1] border-slate-300 rounded focus:ring-[#6804a1]"
+                                />
+                                <label htmlFor="deviceVerification" className="text-sm font-medium text-slate-700">
+                                    Require device verification for this user
+                                </label>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <input
+                                    id="webAccess"
+                                    type="checkbox"
+                                    checked={newUserForm.webAccess}
+                                    onChange={(e) => setNewUserForm({ ...newUserForm, webAccess: e.target.checked })}
+                                    className="h-4 w-4 text-[#6804a1] border-slate-300 rounded focus:ring-[#6804a1]"
+                                />
+                                <label htmlFor="webAccess" className="text-sm font-medium text-slate-700">
+                                    Allow Web Application Access
+                                </label>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <input
+                                    id="mobileAccess"
+                                    type="checkbox"
+                                    checked={newUserForm.mobileAccess}
+                                    onChange={(e) => setNewUserForm({ ...newUserForm, mobileAccess: e.target.checked })}
+                                    className="h-4 w-4 text-[#6804a1] border-slate-300 rounded focus:ring-[#6804a1]"
+                                />
+                                <label htmlFor="mobileAccess" className="text-sm font-medium text-slate-700">
+                                    Allow Mobile Application Access
+                                </label>
+                            </div>
                         </div>
                         <div className="pt-4">
                             <button

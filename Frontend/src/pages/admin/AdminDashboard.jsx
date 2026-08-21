@@ -46,7 +46,9 @@ export default function AdminDashboard() {
         password: "",
         confirmPassword: "",
         deviceVerificationRequired: true,
-        active: true
+        active: true,
+        webAccess: true,
+        mobileAccess: true
     });
 
     // Filter/Search states
@@ -168,7 +170,9 @@ export default function AdminDashboard() {
             password: "",
             confirmPassword: "",
             deviceVerificationRequired: !!userRow.device_verification_required,
-            active: !!userRow.active
+            active: !!userRow.active,
+            webAccess: userRow.web_access !== undefined ? !!userRow.web_access : true,
+            mobileAccess: userRow.mobile_access !== undefined ? !!userRow.mobile_access : true
         });
         setIsSuperAdminModalOpen(true);
     };
@@ -190,7 +194,9 @@ export default function AdminDashboard() {
                 userTypeId: editForm.userTypeId || null,
                 password: editForm.password || undefined,
                 deviceVerificationRequired: editForm.deviceVerificationRequired,
-                active: editForm.active
+                active: editForm.active,
+                webAccess: editForm.webAccess,
+                mobileAccess: editForm.mobileAccess
             });
             toast.success("User updated successfully");
             setIsSuperAdminModalOpen(false);
@@ -1060,6 +1066,26 @@ export default function AdminDashboard() {
                                                 className="accent-[#6804a1] h-4 w-4"
                                             />
                                             Account Active
+                                        </label>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700 select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={editForm.webAccess}
+                                                onChange={(e) => setEditForm(prev => ({ ...prev, webAccess: e.target.checked }))}
+                                                className="accent-[#6804a1] h-4 w-4"
+                                            />
+                                            Allow Web Access
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700 select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={editForm.mobileAccess}
+                                                onChange={(e) => setEditForm(prev => ({ ...prev, mobileAccess: e.target.checked }))}
+                                                className="accent-[#6804a1] h-4 w-4"
+                                            />
+                                            Allow Mobile Access
                                         </label>
                                     </div>
                                 </div>

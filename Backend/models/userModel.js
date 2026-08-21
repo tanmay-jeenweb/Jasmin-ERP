@@ -22,6 +22,8 @@ const createUsersTable = async () => {
             branch JSON DEFAULT NULL,
             product_type JSON DEFAULT NULL,
             landing_type JSON DEFAULT NULL,
+            web_access BOOLEAN DEFAULT TRUE,
+            mobile_access BOOLEAN DEFAULT TRUE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ON UPDATE CURRENT_TIMESTAMP
@@ -82,6 +84,14 @@ const createUsersTable = async () => {
         {
             name: 'plain_password',
             query: 'ALTER TABLE users ADD COLUMN plain_password VARCHAR(255) DEFAULT NULL'
+        },
+        {
+            name: 'web_access',
+            query: 'ALTER TABLE users ADD COLUMN web_access BOOLEAN DEFAULT TRUE'
+        },
+        {
+            name: 'mobile_access',
+            query: 'ALTER TABLE users ADD COLUMN mobile_access BOOLEAN DEFAULT TRUE'
         }
     ];
 
@@ -159,13 +169,15 @@ const createUser = async (
     productType = null,
     landingType = null,
     brand = null,
-    plainPassword = null
+    plainPassword = null,
+    webAccess = true,
+    mobileAccess = true
 ) => {
 
     const query = `
         INSERT INTO users
-        (name, username, email, password, user_type_id, mob_no, date_of_join, device_verification_required, active, role, state, city, branch, product_type, landing_type, brand, plain_password)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (name, username, email, password, user_type_id, mob_no, date_of_join, device_verification_required, active, role, state, city, branch, product_type, landing_type, brand, plain_password, web_access, mobile_access)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const [result] = await db.execute(query, [
@@ -185,7 +197,9 @@ const createUser = async (
         productType ? JSON.stringify(productType) : null,
         landingType ? JSON.stringify(landingType) : null,
         brand ? JSON.stringify(brand) : null,
-        plainPassword
+        plainPassword,
+        webAccess ? 1 : 0,
+        mobileAccess ? 1 : 0
     ]);
 
     return result;
@@ -222,7 +236,8 @@ const getAllUsers = async (includeInactive = false) => {
             u.id, u.name, u.username, u.email,
             u.user_type_id, u.mob_no, u.date_of_join, u.device_verification_required,
             ut.type_name AS user_type_name, u.active,
-            u.state, u.city, u.branch, u.product_type, u.landing_type, u.brand
+            u.state, u.city, u.branch, u.product_type, u.landing_type, u.brand,
+            u.web_access, u.mobile_access
         FROM users u
         LEFT JOIN user_types ut ON u.user_type_id = ut.id
         ${whereClause}
