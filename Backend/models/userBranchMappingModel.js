@@ -13,6 +13,11 @@ const createUserBranchMappingsTable = async () => {
     } catch (e) { /* already renamed */ }
 
     try {
+        await db.execute("ALTER TABLE user_branch_mappings ADD KEY idx_branch_id (branch_id)");
+        console.log("Added idx_branch_id index for foreign key fallback");
+    } catch (e) { /* already exists */ }
+
+    try {
         await db.execute("ALTER TABLE user_branch_mappings DROP INDEX uq_branch_id");
         console.log("Dropped uq_branch_id unique index");
     } catch (e) { /* already dropped or not exist */ }

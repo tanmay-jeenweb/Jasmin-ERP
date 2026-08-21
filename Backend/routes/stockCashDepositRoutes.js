@@ -11,7 +11,7 @@ const { verifyToken, verifyPermission } = require('../middleware/authMiddleware.
 
 const router = express.Router();
 
-router.get('/abm-wise', verifyToken, verifyPermission('stock_vs_cash_deposit', 'read'), getAbmWiseCashDepositReportController);
+router.get('/abm-wise', verifyToken, verifyPermission('abm_wise_cash_deposit', 'read'), getAbmWiseCashDepositReportController);
 router.get('/all', verifyToken, verifyPermission('stock_vs_cash_deposit', 'read'), getStockCashDepositReportController);
 router.post('/import', verifyToken, verifyPermission('stock_vs_cash_deposit', 'write'), importStockCashDepositController);
 router.post('/import-current-stock', verifyToken, verifyPermission('stock_vs_cash_deposit', 'write'), importCurrentStockController);

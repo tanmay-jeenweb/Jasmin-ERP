@@ -14,7 +14,7 @@ export default function FinanceBrandMappingList() {
     setLoading(true);
     setError("");
     try {
-      const res = await getBranches();
+      const res = await getBranches({ assignedOnly: true });
       const rawData = res.data?.success ? (res.data.data || []) : (res.data || []);
       const mapped = rawData.map((row, idx) => ({
         ...row,

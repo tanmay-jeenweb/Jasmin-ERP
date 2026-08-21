@@ -22,11 +22,14 @@ const MASTERS = [
     { key: 'price_list_view', label: 'Price List View' },
     { key: 'landing_type_master', label: 'Landing Type Master' },
     { key: 'target_vs_achievement', label: 'Target vs Achievement' },
+    { key: 'abm_wise_tva', label: 'ABM Wise TvA Report' },
     { key: 'stock_vs_cash_deposit', label: 'Stock vs Cash Deposit' },
     { key: 'offer_master', label: 'Offers Master' },
     { key: 'finance_brand_mapping', label: 'Finance Brand Mapping' },
     { key: 'finance_brand_report', label: 'Finance Brand Report' },
     { key: 'activity_report', label: 'Activity Log Report' },
+    { key: 'brand_wise_sales', label: 'Brand Wise Sales' },
+    { key: 'abm_wise_cash_deposit', label: 'ABM Wise Cash Deposit (Dashboard)' },
 ];
 
 // ─── Table creation ──────────────────────────────────────────────────────────
@@ -114,7 +117,29 @@ const createUserTypePermissionsTable = async () => {
             FROM user_types
         `);
 
-        console.log("✅ Permission keys migrated to worker_employee, worker_employee_type, user_branch_mapping, price_list, price_list_report, and stock_vs_cash_deposit.");
+        // Seed initial brand_wise_sales permission rows for existing user types
+        await db.execute(`
+            INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete)
+            SELECT id, 'brand_wise_sales', 0, 0, 0, 0
+            FROM user_types
+        `);
+
+        // Seed initial abm_wise_cash_deposit permission rows for existing user types
+        await db.execute(`
+            INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete)
+            SELECT id, 'abm_wise_cash_deposit', 0, 0, 0, 0
+            FROM user_types
+        `);
+
+        // Seed initial abm_wise_tva permission rows from target_vs_achievement for existing user types
+        await db.execute(`
+            INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete)
+            SELECT user_type_id, 'abm_wise_tva', can_read, can_write, can_update, can_delete
+            FROM user_type_permissions
+            WHERE master_name = 'target_vs_achievement'
+        `);
+
+        console.log("✅ Permission keys migrated/seeded successfully.");
     } catch (err) {
         console.error("Migration of user permissions failed:", err.message);
     }

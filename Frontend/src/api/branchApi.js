@@ -1,7 +1,7 @@
 import apiClient from "./authApi";
 
-export const getBranches = async () => {
-    return apiClient.get("/branches/all");
+export const getBranches = async (params) => {
+    return apiClient.get("/branches/all", { params });
 };
 
 export const createBranch = async (data) => {

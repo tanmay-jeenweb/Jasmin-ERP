@@ -1,8 +1,53 @@
 const { getFinanceBrandReportData } = require('../models/branchBrandFinanceReportModel.js');
+const db = require('../config/db.js');
 
 const getFinanceBrandReportController = async (req, res) => {
     try {
         const data = await getFinanceBrandReportData();
+
+        // Check if the user is admin/super admin
+        const [userRows] = await db.execute(
+            `SELECT u.id, u.role, u.state, ut.user_role, ut.type_name
+             FROM users u
+             LEFT JOIN user_types ut ON u.user_type_id = ut.id
+             WHERE u.id = ?`,
+            [req.user.id]
+        );
+
+        let isAdmin = false;
+        if (userRows.length > 0) {
+            const u = userRows[0];
+            if (u.role === 'admin' || u.role === 'super admin' || u.user_role === 'Admin' || u.type_name === 'Admin') {
+                isAdmin = true;
+            }
+        }
+
+        let filteredBranches = data.branches;
+
+        if (!isAdmin) {
+            // Fetch mapped branch IDs from user_branch_mappings
+            const [mappingRows] = await db.execute(
+                `SELECT branch_id FROM user_branch_mappings WHERE user_id = ?`,
+                [req.user.id]
+            );
+            const mappedBranchIds = mappingRows.map(r => r.branch_id);
+            filteredBranches = data.branches.filter(b => mappedBranchIds.includes(b.id));
+        } else {
+            // Apply existing state restriction logic
+            let userStates = null;
+            if (userRows.length > 0 && userRows[0].state) {
+                try {
+                    userStates = typeof userRows[0].state === 'string' ? JSON.parse(userRows[0].state) : userRows[0].state;
+                } catch (e) {
+                    userStates = null;
+                }
+            }
+
+            if (userStates && Array.isArray(userStates) && userStates.length > 0 && !userStates.includes("All")) {
+                const upperUserStates = userStates.map(s => String(s).trim().toUpperCase());
+                filteredBranches = data.branches.filter(b => b.state_name && upperUserStates.includes(String(b.state_name).trim().toUpperCase()));
+            }
+        }
 
         // Index database elements by branch_id, brand_id, company_id, machine_id
         const brandCodesMap = {}; // { [branchId]: { [brandId]: brand_code } }
@@ -57,7 +102,7 @@ const getFinanceBrandReportController = async (req, res) => {
         });
 
         // Combine into rows
-        const rows = data.branches.map(branch => {
+        const rows = filteredBranches.map(branch => {
             const bId = branch.id;
             const bBrandCodes = brandCodesMap[bId] || {};
             const bMachineDetails = machineCodesMap[bId] || {};
