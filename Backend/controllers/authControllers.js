@@ -23,10 +23,10 @@ const {
 } = require("../models/deviceModel.js");
 
 // Helper to generate access and refresh tokens, set cookie, and respond
-const generateTokensAndRespond = async (user, userLandingType, userState, deviceId, res, message) => {
+const generateTokensAndRespond = async (user, userLandingType, userState, deviceId, res, message, isMobileLogin = false) => {
     // Generate Access Token (short-lived, configured in env, default 15m)
     const token = jwt.sign(
-        { id: user.id, role: user.role, name: user.name, username: user.username, mob_no: user.mob_no },
+        { id: user.id, role: user.role, name: user.name, username: user.username, mob_no: user.mob_no, mobile: isMobileLogin },
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_ACCESS_EXPIRATION || "15m" }
     );
@@ -34,7 +34,7 @@ const generateTokensAndRespond = async (user, userLandingType, userState, device
     // Generate Refresh Token (long-lived, configured in env, default 7d)
     const refreshExpiresIn = process.env.JWT_REFRESH_EXPIRATION || "7d";
     const refreshToken = jwt.sign(
-        { id: user.id },
+        { id: user.id, mobile: isMobileLogin },
         process.env.JWT_REFRESH_SECRET,
         { expiresIn: refreshExpiresIn }
     );
@@ -83,7 +83,8 @@ const generateTokensAndRespond = async (user, userLandingType, userState, device
             mob_no: user.mob_no,
             modules: user.modules || [],
             landing_type: userLandingType,
-            state: userState
+            state: userState,
+            mobile: isMobileLogin
         }
     });
 };
@@ -122,6 +123,24 @@ const login = async (req, res) => {
             });
         }
 
+        // Check Web/Mobile Access permission
+        const isMobileLogin = req.body.mobile === true || req.body.mobile === 'true';
+        if (isMobileLogin) {
+            if (user.mobile_access === 0 || user.mobile_access === false) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Mobile access is disabled for this account. Please contact an administrator."
+                });
+            }
+        } else {
+            if (user.web_access === 0 || user.web_access === false) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Web access is disabled for this account. Please contact an administrator."
+                });
+            }
+        }
+
         // Compare Password
         const isPasswordCorrect = await bcrypt.compare(password, user.password);
         if (!isPasswordCorrect) {
@@ -145,12 +164,12 @@ const login = async (req, res) => {
 
         // ================= ADMIN LOGIN =================
         if (user.role === "admin" && (user.device_verification_required === 0 || user.device_verification_required === false)) {
-            return await generateTokensAndRespond(user, userLandingType, userState, deviceId, res, "Admin login successful");
+            return await generateTokensAndRespond(user, userLandingType, userState, deviceId, res, "Admin login successful", isMobileLogin);
         }
 
         // ================= DEVICE MATCHING =================
         if (user.device_verification_required === 0 || user.device_verification_required === false) {
-            return await generateTokensAndRespond(user, userLandingType, userState, deviceId, res, "Login successful");
+            return await generateTokensAndRespond(user, userLandingType, userState, deviceId, res, "Login successful", isMobileLogin);
         }
 
         const approvedDevices = await getApprovedDevices(user.id);
@@ -158,7 +177,7 @@ const login = async (req, res) => {
 
         if (isDeviceApproved) {
             // Device matches, login successful
-            return await generateTokensAndRespond(user, userLandingType, userState, deviceId, res, "Login successful");
+            return await generateTokensAndRespond(user, userLandingType, userState, deviceId, res, "Login successful", isMobileLogin);
         }
 
         // If the current device is not approved, check if there is a pending registration request for this device
@@ -351,9 +370,27 @@ const refresh = async (req, res) => {
             });
         }
 
+        // Verify that they still have access
+        const isMobileRefresh = decoded.mobile === true || decoded.mobile === 'true';
+        if (isMobileRefresh) {
+            if (user.mobile_access === 0 || user.mobile_access === false) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Mobile access is disabled for this account."
+                });
+            }
+        } else {
+            if (user.web_access === 0 || user.web_access === false) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Web access is disabled for this account."
+                });
+            }
+        }
+
         // Generate new Access Token (short-lived)
         const newAccessToken = jwt.sign(
-            { id: user.id, role: user.role, name: user.name, username: user.username, mob_no: user.mob_no },
+            { id: user.id, role: user.role, name: user.name, username: user.username, mob_no: user.mob_no, mobile: isMobileRefresh },
             process.env.JWT_SECRET,
             { expiresIn: process.env.JWT_ACCESS_EXPIRATION || "15m" }
         );
@@ -361,7 +398,7 @@ const refresh = async (req, res) => {
         // Rotate the Refresh Token
         const refreshExpiresIn = process.env.JWT_REFRESH_EXPIRATION || "7d";
         const newRefreshToken = jwt.sign(
-            { id: user.id },
+            { id: user.id, mobile: isMobileRefresh },
             process.env.JWT_REFRESH_SECRET,
             { expiresIn: refreshExpiresIn }
         );
