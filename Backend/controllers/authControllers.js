@@ -24,49 +24,60 @@ const {
 
 // Helper to generate access and refresh tokens, set cookie, and respond
 const generateTokensAndRespond = async (req, user, userLandingType, userState, deviceId, res, message, isMobileLogin = false) => {
-    // Generate Access Token (short-lived, configured in env, default 15m)
+    // Generate Access Token (short-lived for mobile, configured for web)
+    const accessExpiresIn = isMobileLogin
+        ? (process.env.JWT_ACCESS_EXPIRATION || "15m")
+        : (process.env.JWT_WEB_ACCESS_EXPIRATION || "1d");
+
     const token = jwt.sign(
         { id: user.id, role: user.role, name: user.name, username: user.username, mob_no: user.mob_no, mobile: isMobileLogin },
         process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_ACCESS_EXPIRATION || "15m" }
+        { expiresIn: accessExpiresIn }
     );
 
-    // Generate Refresh Token (long-lived, configured in env, default 7d)
-    const refreshExpiresIn = process.env.JWT_REFRESH_EXPIRATION || "7d";
-    const refreshToken = jwt.sign(
-        { id: user.id, mobile: isMobileLogin },
-        process.env.JWT_REFRESH_SECRET,
-        { expiresIn: refreshExpiresIn }
-    );
+    let refreshToken = null;
 
-    // Calculate expiration timestamp
-    let durationMs = 7 * 24 * 60 * 60 * 1000; // default 7 days
-    const match = refreshExpiresIn.match(/^(\d+)([dhm])$/);
-    if (match) {
-        const val = parseInt(match[1], 10);
-        const unit = match[2];
-        if (unit === 'd') durationMs = val * 24 * 60 * 60 * 1000;
-        else if (unit === 'h') durationMs = val * 60 * 60 * 1000;
-        else if (unit === 'm') durationMs = val * 60 * 1000;
-    }
-    const expiresAt = new Date(Date.now() + durationMs);
+    if (isMobileLogin) {
+        // Generate Refresh Token (long-lived, configured in env, default 7d)
+        const refreshExpiresIn = process.env.JWT_REFRESH_EXPIRATION || "7d";
+        refreshToken = jwt.sign(
+            { id: user.id, mobile: isMobileLogin },
+            process.env.JWT_REFRESH_SECRET,
+            { expiresIn: refreshExpiresIn }
+        );
 
-    // Save Refresh Token to database
-    await addRefreshToken(user.id, refreshToken, deviceId || null, expiresAt);
+        // Calculate expiration timestamp
+        let durationMs = 7 * 24 * 60 * 60 * 1000; // default 7 days
+        const match = refreshExpiresIn.match(/^(\d+)([dhm])$/);
+        if (match) {
+            const val = parseInt(match[1], 10);
+            const unit = match[2];
+            if (unit === 'd') durationMs = val * 24 * 60 * 60 * 1000;
+            else if (unit === 'h') durationMs = val * 60 * 60 * 1000;
+            else if (unit === 'm') durationMs = val * 60 * 1000;
+        }
+        const expiresAt = new Date(Date.now() + durationMs);
 
-    // Set Refresh Token in HTTP-only cookie
-    res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: durationMs
-    });
+        // Save Refresh Token to database
+        await addRefreshToken(user.id, refreshToken, deviceId || null, expiresAt);
 
-    // Clean up expired tokens in background
-    try {
-        await deleteExpiredRefreshTokens();
-    } catch (e) {
-        console.error("Failed to delete expired refresh tokens:", e);
+        // Set Refresh Token in HTTP-only cookie
+        res.cookie("refreshToken", refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            maxAge: durationMs
+        });
+
+        // Clean up expired tokens in background
+        try {
+            await deleteExpiredRefreshTokens();
+        } catch (e) {
+            console.error("Failed to delete expired refresh tokens:", e);
+        }
+    } else {
+        // Clear any leftover refresh token cookie for web logins
+        res.clearCookie("refreshToken");
     }
 
     // Log login activity
@@ -87,11 +98,10 @@ const generateTokensAndRespond = async (req, user, userLandingType, userState, d
         console.error("Failed to create login audit log:", logError);
     }
 
-    return res.status(200).json({
+    const responsePayload = {
         success: true,
         message,
         token,
-        refreshToken, // Fallback for client applications not using cookies
         user: {
             id: user.id,
             name: user.name,
@@ -104,7 +114,13 @@ const generateTokensAndRespond = async (req, user, userLandingType, userState, d
             state: userState,
             mobile: isMobileLogin
         }
-    });
+    };
+
+    if (isMobileLogin) {
+        responsePayload.refreshToken = refreshToken;
+    }
+
+    return res.status(200).json(responsePayload);
 };
 
 // ================= LOGIN =================
@@ -326,79 +342,85 @@ const requestDeviceRegistration = async (req, res) => {
 const logout = async (req, res) => {
     try {
         const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
-        if (refreshToken) {
-            let userId = null;
-            let deviceId = null;
-            let username = 'Unknown';
-            let isMobile = false;
+        let userId = null;
+        let deviceId = null;
+        let username = 'Unknown';
+        let isMobile = false;
 
+        // Try to get info from refresh token first
+        if (refreshToken) {
             try {
-                // 1. Try to find the refresh token entry in DB to get user_id and device_id
                 const dbToken = await findRefreshToken(refreshToken);
                 if (dbToken) {
                     userId = dbToken.user_id;
                     deviceId = dbToken.device_id;
                 }
-                
-                // Decode the refresh token JWT to get user ID and isMobile flag
                 const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
                 if (decoded) {
                     userId = userId || decoded.id;
                     isMobile = decoded.mobile === true || decoded.mobile === 'true';
                 }
+            } catch (err) {
+                console.error("Error retrieving user info from refresh token for logout:", err);
+            }
+        }
 
-                if (userId) {
-                    // 2. Fetch the user details (name, username) from DB
-                    const [userRows] = await db.execute(
-                        "SELECT name, username FROM users WHERE id = ?",
-                        [userId]
-                    );
-                    if (userRows.length > 0) {
-                        username = userRows[0].name || userRows[0].username || 'Unknown';
-                    }
+        // Fallback: Try to decode authorization header (Access Token)
+        if (!userId) {
+            const authHeader = req.headers.authorization;
+            if (authHeader && authHeader.startsWith("Bearer ")) {
+                try {
+                    const token = authHeader.split(" ")[1];
+                    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                    userId = decoded.id;
+                    username = decoded.name || decoded.username || 'Unknown';
+                    isMobile = decoded.mobile === true || decoded.mobile === 'true';
+                } catch (e) {
+                    // Ignore decode errors
+                }
+            }
+        }
+
+        // Fetch user name/username if we have userId but don't have the username yet
+        if (userId && username === 'Unknown') {
+            try {
+                const [userRows] = await db.execute(
+                    "SELECT name, username FROM users WHERE id = ?",
+                    [userId]
+                );
+                if (userRows.length > 0) {
+                    username = userRows[0].name || userRows[0].username || 'Unknown';
                 }
             } catch (err) {
-                console.error("Error retrieving user info from refresh token for logout log:", err);
+                console.error("Error fetching username for logout log:", err);
             }
+        }
 
-            // Fallback: Try to decode authorization header if user ID is still not found
-            if (!userId) {
-                const authHeader = req.headers.authorization;
-                if (authHeader && authHeader.startsWith("Bearer ")) {
-                    try {
-                        const token = authHeader.split(" ")[1];
-                        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-                        userId = decoded.id;
-                        username = decoded.name || decoded.username || 'Unknown';
-                        isMobile = decoded.mobile === true || decoded.mobile === 'true';
-                    } catch (e) {
-                        // Ignore decode errors
+        // Log logout activity
+        if (userId) {
+            try {
+                await createAuditLog(
+                    userId,
+                    username,
+                    deviceId || null,
+                    'User Authentication',
+                    'logout',
+                    null,
+                    {
+                        platform: isMobile ? "Mobile App" : "Web Application",
+                        status: "Logged out successfully"
                     }
-                }
+                );
+            } catch (logError) {
+                console.error("Failed to create logout audit log:", logError);
             }
+        }
 
-            // 3. Log logout activity before deleting the token from database
-            if (userId) {
-                try {
-                    await createAuditLog(
-                        userId,
-                        username,
-                        deviceId || null,
-                        'User Authentication',
-                        'logout',
-                        null,
-                        {
-                            platform: isMobile ? "Mobile App" : "Web Application",
-                            status: "Logged out successfully"
-                        }
-                    );
-                } catch (logError) {
-                    console.error("Failed to create logout audit log:", logError);
-                }
-            }
-
+        // Delete refresh token if present
+        if (refreshToken) {
             await deleteRefreshToken(refreshToken);
         }
+
         res.clearCookie("refreshToken");
         return res.status(200).json({
             success: true,
