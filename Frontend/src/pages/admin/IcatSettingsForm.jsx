@@ -94,9 +94,7 @@ export default function IcatSettingsForm() {
                 {/* Header Section */}
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#6804a1] to-[#4c0275] flex items-center justify-center text-white shadow-[0_3px_10px_rgba(104,4,161,0.2)] shrink-0">
-                            <i className="fa-solid fa-sliders text-lg"></i>
-                        </div>
+                        
                         <div>
                             <h1 className="m-0 text-xl font-extrabold text-slate-900">Settings Master</h1>
                             <p className="mt-0.5 text-[13px] text-slate-500">
