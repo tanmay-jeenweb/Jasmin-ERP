@@ -25,3 +25,7 @@ export const getAbmWiseCashDepositReport = async (state = "All") => {
         params: { state }
     });
 };
+
+export const updateStockCashDepositRecord = async (branchId, recordData) => {
+    return apiClient.put(`/stock-cash-deposit/update/${branchId}`, recordData);
+};
