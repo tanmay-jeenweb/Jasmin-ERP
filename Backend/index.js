@@ -56,6 +56,8 @@ const branchBrandFinanceReportRoutes = require("./routes/branchBrandFinanceRepor
 const { createVariationTable } = require("./models/variationModel.js");
 const variationRoutes = require("./routes/variationRoutes.js");
 const priceListRoutes = require("./routes/priceListRoutes.js");
+const settingRoutes = require("./routes/settingRoutes.js");
+const { createSettingsTable } = require("./models/settingModel.js");
 const { createLandingTypeTable } = require("./models/landingTypeModel.js");
 const landingTypeRoutes = require("./routes/landingTypeRoutes.js");
 const { createStockCacheTable } = require("./models/stockCacheModel.js");
@@ -146,6 +148,7 @@ app.use("/v1/api/branch-brand-finance-mapping", branchBrandFinanceMappingRoutes)
 app.use("/v1/api/reports", branchBrandFinanceReportRoutes);
 app.use("/v1/api/variations", variationRoutes);
 app.use("/v1/api/price-lists", priceListRoutes);
+app.use("/v1/api/settings", settingRoutes);
 app.use("/v1/api/landingtypes", landingTypeRoutes);
 
 
@@ -192,6 +195,7 @@ const startServer = async () => {
         await createLandingTypeTable();
         await createStockCacheTable();
         await createRefreshTokensTable();
+        await createSettingsTable();
 
 
 

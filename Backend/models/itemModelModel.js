@@ -134,11 +134,23 @@ const getDistinctBrands = async () => {
     return results.map(row => row.brand_name);
 };
 
+const getDistinctIcatNames = async () => {
+    const query = `
+        SELECT DISTINCT icat_name 
+        FROM item_model_master 
+        WHERE icat_name IS NOT NULL AND icat_name != '' 
+        ORDER BY icat_name ASC
+    `;
+    const [results] = await db.execute(query);
+    return results.map(row => row.icat_name);
+};
+
 module.exports = {
     createItemModelsTable,
     upsertItemModels,
     getAllItemModels,
     deleteItemModel,
     getItemModelById,
-    getDistinctBrands
+    getDistinctBrands,
+    getDistinctIcatNames
 };
