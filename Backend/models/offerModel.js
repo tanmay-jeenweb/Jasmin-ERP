@@ -187,7 +187,34 @@ const getAllOffers = async () => {
         ORDER BY o.timestamp DESC
     `;
     const [results] = await db.execute(query);
-    return mapOfferStates(results);
+    const mappedOffers = await mapOfferStates(results);
+
+    if (mappedOffers.length === 0) return [];
+
+    // Fetch all transactions for these offers
+    const offerIds = mappedOffers.map(o => o.id);
+    const placeholders = offerIds.map(() => '?').join(',');
+    const txQuery = `
+        SELECT *
+        FROM offer_transactions
+        WHERE offer_id IN (${placeholders})
+    `;
+    const [txRows] = await db.execute(txQuery, offerIds);
+
+    // Group transactions by offer_id
+    const txMap = {};
+    for (const tx of txRows) {
+        if (!txMap[tx.offer_id]) {
+            txMap[tx.offer_id] = [];
+        }
+        txMap[tx.offer_id].push(tx);
+    }
+
+    // Attach transactions to each offer
+    return mappedOffers.map(o => ({
+        ...o,
+        transactions: txMap[o.id] || []
+    }));
 };
 
 const getOfferById = async (id) => {
