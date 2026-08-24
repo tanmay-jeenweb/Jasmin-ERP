@@ -38,21 +38,6 @@ apiClient.interceptors.request.use(async (config) => {
     return Promise.reject(error);
 });
 
-// Queue to hold pending requests while token is refreshing
-let isRefreshing = false;
-let failedQueue = [];
-
-const processQueue = (error, token = null) => {
-    failedQueue.forEach(prom => {
-        if (error) {
-            prom.reject(error);
-        } else {
-            prom.resolve(token);
-        }
-    });
-    failedQueue = [];
-};
-
 // Response interceptor to handle 401 Unauthorized errors (expired tokens)
 apiClient.interceptors.response.use(
     (response) => {
@@ -72,55 +57,21 @@ apiClient.interceptors.response.use(
                 return Promise.reject(error);
             }
 
-            // If another request is currently refreshing the token, queue this request
-            if (isRefreshing) {
-                return new Promise((resolve, reject) => {
-                    failedQueue.push({ resolve, reject });
-                })
-                .then((token) => {
-                    originalRequest.headers.Authorization = `Bearer ${token}`;
-                    return apiClient(originalRequest);
-                })
-                .catch((err) => {
-                    return Promise.reject(err);
-                });
-            }
-
-            originalRequest._retry = true;
-            isRefreshing = true;
-
-            try {
-                // Call refresh token endpoint (sends HttpOnly cookie automatically)
-                const response = await apiClient.post("/auth/refresh");
-
-                if (response.data?.success) {
-                    const { token } = response.data;
-                    localStorage.setItem("token", token);
-                    
-                    // Retry original request with the new token
-                    originalRequest.headers.Authorization = `Bearer ${token}`;
-                    processQueue(null, token);
-                    return apiClient(originalRequest);
-                } else {
-                    throw new Error("Failed to refresh token");
-                }
-            } catch (refreshError) {
-                processQueue(refreshError, null);
-                // Clear all auth state immediately
-                localStorage.removeItem("token");
-                localStorage.removeItem("user");
-                sessionStorage.removeItem("loginTime");
-                sessionStorage.removeItem("alertShown");
-                // Notify React components so they unmount before redirect
-                window.dispatchEvent(new Event("auth-change"));
-                // Force redirect — use replace to prevent back-button returning to stale page
-                window.location.replace("/");
-                // Return a never-resolving promise so no component error handler
-                // runs and shows stale UI (e.g. "No records found") before the redirect
-                return new Promise(() => {});
-            } finally {
-                isRefreshing = false;
-            }
+            // Since refresh token logic is removed from the web app, we instantly log out the user on session expiration (401/403)
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+            sessionStorage.removeItem("loginTime");
+            sessionStorage.removeItem("alertShown");
+            
+            // Notify React components so they unmount before redirect
+            window.dispatchEvent(new Event("auth-change"));
+            
+            // Force redirect — use replace to prevent back-button returning to stale page
+            window.location.replace("/");
+            
+            // Return a never-resolving promise so no component error handler
+            // runs and shows stale UI (e.g. "No records found") before the redirect
+            return new Promise(() => {});
         }
 
         return Promise.reject(error);

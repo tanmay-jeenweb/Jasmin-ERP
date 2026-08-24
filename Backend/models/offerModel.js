@@ -28,6 +28,18 @@ const createOffersTable = async () => {
         // column modification may fail if schema is already modified
     }
 
+    // Migration to add state_ids JSON column if not present
+    try {
+        const [stateIdsCol] = await db.execute(`SHOW COLUMNS FROM offers LIKE 'state_ids'`);
+        if (!stateIdsCol || stateIdsCol.length === 0) {
+            console.log("Migrating offers schema: adding state_ids column...");
+            await db.execute(`ALTER TABLE offers ADD COLUMN state_ids JSON NULL`);
+            await db.execute(`UPDATE offers SET state_ids = JSON_ARRAY(state_id) WHERE state_ids IS NULL`);
+        }
+    } catch (err) {
+        console.error("Migration of offers table failed:", err.message);
+    }
+
     // Offer model groups junction table
     const createOfferModelGroupsQuery = `
         CREATE TABLE IF NOT EXISTS offer_model_groups (
@@ -65,8 +77,8 @@ const createOffer = async (offerData, modelGroups, transactions, addedBy, device
 
         const insertOfferQuery = `
             INSERT INTO offers (
-                brand_name, model_group_name, state_id, offer_type, from_date, to_date, added_by, device_id
-            ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?)
+                brand_name, model_group_name, state_id, offer_type, from_date, to_date, added_by, device_id, state_ids
+            ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)
         `;
         const [offerResult] = await conn.execute(insertOfferQuery, [
             offerData.brand_name,
@@ -75,7 +87,8 @@ const createOffer = async (offerData, modelGroups, transactions, addedBy, device
             offerData.from_date,
             offerData.to_date,
             addedBy,
-            deviceId
+            deviceId,
+            offerData.state_ids ? JSON.stringify(offerData.state_ids) : JSON.stringify([offerData.state_id])
         ]);
 
         const offerId = offerResult.insertId;
@@ -120,6 +133,37 @@ const createOffer = async (offerData, modelGroups, transactions, addedBy, device
     }
 };
 
+const mapOfferStates = async (offers) => {
+    const [states] = await db.execute("SELECT id, name FROM state_master");
+    const stateMap = new Map(states.map(s => [s.id, s.name]));
+
+    const processOffer = (o) => {
+        if (!o) return null;
+        let stateIds = [];
+        if (o.state_ids) {
+            try {
+                stateIds = typeof o.state_ids === 'string' ? JSON.parse(o.state_ids) : o.state_ids;
+            } catch (e) {
+                stateIds = [];
+            }
+        }
+        if (!Array.isArray(stateIds) || stateIds.length === 0) {
+            stateIds = o.state_id ? [o.state_id] : [];
+        }
+
+        const names = stateIds.map(id => stateMap.get(id)).filter(Boolean);
+        o.state_ids = stateIds;
+        o.state_name = names.join(", ") || o.state_name || "Unknown";
+        return o;
+    };
+
+    if (Array.isArray(offers)) {
+        return offers.map(processOffer);
+    } else {
+        return processOffer(offers);
+    }
+};
+
 const getAllOffers = async () => {
     const query = `
         SELECT
@@ -127,6 +171,7 @@ const getAllOffers = async () => {
             o.brand_name,
             GROUP_CONCAT(omg.model_group_name ORDER BY omg.model_group_name SEPARATOR ', ') AS model_group_name,
             o.state_id,
+            o.state_ids,
             sm.name AS state_name,
             o.offer_type,
             o.from_date,
@@ -142,7 +187,34 @@ const getAllOffers = async () => {
         ORDER BY o.timestamp DESC
     `;
     const [results] = await db.execute(query);
-    return results;
+    const mappedOffers = await mapOfferStates(results);
+
+    if (mappedOffers.length === 0) return [];
+
+    // Fetch all transactions for these offers
+    const offerIds = mappedOffers.map(o => o.id);
+    const placeholders = offerIds.map(() => '?').join(',');
+    const txQuery = `
+        SELECT *
+        FROM offer_transactions
+        WHERE offer_id IN (${placeholders})
+    `;
+    const [txRows] = await db.execute(txQuery, offerIds);
+
+    // Group transactions by offer_id
+    const txMap = {};
+    for (const tx of txRows) {
+        if (!txMap[tx.offer_id]) {
+            txMap[tx.offer_id] = [];
+        }
+        txMap[tx.offer_id].push(tx);
+    }
+
+    // Attach transactions to each offer
+    return mappedOffers.map(o => ({
+        ...o,
+        transactions: txMap[o.id] || []
+    }));
 };
 
 const getOfferById = async (id) => {
@@ -154,6 +226,9 @@ const getOfferById = async (id) => {
     `;
     const [offerRows] = await db.execute(offerQuery, [id]);
     if (offerRows.length === 0) return null;
+
+    const mappedOffers = await mapOfferStates(offerRows);
+    const offer = mappedOffers[0];
 
     // Fetch model groups
     const [mgRows] = await db.execute(
@@ -171,7 +246,7 @@ const getOfferById = async (id) => {
     const [txRows] = await db.execute(txQuery, [id]);
 
     return {
-        ...offerRows[0],
+        ...offer,
         model_groups,
         transactions: txRows
     };
@@ -190,7 +265,8 @@ const updateOffer = async (id, offerData, modelGroups, transactions, deviceId) =
                 offer_type = ?,
                 from_date = ?,
                 to_date = ?,
-                device_id = ?
+                device_id = ?,
+                state_ids = ?
             WHERE id = ?
         `;
         await conn.execute(updateOfferQuery, [
@@ -200,6 +276,7 @@ const updateOffer = async (id, offerData, modelGroups, transactions, deviceId) =
             offerData.from_date,
             offerData.to_date,
             deviceId,
+            offerData.state_ids ? JSON.stringify(offerData.state_ids) : JSON.stringify([offerData.state_id]),
             id
         ]);
 

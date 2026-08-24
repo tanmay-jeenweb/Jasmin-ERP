@@ -328,6 +328,23 @@ export default function AdminDashboard() {
             }
         },
         {
+            key: 'zone',
+            label: 'Zone',
+            render: (row) => {
+                if (!row.zone) return '—';
+                try {
+                    const arr = typeof row.zone === 'string' ? JSON.parse(row.zone) : row.zone;
+                    if (Array.isArray(arr)) {
+                        if (arr.includes('All')) return 'All';
+                        return arr.join(', ');
+                    }
+                    return String(row.zone);
+                } catch (e) {
+                    return String(row.zone);
+                }
+            }
+        },
+        {
             key: 'city',
             label: 'City',
             render: (row) => <span className="text-sm text-slate-600">{row.city || '—'}</span>

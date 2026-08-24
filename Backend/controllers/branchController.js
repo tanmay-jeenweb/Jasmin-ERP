@@ -12,7 +12,7 @@ const db = require('../config/db.js');
 
 const addBranchController = async (req, res) => {
     try {
-        const { name, code, phone, email, pincode, GSTIN, opened_on, store_type, state_id, city, address, abm, status } = req.body;
+        const { name, code, phone, email, pincode, GSTIN, opened_on, store_type, state_id, city, address, abm, status, branch_cls_05 } = req.body;
         const addedBy = req.user.id;
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
 
@@ -120,7 +120,7 @@ const getAllBranchesController = async (req, res) => {
 const updateBranchController = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, code, phone, email, pincode, GSTIN, opened_on, store_type, state_id, city, address, abm, status } = req.body;
+        const { name, code, phone, email, pincode, GSTIN, opened_on, store_type, state_id, city, address, abm, status, branch_cls_05 } = req.body;
 
         if (!name || !code || !phone || !email || !pincode || !GSTIN || !opened_on || !store_type || !state_id || !city || !address || !abm || !status) {
             return res.status(400).json({ success: false, message: 'All fields are required' });
@@ -262,7 +262,8 @@ const syncBranchesController = async (req, res) => {
                 city: item.BRANCH_CITY || '',
                 address: address,
                 abm: item.BRANCH_CLS_01 || '',
-                status: status
+                status: status,
+                branch_cls_05: item.BRANCH_CLS_05 || ''
             };
         }).filter(b => b.code);
 
