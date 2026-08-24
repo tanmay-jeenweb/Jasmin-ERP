@@ -28,7 +28,8 @@ export default function CreateBranch() {
     city: "",
     address: "",
     abm: "",
-    status: "active"
+    status: "active",
+    branch_cls_05: ""
   });
 
   const loadStates = async () => {
@@ -79,7 +80,8 @@ export default function CreateBranch() {
           city: branch.city || "",
           address: branch.address || "",
           abm: branch.abm || "",
-          status: branch.status || "active"
+          status: branch.status || "active",
+          branch_cls_05: branch.branch_cls_05 || ""
         });
       } else {
         toast.error("Branch not found");
@@ -146,6 +148,7 @@ export default function CreateBranch() {
     { label: "State", name: "state_id", type: "select", required: true, options: states.map(s => ({ value: s.id, label: s.name })), prompt: "Select a State" },
     { label: "City", name: "city", type: "text", required: true, placeholder: "e.g. Mumbai" },
     { label: "Area Branch Manager (ABM)", name: "abm", type: "select", required: true, options: abms.map(u => ({ value: u.name, label: `${u.name} (${u.username})` })), prompt: "Select an ABM" },
+    { label: "Zone", name: "branch_cls_05", type: "text", required: false, placeholder: "e.g. Central-Gujarat" },
     { label: "Status", name: "status", type: "select", required: true, options: [{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }] },
     { label: "Address", name: "address", type: "textarea", required: true, placeholder: "Full office/store address...", fullWidth: true }
   ];

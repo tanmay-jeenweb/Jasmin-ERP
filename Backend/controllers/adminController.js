@@ -28,7 +28,7 @@ const fetchUsers = async (req, res) => {
                 u.id, u.name, u.username, u.email, u.mob_no, u.role,
                 ut.type_name,
                 device_verification_required, u.active,
-                u.state, u.city, u.branch, u.product_type, u.landing_type,
+                u.state, u.city, u.branch, u.product_type, u.landing_type, u.zone,
                 (SELECT COUNT(*) FROM user_devices WHERE user_id = u.id AND status = 'approved' AND closed_at IS NULL) AS approved_devices_count,
                 (SELECT COUNT(*) FROM user_devices WHERE user_id = u.id AND status = 'pending' AND closed_at IS NULL) AS pending_devices_count
             FROM users u
@@ -67,7 +67,8 @@ const createUserByAdmin = async (req, res) => {
             landingType,
             brand,
             webAccess,
-            mobileAccess
+            mobileAccess,
+            zone
         } = req.body;
 
         if (!name || !username || !email || !password) {
@@ -94,7 +95,8 @@ const createUserByAdmin = async (req, res) => {
             brand || null,
             password,
             typeof webAccess === 'boolean' ? webAccess : true,
-            typeof mobileAccess === 'boolean' ? mobileAccess : true
+            typeof mobileAccess === 'boolean' ? mobileAccess : true,
+            zone || null
         );
 
         const adminDeviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
@@ -376,7 +378,8 @@ const updateUserBySuperAdmin = async (req, res) => {
             landingType,
             brand,
             webAccess,
-            mobileAccess
+            mobileAccess,
+            zone
         } = req.body;
 
         const [userRows] = await db.execute("SELECT * FROM users WHERE id = ?", [userId]);
@@ -406,6 +409,7 @@ const updateUserBySuperAdmin = async (req, res) => {
                 product_type = ?,
                 landing_type = ?,
                 brand = ?,
+                zone = ?,
                 web_access = ?,
                 mobile_access = ?
         `;
@@ -424,6 +428,7 @@ const updateUserBySuperAdmin = async (req, res) => {
             productType !== undefined ? (productType ? JSON.stringify(productType) : null) : currentUser.product_type,
             landingType !== undefined ? (landingType ? JSON.stringify(landingType) : null) : currentUser.landing_type,
             brand !== undefined ? (brand ? JSON.stringify(brand) : null) : currentUser.brand,
+            zone !== undefined ? (zone ? JSON.stringify(zone) : null) : currentUser.zone,
             webAccess !== undefined ? (webAccess ? 1 : 0) : currentUser.web_access,
             mobileAccess !== undefined ? (mobileAccess ? 1 : 0) : currentUser.mobile_access
         ];

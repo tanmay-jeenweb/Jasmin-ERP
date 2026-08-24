@@ -507,96 +507,101 @@ const getBrandWiseSalesController = async (req, res) => {
 
         let dbRows = [], dbSrnRows = [];
 
+        const stateFilter = req.query.state;
+        const zoneFilter = req.query.zone;
+
+        let statesList = [];
+        if (stateFilter && stateFilter !== 'All') {
+            statesList = stateFilter.split(',').map(s => s.trim()).filter(Boolean);
+        }
+
+        let zonesList = [];
+        if (zoneFilter && zoneFilter !== 'All') {
+            zonesList = zoneFilter.split(',').map(z => z.trim()).filter(Boolean);
+        }
+
         if (Array.isArray(allowedBranchCodes) && allowedBranchCodes.length === 0) {
             dbRows = [];
             dbSrnRows = [];
         } else if (allowedBranchCodes !== null) {
             const placeholders = allowedBranchCodes.map(() => '?').join(',');
+            
+            let queryInvoice = `SELECT sic.invoice_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
+                                FROM sales_invoice_cache sic
+                                INNER JOIN branch_master bm ON sic.branch_code = bm.code COLLATE utf8mb4_unicode_ci
+                                INNER JOIN state_master sm ON bm.state_id = sm.id
+                                WHERE sic.invoice_date BETWEEN ? AND ?
+                                  AND sic.record_type = 'INVOICE'
+                                  AND sic.invoice_no NOT LIKE 'ISBS%'
+                                  AND sic.branch_code IN (${placeholders})`;
 
-            if (req.query.state && req.query.state !== 'All') {
-                [dbRows] = await db.execute(
-                    `SELECT sic.invoice_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
-                     FROM sales_invoice_cache sic
-                     INNER JOIN branch_master bm ON sic.branch_code = bm.code
-                     INNER JOIN state_master sm ON bm.state_id = sm.id
-                     WHERE sic.invoice_date BETWEEN ? AND ?
-                       AND sic.record_type = 'INVOICE'
-                       AND sic.invoice_no NOT LIKE 'ISBS%'
-                       AND sm.name = ?
-                       AND sic.branch_code IN (${placeholders})`,
-                    [firstDayLastMonthStr, targetDateStr, req.query.state, ...allowedBranchCodes]
-                );
-                [dbSrnRows] = await db.execute(
-                    `SELECT sic.invoice_date AS sales_return_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
-                     FROM sales_invoice_cache sic
-                     INNER JOIN branch_master bm ON sic.branch_code = bm.code
-                     INNER JOIN state_master sm ON bm.state_id = sm.id
-                     WHERE sic.invoice_date BETWEEN ? AND ?
-                       AND sic.record_type = 'RETURN'
-                       AND sm.name = ?
-                       AND sic.branch_code IN (${placeholders})`,
-                    [firstDayLastMonthStr, targetDateStr, req.query.state, ...allowedBranchCodes]
-                );
-            } else {
-                [dbRows] = await db.execute(
-                    `SELECT invoice_date, item_code, item_model_name AS item_description, qty, amount AS net_amount
-                     FROM sales_invoice_cache
-                     WHERE invoice_date BETWEEN ? AND ?
-                       AND record_type = 'INVOICE'
-                       AND invoice_no NOT LIKE 'ISBS%'
-                       AND branch_code IN (${placeholders})`,
-                    [firstDayLastMonthStr, targetDateStr, ...allowedBranchCodes]
-                );
-                [dbSrnRows] = await db.execute(
-                    `SELECT invoice_date AS sales_return_date, item_code, item_model_name AS item_description, qty, amount AS net_amount
-                     FROM sales_invoice_cache
-                     WHERE invoice_date BETWEEN ? AND ?
-                       AND record_type = 'RETURN'
-                       AND branch_code IN (${placeholders})`,
-                    [firstDayLastMonthStr, targetDateStr, ...allowedBranchCodes]
-                );
+            let queryReturn = `SELECT sic.invoice_date AS sales_return_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
+                               FROM sales_invoice_cache sic
+                               INNER JOIN branch_master bm ON sic.branch_code = bm.code COLLATE utf8mb4_unicode_ci
+                               INNER JOIN state_master sm ON bm.state_id = sm.id
+                               WHERE sic.invoice_date BETWEEN ? AND ?
+                                 AND sic.record_type = 'RETURN'
+                                 AND sic.branch_code IN (${placeholders})`;
+
+            const invoiceParams = [firstDayLastMonthStr, targetDateStr, ...allowedBranchCodes];
+            const returnParams = [firstDayLastMonthStr, targetDateStr, ...allowedBranchCodes];
+
+            if (statesList.length > 0) {
+                const statePlaceholders = statesList.map(() => '?').join(',');
+                queryInvoice += ` AND sm.name IN (${statePlaceholders})`;
+                queryReturn += ` AND sm.name IN (${statePlaceholders})`;
+                invoiceParams.push(...statesList);
+                returnParams.push(...statesList);
             }
+
+            if (zonesList.length > 0) {
+                const zonePlaceholders = zonesList.map(() => '?').join(',');
+                queryInvoice += ` AND bm.branch_cls_05 IN (${zonePlaceholders})`;
+                queryReturn += ` AND bm.branch_cls_05 IN (${zonePlaceholders})`;
+                invoiceParams.push(...zonesList);
+                returnParams.push(...zonesList);
+            }
+
+            [dbRows] = await db.execute(queryInvoice, invoiceParams);
+            [dbSrnRows] = await db.execute(queryReturn, returnParams);
         } else {
             // Admin: all branches
-            if (req.query.state && req.query.state !== 'All') {
-                [dbRows] = await db.execute(
-                    `SELECT sic.invoice_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
-                     FROM sales_invoice_cache sic
-                     INNER JOIN branch_master bm ON sic.branch_code = bm.code
-                     INNER JOIN state_master sm ON bm.state_id = sm.id
-                     WHERE sic.invoice_date BETWEEN ? AND ?
-                       AND sic.record_type = 'INVOICE'
-                       AND sic.invoice_no NOT LIKE 'ISBS%'
-                       AND sm.name = ?`,
-                    [firstDayLastMonthStr, targetDateStr, req.query.state]
-                );
-                [dbSrnRows] = await db.execute(
-                    `SELECT sic.invoice_date AS sales_return_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
-                     FROM sales_invoice_cache sic
-                     INNER JOIN branch_master bm ON sic.branch_code = bm.code
-                     INNER JOIN state_master sm ON bm.state_id = sm.id
-                     WHERE sic.invoice_date BETWEEN ? AND ?
-                       AND sic.record_type = 'RETURN'
-                       AND sm.name = ?`,
-                    [firstDayLastMonthStr, targetDateStr, req.query.state]
-                );
-            } else {
-                [dbRows] = await db.execute(
-                    `SELECT invoice_date, item_code, item_model_name AS item_description, qty, amount AS net_amount
-                     FROM sales_invoice_cache
-                     WHERE invoice_date BETWEEN ? AND ?
-                       AND record_type = 'INVOICE'
-                       AND invoice_no NOT LIKE 'ISBS%'`,
-                    [firstDayLastMonthStr, targetDateStr]
-                );
-                [dbSrnRows] = await db.execute(
-                    `SELECT invoice_date AS sales_return_date, item_code, item_model_name AS item_description, qty, amount AS net_amount
-                     FROM sales_invoice_cache
-                     WHERE invoice_date BETWEEN ? AND ?
-                       AND record_type = 'RETURN'`,
-                    [firstDayLastMonthStr, targetDateStr]
-                );
+            let queryInvoice = `SELECT sic.invoice_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
+                                FROM sales_invoice_cache sic
+                                INNER JOIN branch_master bm ON sic.branch_code = bm.code COLLATE utf8mb4_unicode_ci
+                                INNER JOIN state_master sm ON bm.state_id = sm.id
+                                WHERE sic.invoice_date BETWEEN ? AND ?
+                                  AND sic.record_type = 'INVOICE'
+                                  AND sic.invoice_no NOT LIKE 'ISBS%'`;
+
+            let queryReturn = `SELECT sic.invoice_date AS sales_return_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
+                               FROM sales_invoice_cache sic
+                               INNER JOIN branch_master bm ON sic.branch_code = bm.code COLLATE utf8mb4_unicode_ci
+                               INNER JOIN state_master sm ON bm.state_id = sm.id
+                               WHERE sic.invoice_date BETWEEN ? AND ?
+                                 AND sic.record_type = 'RETURN'`;
+
+            const invoiceParams = [firstDayLastMonthStr, targetDateStr];
+            const returnParams = [firstDayLastMonthStr, targetDateStr];
+
+            if (statesList.length > 0) {
+                const statePlaceholders = statesList.map(() => '?').join(',');
+                queryInvoice += ` AND sm.name IN (${statePlaceholders})`;
+                queryReturn += ` AND sm.name IN (${statePlaceholders})`;
+                invoiceParams.push(...statesList);
+                returnParams.push(...statesList);
             }
+
+            if (zonesList.length > 0) {
+                const zonePlaceholders = zonesList.map(() => '?').join(',');
+                queryInvoice += ` AND bm.branch_cls_05 IN (${zonePlaceholders})`;
+                queryReturn += ` AND bm.branch_cls_05 IN (${zonePlaceholders})`;
+                invoiceParams.push(...zonesList);
+                returnParams.push(...zonesList);
+            }
+
+            [dbRows] = await db.execute(queryInvoice, invoiceParams);
+            [dbSrnRows] = await db.execute(queryReturn, returnParams);
         }
 
         // Initialize brand aggregation map with standard brands
@@ -816,96 +821,101 @@ const getBrandWiseSalesTotalsController = async (req, res) => {
 
         let dbRows = [], dbSrnRows = [];
 
+        const stateFilter = req.query.state;
+        const zoneFilter = req.query.zone;
+
+        let statesList = [];
+        if (stateFilter && stateFilter !== 'All') {
+            statesList = stateFilter.split(',').map(s => s.trim()).filter(Boolean);
+        }
+
+        let zonesList = [];
+        if (zoneFilter && zoneFilter !== 'All') {
+            zonesList = zoneFilter.split(',').map(z => z.trim()).filter(Boolean);
+        }
+
         if (Array.isArray(allowedBranchCodes) && allowedBranchCodes.length === 0) {
             dbRows = [];
             dbSrnRows = [];
         } else if (allowedBranchCodes !== null) {
             const placeholders = allowedBranchCodes.map(() => '?').join(',');
+            
+            let queryInvoice = `SELECT sic.invoice_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
+                                FROM sales_invoice_cache sic
+                                INNER JOIN branch_master bm ON sic.branch_code = bm.code COLLATE utf8mb4_unicode_ci
+                                INNER JOIN state_master sm ON bm.state_id = sm.id
+                                WHERE sic.invoice_date BETWEEN ? AND ?
+                                  AND sic.record_type = 'INVOICE'
+                                  AND sic.invoice_no NOT LIKE 'ISBS%'
+                                  AND sic.branch_code IN (${placeholders})`;
 
-            if (req.query.state && req.query.state !== 'All') {
-                [dbRows] = await db.execute(
-                    `SELECT sic.invoice_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
-                     FROM sales_invoice_cache sic
-                     INNER JOIN branch_master bm ON sic.branch_code = bm.code
-                     INNER JOIN state_master sm ON bm.state_id = sm.id
-                     WHERE sic.invoice_date BETWEEN ? AND ?
-                       AND sic.record_type = 'INVOICE'
-                       AND sic.invoice_no NOT LIKE 'ISBS%'
-                       AND sm.name = ?
-                       AND sic.branch_code IN (${placeholders})`,
-                    [firstDayLastMonthStr, targetDateStr, req.query.state, ...allowedBranchCodes]
-                );
-                [dbSrnRows] = await db.execute(
-                    `SELECT sic.invoice_date AS sales_return_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
-                     FROM sales_invoice_cache sic
-                     INNER JOIN branch_master bm ON sic.branch_code = bm.code
-                     INNER JOIN state_master sm ON bm.state_id = sm.id
-                     WHERE sic.invoice_date BETWEEN ? AND ?
-                       AND sic.record_type = 'RETURN'
-                       AND sm.name = ?
-                       AND sic.branch_code IN (${placeholders})`,
-                    [firstDayLastMonthStr, targetDateStr, req.query.state, ...allowedBranchCodes]
-                );
-            } else {
-                [dbRows] = await db.execute(
-                    `SELECT invoice_date, item_code, item_model_name AS item_description, qty, amount AS net_amount
-                     FROM sales_invoice_cache
-                     WHERE invoice_date BETWEEN ? AND ?
-                       AND record_type = 'INVOICE'
-                       AND invoice_no NOT LIKE 'ISBS%'
-                       AND branch_code IN (${placeholders})`,
-                    [firstDayLastMonthStr, targetDateStr, ...allowedBranchCodes]
-                );
-                [dbSrnRows] = await db.execute(
-                    `SELECT invoice_date AS sales_return_date, item_code, item_model_name AS item_description, qty, amount AS net_amount
-                     FROM sales_invoice_cache
-                     WHERE invoice_date BETWEEN ? AND ?
-                       AND record_type = 'RETURN'
-                       AND branch_code IN (${placeholders})`,
-                    [firstDayLastMonthStr, targetDateStr, ...allowedBranchCodes]
-                );
+            let queryReturn = `SELECT sic.invoice_date AS sales_return_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
+                               FROM sales_invoice_cache sic
+                               INNER JOIN branch_master bm ON sic.branch_code = bm.code COLLATE utf8mb4_unicode_ci
+                               INNER JOIN state_master sm ON bm.state_id = sm.id
+                               WHERE sic.invoice_date BETWEEN ? AND ?
+                                 AND sic.record_type = 'RETURN'
+                                 AND sic.branch_code IN (${placeholders})`;
+
+            const invoiceParams = [firstDayLastMonthStr, targetDateStr, ...allowedBranchCodes];
+            const returnParams = [firstDayLastMonthStr, targetDateStr, ...allowedBranchCodes];
+
+            if (statesList.length > 0) {
+                const statePlaceholders = statesList.map(() => '?').join(',');
+                queryInvoice += ` AND sm.name IN (${statePlaceholders})`;
+                queryReturn += ` AND sm.name IN (${statePlaceholders})`;
+                invoiceParams.push(...statesList);
+                returnParams.push(...statesList);
             }
+
+            if (zonesList.length > 0) {
+                const zonePlaceholders = zonesList.map(() => '?').join(',');
+                queryInvoice += ` AND bm.branch_cls_05 IN (${zonePlaceholders})`;
+                queryReturn += ` AND bm.branch_cls_05 IN (${zonePlaceholders})`;
+                invoiceParams.push(...zonesList);
+                returnParams.push(...zonesList);
+            }
+
+            [dbRows] = await db.execute(queryInvoice, invoiceParams);
+            [dbSrnRows] = await db.execute(queryReturn, returnParams);
         } else {
             // Admin: all branches
-            if (req.query.state && req.query.state !== 'All') {
-                [dbRows] = await db.execute(
-                    `SELECT sic.invoice_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
-                     FROM sales_invoice_cache sic
-                     INNER JOIN branch_master bm ON sic.branch_code = bm.code
-                     INNER JOIN state_master sm ON bm.state_id = sm.id
-                     WHERE sic.invoice_date BETWEEN ? AND ?
-                       AND sic.record_type = 'INVOICE'
-                       AND sic.invoice_no NOT LIKE 'ISBS%'
-                       AND sm.name = ?`,
-                    [firstDayLastMonthStr, targetDateStr, req.query.state]
-                );
-                [dbSrnRows] = await db.execute(
-                    `SELECT sic.invoice_date AS sales_return_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
-                     FROM sales_invoice_cache sic
-                     INNER JOIN branch_master bm ON sic.branch_code = bm.code
-                     INNER JOIN state_master sm ON bm.state_id = sm.id
-                     WHERE sic.invoice_date BETWEEN ? AND ?
-                       AND sic.record_type = 'RETURN'
-                       AND sm.name = ?`,
-                    [firstDayLastMonthStr, targetDateStr, req.query.state]
-                );
-            } else {
-                [dbRows] = await db.execute(
-                    `SELECT invoice_date, item_code, item_model_name AS item_description, qty, amount AS net_amount
-                     FROM sales_invoice_cache
-                     WHERE invoice_date BETWEEN ? AND ?
-                       AND record_type = 'INVOICE'
-                       AND invoice_no NOT LIKE 'ISBS%'`,
-                    [firstDayLastMonthStr, targetDateStr]
-                );
-                [dbSrnRows] = await db.execute(
-                    `SELECT invoice_date AS sales_return_date, item_code, item_model_name AS item_description, qty, amount AS net_amount
-                     FROM sales_invoice_cache
-                     WHERE invoice_date BETWEEN ? AND ?
-                       AND record_type = 'RETURN'`,
-                    [firstDayLastMonthStr, targetDateStr]
-                );
+            let queryInvoice = `SELECT sic.invoice_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
+                                FROM sales_invoice_cache sic
+                                INNER JOIN branch_master bm ON sic.branch_code = bm.code COLLATE utf8mb4_unicode_ci
+                                INNER JOIN state_master sm ON bm.state_id = sm.id
+                                WHERE sic.invoice_date BETWEEN ? AND ?
+                                  AND sic.record_type = 'INVOICE'
+                                  AND sic.invoice_no NOT LIKE 'ISBS%'`;
+
+            let queryReturn = `SELECT sic.invoice_date AS sales_return_date, sic.item_code, sic.item_model_name AS item_description, sic.qty, sic.amount AS net_amount
+                               FROM sales_invoice_cache sic
+                               INNER JOIN branch_master bm ON sic.branch_code = bm.code COLLATE utf8mb4_unicode_ci
+                               INNER JOIN state_master sm ON bm.state_id = sm.id
+                               WHERE sic.invoice_date BETWEEN ? AND ?
+                                 AND sic.record_type = 'RETURN'`;
+
+            const invoiceParams = [firstDayLastMonthStr, targetDateStr];
+            const returnParams = [firstDayLastMonthStr, targetDateStr];
+
+            if (statesList.length > 0) {
+                const statePlaceholders = statesList.map(() => '?').join(',');
+                queryInvoice += ` AND sm.name IN (${statePlaceholders})`;
+                queryReturn += ` AND sm.name IN (${statePlaceholders})`;
+                invoiceParams.push(...statesList);
+                returnParams.push(...statesList);
             }
+
+            if (zonesList.length > 0) {
+                const zonePlaceholders = zonesList.map(() => '?').join(',');
+                queryInvoice += ` AND bm.branch_cls_05 IN (${zonePlaceholders})`;
+                queryReturn += ` AND bm.branch_cls_05 IN (${zonePlaceholders})`;
+                invoiceParams.push(...zonesList);
+                returnParams.push(...zonesList);
+            }
+
+            [dbRows] = await db.execute(queryInvoice, invoiceParams);
+            [dbSrnRows] = await db.execute(queryReturn, returnParams);
         }
 
         // 4. Accumulate totals directly (no brand map needed)

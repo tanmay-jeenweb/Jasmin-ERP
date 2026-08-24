@@ -29,14 +29,18 @@ export default function TargetVsAchievement() {
   const fileInputRef = useRef(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
+  const filtersRef = useRef(null);
 
   // Filter States
+  const [branches, setBranches] = useState([]);
   const [selectedBranches, setSelectedBranches] = useState([]);
   const [selectedAbms, setSelectedAbms] = useState([]);
   const [selectedStates, setSelectedStates] = useState([]);
+  const [selectedZones, setSelectedZones] = useState([]);
   const [branchSearchText, setBranchSearchText] = useState("");
   const [abmSearchText, setAbmSearchText] = useState("");
   const [stateSearchText, setStateSearchText] = useState("");
+  const [zoneSearchText, setZoneSearchText] = useState("");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const totalActiveFilters = useMemo(() => {
@@ -44,17 +48,46 @@ export default function TargetVsAchievement() {
     if (selectedStates.length > 0) count += 1;
     if (selectedBranches.length > 0) count += 1;
     if (selectedAbms.length > 0) count += 1;
+    if (selectedZones.length > 0) count += 1;
     return count;
-  }, [selectedStates, selectedBranches, selectedAbms]);
+  }, [selectedStates, selectedBranches, selectedAbms, selectedZones]);
 
   const handleClearAllFilters = () => {
     setSelectedStates([]);
     setSelectedBranches([]);
     setSelectedAbms([]);
+    setSelectedZones([]);
     setStateSearchText("");
     setBranchSearchText("");
     setAbmSearchText("");
+    setZoneSearchText("");
   };
+
+  const [rightOffset, setRightOffset] = useState(0);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (isFilterOpen && filtersRef.current) {
+        const rect = filtersRef.current.getBoundingClientRect();
+        const buttonRight = rect.right;
+        const leftEdge = buttonRight - 960;
+        if (leftEdge < 24) {
+          const shift = 24 - leftEdge;
+          setRightOffset(-shift);
+        } else {
+          setRightOffset(0);
+        }
+      }
+    };
+
+    if (isFilterOpen) {
+      handleResize();
+      window.addEventListener("resize", handleResize);
+    }
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [isFilterOpen]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -86,6 +119,9 @@ export default function TargetVsAchievement() {
 
   useEffect(() => {
     loadData();
+    getBranches()
+      .then(res => setBranches(res.data.data || []))
+      .catch(err => console.error("Failed to load branches for zones filter", err));
   }, []);
 
   const handleExport = async () => {
@@ -622,15 +658,28 @@ export default function TargetVsAchievement() {
     return Array.from(new Set(list)).sort((a, b) => a.localeCompare(b));
   }, [data]);
 
+  // Extract unique Zones based on user states permission / selectedStates filter
+  const uniqueZones = useMemo(() => {
+    let filteredBranches = branches;
+    if (selectedStates.length > 0) {
+      filteredBranches = branches.filter(b => b.state_name && selectedStates.includes(b.state_name));
+    }
+    const list = filteredBranches
+      .map(b => b.branch_cls_05)
+      .filter(zone => zone && zone.trim() !== "");
+    return Array.from(new Set(list)).sort((a, b) => a.localeCompare(b));
+  }, [branches, selectedStates]);
+
   // Filtered dataset
   const filteredData = useMemo(() => {
     return data.filter(item => {
       const branchMatch = selectedBranches.length === 0 || selectedBranches.includes(item.branch_name);
       const abmMatch = selectedAbms.length === 0 || selectedAbms.includes(item.abm_name);
       const stateMatch = selectedStates.length === 0 || selectedStates.includes(item.state_name);
-      return branchMatch && abmMatch && stateMatch;
+      const zoneMatch = selectedZones.length === 0 || (item.zone && selectedZones.includes(item.zone));
+      return branchMatch && abmMatch && stateMatch && zoneMatch;
     });
-  }, [data, selectedBranches, selectedAbms, selectedStates]);
+  }, [data, selectedBranches, selectedAbms, selectedStates, selectedZones]);
 
   // Add serial number (Sr. No) sequentially based on row index
   const formattedData = useMemo(() => {
@@ -652,6 +701,12 @@ export default function TargetVsAchievement() {
       label: "Branch Name",
       minWidth: "150px",
       render: (row) => <span className="font-bold text-slate-800">{row.branch_name || "—"}</span>
+    },
+    {
+      key: "zone",
+      label: "Zone",
+      minWidth: "120px",
+      render: (row) => <span className="text-slate-600">{row.zone || "—"}</span>
     },
     {
       key: "abm_name",
@@ -788,7 +843,7 @@ export default function TargetVsAchievement() {
   // Filters Component
   const filtersElement = (
     <div className="flex flex-wrap items-center gap-3">
-      <div className="relative">
+      <div className="relative" ref={filtersRef}>
         <button
           type="button"
           onClick={() => setIsFilterOpen(!isFilterOpen)}
@@ -807,8 +862,14 @@ export default function TargetVsAchievement() {
 
         {isFilterOpen && (
           <>
-            <div className="fixed inset-0 z-45" onClick={() => setIsFilterOpen(false)}></div>
-            <div className="absolute right-0 mt-1.5 w-[750px] max-w-[90vw] rounded-xl border border-slate-200 bg-white shadow-2xl p-4 z-50 flex flex-col gap-4">
+            {/* Transparent backdrop to detect click outside */}
+            <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setIsFilterOpen(false)}></div>
+            
+            {/* Absolute Dropdown Box */}
+            <div
+              className="absolute mt-1.5 w-[960px] max-w-[calc(100vw-48px)] rounded-2xl border border-slate-200 bg-white shadow-2xl p-5 z-50 flex flex-col gap-4"
+              style={{ right: `${rightOffset}px` }}
+            >
               {/* Header */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                 <span className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
@@ -817,22 +878,24 @@ export default function TargetVsAchievement() {
                   </svg>
                   Filter Options
                 </span>
-                {totalActiveFilters > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleClearAllFilters}
-                    className="bg-transparent border-none cursor-pointer text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
-                    </svg>
-                    Clear All
-                  </button>
-                )}
+                <div className="flex items-center gap-4">
+                  {totalActiveFilters > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAllFilters}
+                      className="bg-transparent border-none cursor-pointer text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                      </svg>
+                      Clear All
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* 3-Column Layout */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* 4-Column Layout */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
                 
                 {/* Column 1: States */}
                 <div className="flex flex-col md:border-r md:border-slate-100 pr-2">
@@ -902,14 +965,81 @@ export default function TargetVsAchievement() {
                   </div>
                 </div>
 
-                {/* Column 2: Branches */}
+                {/* Column 2: Zones */}
+                <div className="flex flex-col md:border-r md:border-slate-100 pr-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">Zones</span>
+                    <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-semibold">
+                      {selectedZones.length === 0 ? "All" : selectedZones.length}
+                    </span>
+                  </div>
+                  
+                  {/* Search box */}
+                  <div className="px-2 py-1.5 border border-slate-200 rounded-lg flex items-center gap-1.5 mb-2 bg-slate-50">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.602 10.602Z" />
+                    </svg>
+                    <input
+                      type="text"
+                      placeholder="Search zones..."
+                      value={zoneSearchText}
+                      onChange={(e) => setZoneSearchText(e.target.value)}
+                      className="w-full text-xs border-none outline-none bg-transparent"
+                    />
+                  </div>
+
+                  {/* Bulk Actions */}
+                  <div className="flex justify-between items-center text-[10px] font-bold text-indigo-650 mb-2 px-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedZones(uniqueZones)}
+                      className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedZones([])}
+                      className="bg-transparent border-none cursor-pointer hover:underline text-indigo-600 font-semibold"
+                    >
+                      Deselect All
+                    </button>
+                  </div>
+
+                  {/* Checklist */}
+                  <div className="max-h-48 overflow-y-auto px-1 py-1 space-y-0.5 border border-slate-100 rounded-lg">
+                    {uniqueZones
+                      .filter(name => name.toLowerCase().includes(zoneSearchText.toLowerCase()))
+                      .map(zoneName => {
+                        const isChecked = selectedZones.includes(zoneName);
+                        return (
+                          <label key={zoneName} className="flex items-center gap-2 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 rounded cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                if (isChecked) {
+                                  setSelectedZones(selectedZones.filter(name => name !== zoneName));
+                                } else {
+                                  setSelectedZones([...selectedZones, zoneName]);
+                                }
+                              }}
+                              className="accent-[#6804a1] h-3.5 w-3.5 flex-shrink-0"
+                            />
+                            <span className="truncate">{zoneName}</span>
+                          </label>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                {/* Column 3: Branches */}
                 <div className="flex flex-col md:border-r md:border-slate-100 pr-2">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">Branches</span>
                     <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-semibold">
                       {selectedBranches.length === 0 ? "All" : selectedBranches.length}
-                    </span>
-                  </div>
+                    </span>                  </div>
                   
                   {/* Search box */}
                   <div className="px-2 py-1.5 border border-slate-200 rounded-lg flex items-center gap-1.5 mb-2 bg-slate-50">
@@ -970,7 +1100,7 @@ export default function TargetVsAchievement() {
                   </div>
                 </div>
 
-                {/* Column 3: ABMs */}
+                {/* Column 4: ABMs */}
                 <div className="flex flex-col">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">ABMs</span>
@@ -1039,6 +1169,18 @@ export default function TargetVsAchievement() {
                 </div>
 
               </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end border-t border-slate-100 pt-3 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsFilterOpen(false)}
+                  className="px-5 py-2 bg-[#6804a1] hover:bg-[#52037e] text-white text-sm font-semibold rounded-lg shadow transition-colors cursor-pointer"
+                >
+                  Apply Filters
+                </button>
+              </div>
+
             </div>
           </>
         )}
