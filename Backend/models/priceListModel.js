@@ -1,10 +1,28 @@
 const db = require('../config/db.js');
+const { getSetting } = require('./settingModel.js');
+
+const filterByIcatSettings = async (records) => {
+    if (!records || records.length === 0) return records;
+    try {
+        const rawSettings = await getSetting('icat_settings');
+        if (!rawSettings) return records;
+        const settings = JSON.parse(rawSettings);
+        return records.filter(row => {
+            const icat = row.icat_name;
+            if (!icat) return true;
+            return settings[icat] !== false;
+        });
+    } catch (error) {
+        console.error('Error filtering records by ICAT settings:', error);
+        return records;
+    }
+};
 
 const getPriceListData = async (variationId) => {
     const tableName = `price_list_format_${variationId}`;
     const query = `SELECT * FROM \`${tableName}\` ORDER BY brand ASC, model_name ASC`;
     const [results] = await db.execute(query);
-    return results;
+    return filterByIcatSettings(results);
 };
 
 const sanitize = (name) => {
@@ -369,7 +387,7 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
         active_offers: offersByGroup[rec.model_group_name] || []
     }));
 
-    return reportData;
+    return filterByIcatSettings(reportData);
 };
 
 module.exports = {

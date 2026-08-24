@@ -288,6 +288,15 @@ export default function Navbar() {
             color: "bg-indigo-50 text-indigo-600 border border-indigo-100/50",
             activeColor: "bg-indigo-100 text-indigo-700",
             desc: "Map branches to active users"
+        },
+        {
+            name: "Settings Master",
+            path: "/admin/settings/icat",
+            masterKey: "price_list",
+            icon: "fa-solid fa-sliders",
+            color: "bg-amber-50 text-amber-600 border border-amber-100/50",
+            activeColor: "bg-amber-100 text-amber-700",
+            desc: "Configure Price List exclusions"
         }
     ];
 
@@ -552,8 +561,8 @@ export default function Navbar() {
                                 </button>
 
                                 {isOpen && (
-                                    <div className="absolute left-0 top-full mt-1.5 w-140 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
-                                        <div className="grid grid-cols-2 gap-1.5">
+                                    <div className="absolute left-0 top-full mt-1.5 w-[760px] max-w-[90vw] bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
                                             {availableMasters.map((m, idx) => {
                                                 const isActive = location.pathname === m.path;
                                                 return (

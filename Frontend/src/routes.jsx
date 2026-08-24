@@ -40,6 +40,7 @@ import PricingFormulaForm from "./pages/admin/PricingFormulaForm";
 import PriceListData from "./pages/admin/PriceListData";
 import PriceListReport from "./pages/admin/PriceListReport";
 import PriceListView from "./pages/admin/PriceListView";
+import IcatSettingsForm from "./pages/admin/IcatSettingsForm";
 
 
 export default function AppRoutes() {
@@ -290,6 +291,10 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/price-list/:variationId"
                     element={<PriceListData />}
+                />
+                <Route
+                    path="/admin/settings/icat"
+                    element={<IcatSettingsForm />}
                 />
             </Route>
 
