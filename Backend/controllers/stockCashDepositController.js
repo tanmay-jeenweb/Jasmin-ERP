@@ -3,7 +3,8 @@ const {
     importStockCashDepositData, 
     importCurrentStockData,
     importOpeningCashAndCreditData,
-    importCashDepositData
+    importCashDepositData,
+    updateStockCashDepositRecordData
 } = require('../models/stockCashDepositModel.js');
 
 const db = require('../config/db.js');
@@ -356,11 +357,67 @@ const getAbmWiseCashDepositReportController = async (req, res) => {
     }
 };
 
+const updateStockCashDepositRecordController = async (req, res) => {
+    try {
+        const { branchId } = req.params;
+        const data = req.body;
+        
+        if (!branchId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Branch ID is required.'
+            });
+        }
+
+        // Perform update / upsert
+        await updateStockCashDepositRecordData(branchId, data);
+
+        // Audit Log
+        try {
+            const addedBy = req.user.id;
+            const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+            
+            // Get branch name for logging
+            const [branchRows] = await db.execute("SELECT name FROM branch_master WHERE id = ?", [branchId]);
+            const branchName = branchRows.length > 0 ? branchRows[0].name : `Branch ID ${branchId}`;
+
+            await createAuditLog(
+                addedBy,
+                req.user?.name || req.user?.username || 'Unknown',
+                deviceId,
+                'Stock vs Cash Deposit Edit',
+                'updated',
+                null,
+                {
+                    branch_id: branchId,
+                    branch_name: branchName,
+                    updated_fields: data,
+                    updated_at: new Date().toISOString()
+                }
+            );
+        } catch (auditErr) {
+            console.error("Failed to write audit log for Stock vs Cash Deposit edit:", auditErr);
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Stock vs Cash Deposit record updated successfully.'
+        });
+    } catch (error) {
+        console.error('Error updating Stock vs Cash Deposit record:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update record'
+        });
+    }
+};
+
 module.exports = {
     getStockCashDepositReportController,
     importStockCashDepositController,
     importCurrentStockController,
     importOpeningCashAndCreditController,
     importCashDepositController,
-    getAbmWiseCashDepositReportController
+    getAbmWiseCashDepositReportController,
+    updateStockCashDepositRecordController
 };

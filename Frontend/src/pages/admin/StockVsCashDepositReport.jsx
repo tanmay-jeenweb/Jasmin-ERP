@@ -5,7 +5,8 @@ import {
   importStockCashDepositReport,
   importCurrentStockReport,
   importOpeningCashAndCreditReport,
-  importCashDepositReport
+  importCashDepositReport,
+  updateStockCashDepositRecord
 } from "../../api/stockCashDepositApi";
 import DataTable from "../../components/DataTable";
 import * as XLSX from "xlsx-js-style";
@@ -18,6 +19,71 @@ export default function StockVsCashDepositReport() {
   const canWriteOrUpdate = isAdmin || hasPermission("stock_vs_cash_deposit", "write") || hasPermission("stock_vs_cash_deposit", "update");
 
   const [data, setData] = useState([]);
+  
+  // Edit Record States
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingRow, setEditingRow] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    stock_deposit: 0,
+    support: 0,
+    paid_support: 0,
+    current_stock: 0,
+    opening_cash_deposit_pending: 0,
+    cash_deposit: 0,
+    credit_debit: 0
+  });
+  const [updatingRecord, setUpdatingRecord] = useState(false);
+
+  const handleEditClick = (row) => {
+    setEditingRow(row);
+    setEditFormData({
+      stock_deposit: row.stock_deposit || 0,
+      support: row.support || 0,
+      paid_support: row.paid_support || 0,
+      current_stock: row.current_stock || 0,
+      opening_cash_deposit_pending: row.opening_cash_deposit_pending || 0,
+      cash_deposit: row.cash_deposit || 0,
+      credit_debit: row.credit_debit || 0
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditFormData(prev => ({
+      ...prev,
+      [name]: value === "" ? "" : Number(value)
+    }));
+  };
+
+  const handleEditFormSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingRow || !editingRow.id) return;
+
+    setUpdatingRecord(true);
+    try {
+      const payload = {
+        stock_deposit: Number(editFormData.stock_deposit) || 0,
+        support: Number(editFormData.support) || 0,
+        paid_support: Number(editFormData.paid_support) || 0,
+        current_stock: Number(editFormData.current_stock) || 0,
+        opening_cash_deposit_pending: Number(editFormData.opening_cash_deposit_pending) || 0,
+        cash_deposit: Number(editFormData.cash_deposit) || 0,
+        credit_debit: Number(editFormData.credit_debit) || 0,
+      };
+
+      await updateStockCashDepositRecord(editingRow.id, payload);
+      toast.success("Stock vs Cash Deposit details updated successfully!");
+      setIsEditModalOpen(false);
+      setEditingRow(null);
+      loadData();
+    } catch (err) {
+      console.error("Failed to update stock vs cash deposit details", err);
+      toast.error(err.response?.data?.message || "Failed to update record. Please try again.");
+    } finally {
+      setUpdatingRecord(false);
+    }
+  };
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [exporting, setExporting] = useState(false);
@@ -1046,126 +1112,153 @@ export default function StockVsCashDepositReport() {
     return [...base, totalRow];
   }, [filteredData, totals]);
 
-  const columns = useMemo(() => [
-    {
-      key: "sr_no",
-      label: "Sr. No",
-      minWidth: "70px",
-      render: (row) => <span className={`font-semibold ${row.id === "Total" ? "text-slate-900 font-bold" : "text-slate-500"}`}>{row.sr_no}</span>
-    },
-    {
-      key: "branch_name",
-      label: "Branch Name",
-      minWidth: "150px",
-      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "font-bold text-slate-800"}>{row.branch_name || "—"}</span>
-    },
-    {
-      key: "state_name",
-      label: "State",
-      minWidth: "120px",
-      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "font-semibold text-slate-700"}>{row.state_name || "—"}</span>
-    },
-    {
-      key: "city",
-      label: "City",
-      minWidth: "120px",
-      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-700"}>{row.city || "—"}</span>
-    },
-    {
-      key: "abm_name",
-      label: "ABM Name",
-      minWidth: "150px",
-      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "font-semibold text-indigo-700"}>{row.abm_name || "—"}</span>
-    },
-    {
-      key: "store_type",
-      label: "Store Type",
-      minWidth: "110px",
-      render: (row) => {
-        if (row.id === "Total") return "";
-        return (
-          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${row.store_type === 'branch' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-orange-50 text-orange-700 border border-orange-200'
-            }`}>
-            {row.store_type ? row.store_type.toUpperCase() : "—"}
-          </span>
-        );
+  const columns = useMemo(() => {
+    const baseCols = [
+      {
+        key: "sr_no",
+        label: "Sr. No",
+        minWidth: "70px",
+        render: (row) => <span className={`font-semibold ${row.id === "Total" ? "text-slate-900 font-bold" : "text-slate-500"}`}>{row.sr_no}</span>
+      },
+      {
+        key: "branch_name",
+        label: "Branch Name",
+        minWidth: "150px",
+        render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "font-bold text-slate-800"}>{row.branch_name || "—"}</span>
+      },
+      {
+        key: "state_name",
+        label: "State",
+        minWidth: "120px",
+        render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "font-semibold text-slate-700"}>{row.state_name || "—"}</span>
+      },
+      {
+        key: "city",
+        label: "City",
+        minWidth: "120px",
+        render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-700"}>{row.city || "—"}</span>
+      },
+      {
+        key: "abm_name",
+        label: "ABM Name",
+        minWidth: "150px",
+        render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "font-semibold text-indigo-700"}>{row.abm_name || "—"}</span>
+      },
+      {
+        key: "store_type",
+        label: "Store Type",
+        minWidth: "110px",
+        render: (row) => {
+          if (row.id === "Total") return "";
+          return (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${row.store_type === 'branch' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-orange-50 text-orange-700 border border-orange-200'
+              }`}>
+              {row.store_type ? row.store_type.toUpperCase() : "—"}
+            </span>
+          );
+        }
+      },
+      {
+        key: "status",
+        label: "Status",
+        minWidth: "100px",
+        render: (row) => {
+          if (row.id === "Total") return "";
+          return (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${row.status === 'active' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+              }`}>
+              {row.status ? row.status.toUpperCase() : "—"}
+            </span>
+          );
+        }
+      },
+      {
+        key: "stock_deposit",
+        label: "Stock Deposit",
+        minWidth: "130px",
+        render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900 text-sm" : "font-medium text-slate-700"}>{formatVal(row.stock_deposit)}</span>
+      },
+      {
+        key: "support",
+        label: "Support (20%)",
+        minWidth: "120px",
+        render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900 text-sm" : "font-medium text-slate-700"}>{formatVal(row.support)}</span>
+      },
+      {
+        key: "paid_support",
+        label: "Paid Support",
+        minWidth: "130px",
+        render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900 text-sm" : "font-medium text-slate-700"}>{formatVal(row.paid_support)}</span>
+      },
+      {
+        key: "total_stock_invest",
+        label: "Total Stock Invest",
+        minWidth: "150px",
+        render: (row) => <span className={row.id === "Total" ? "font-extrabold text-blue-900 text-sm" : "font-bold text-blue-700"}>{formatVal(row.total_stock_invest)}</span>
+      },
+      {
+        key: "current_stock",
+        label: "Current Stock",
+        minWidth: "130px",
+        render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900 text-sm" : "font-medium text-slate-700"}>{formatVal(row.current_stock)}</span>
+      },
+      {
+        key: `opening_cash_deposit_pending`,
+        label: `(${new Date().toISOString().split('T')[0]}) Opening Cash Deposit Pending`,
+        minWidth: "220px",
+        render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900 text-sm" : "font-medium text-slate-700"}>{formatVal(row.opening_cash_deposit_pending)}</span>
+      },
+      {
+        key: "cash_deposit",
+        label: `(${new Date().toISOString().split('T')[0]}) Cash Deposit`,
+        minWidth: "130px",
+        render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900 text-sm" : "font-medium text-slate-700"}>{formatVal(row.cash_deposit)}</span>
+      },
+      {
+        key: "pending_cash_deposit",
+        label: `(${new Date().toISOString().split('T')[0]}) Pending Cash Deposit`,
+        minWidth: "170px",
+        render: (row) => <span className={row.id === "Total" ? "font-extrabold text-amber-900 text-sm" : "font-semibold text-amber-700"}>{formatVal(row.pending_cash_deposit)}</span>
+      },
+      {
+        key: "credit_debit",
+        label: "Credit / Debit",
+        minWidth: "130px",
+        render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900 text-sm" : "font-medium text-slate-700"}>{formatVal(row.credit_debit)}</span>
+      },
+      {
+        key: "available_limit",
+        label: "Available Limit with Cash Deposit",
+        minWidth: "240px",
+        render: (row) => <span className={row.id === "Total" ? "font-extrabold text-emerald-900 text-sm" : "font-bold text-emerald-700"}>{formatVal(row.available_limit)}</span>
       }
-    },
-    {
-      key: "status",
-      label: "Status",
-      minWidth: "100px",
-      render: (row) => {
-        if (row.id === "Total") return "";
-        return (
-          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${row.status === 'active' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
-            }`}>
-            {row.status ? row.status.toUpperCase() : "—"}
-          </span>
-        );
-      }
-    },
-    {
-      key: "stock_deposit",
-      label: "Stock Deposit",
-      minWidth: "130px",
-      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900 text-sm" : "font-medium text-slate-700"}>{formatVal(row.stock_deposit)}</span>
-    },
-    {
-      key: "support",
-      label: "Support (20%)",
-      minWidth: "120px",
-      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900 text-sm" : "font-medium text-slate-700"}>{formatVal(row.support)}</span>
-    },
-    {
-      key: "paid_support",
-      label: "Paid Support",
-      minWidth: "130px",
-      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900 text-sm" : "font-medium text-slate-700"}>{formatVal(row.paid_support)}</span>
-    },
-    {
-      key: "total_stock_invest",
-      label: "Total Stock Invest",
-      minWidth: "150px",
-      render: (row) => <span className={row.id === "Total" ? "font-extrabold text-blue-900 text-sm" : "font-bold text-blue-700"}>{formatVal(row.total_stock_invest)}</span>
-    },
-    {
-      key: "current_stock",
-      label: "Current Stock",
-      minWidth: "130px",
-      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900 text-sm" : "font-medium text-slate-700"}>{formatVal(row.current_stock)}</span>
-    },
-    {
-      key: `opening_cash_deposit_pending`,
-      label: `(${new Date().toISOString().split('T')[0]}) Opening Cash Deposit Pending`,
-      minWidth: "220px",
-      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900 text-sm" : "font-medium text-slate-700"}>{formatVal(row.opening_cash_deposit_pending)}</span>
-    },
-    {
-      key: "cash_deposit",
-      label: `(${new Date().toISOString().split('T')[0]}) Cash Deposit`,
-      minWidth: "130px",
-      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900 text-sm" : "font-medium text-slate-700"}>{formatVal(row.cash_deposit)}</span>
-    },
-    {
-      key: "pending_cash_deposit",
-      label: `(${new Date().toISOString().split('T')[0]}) Pending Cash Deposit`,
-      minWidth: "170px",
-      render: (row) => <span className={row.id === "Total" ? "font-extrabold text-amber-900 text-sm" : "font-semibold text-amber-700"}>{formatVal(row.pending_cash_deposit)}</span>
-    },
-    {
-      key: "credit_debit",
-      label: "Credit / Debit",
-      minWidth: "130px",
-      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900 text-sm" : "font-medium text-slate-700"}>{formatVal(row.credit_debit)}</span>
-    },
-    {
-      key: "available_limit",
-      label: "Available Limit with Cash Deposit",
-      minWidth: "240px",
-      render: (row) => <span className={row.id === "Total" ? "font-extrabold text-emerald-900 text-sm" : "font-bold text-emerald-700"}>{formatVal(row.available_limit)}</span>
+    ];
+
+    if (canWriteOrUpdate) {
+      baseCols.push({
+        key: "actions",
+        label: "Actions",
+        minWidth: "100px",
+        sortable: false,
+        render: (row) => {
+          if (row.id === "Total") return null;
+          return (
+            <button
+              onClick={() => handleEditClick(row)}
+              className="flex w-8 h-8 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-[#6804a1] cursor-pointer hover:bg-purple-100 transition-colors"
+              title="Edit"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-[15px] h-[15px]">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931Z" />
+              </svg>
+            </button>
+          );
+        }
+      });
     }
-  ], [totals]);
+
+    return baseCols;
+  }, [canWriteOrUpdate, totals]);
 
   // Filters Component
   const filtersElement = (
@@ -1607,6 +1700,238 @@ export default function StockVsCashDepositReport() {
             )
           }
         />
+
+        {isEditModalOpen && editingRow && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none">
+            {/* Backdrop */}
+            <div 
+              className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity"
+              onClick={() => setIsEditModalOpen(false)}
+            />
+            
+            {/* Modal Box */}
+            <div className="relative w-full max-w-2xl mx-auto my-6 z-50 px-4">
+              <div className="relative flex flex-col w-full bg-white border border-slate-200 rounded-2xl shadow-xl outline-none focus:outline-none overflow-hidden">
+                {/* Header */}
+                <div className="flex items-center justify-between p-5 border-b border-slate-100">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">
+                      Edit Stock & Cash Deposit
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Branch: <span className="font-semibold text-slate-700">{editingRow.branch_name}</span>
+                      {editingRow.state_name && editingRow.state_name !== "—" && (
+                        <> | State: <span className="font-semibold text-slate-700">{editingRow.state_name}</span></>
+                      )}
+                      {editingRow.city && editingRow.city !== "—" && (
+                        <> | City: <span className="font-semibold text-slate-700">{editingRow.city}</span></>
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsEditModalOpen(false)}
+                    className="text-slate-400 hover:text-slate-600 transition-colors border-none bg-transparent cursor-pointer"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                
+                {/* Form */}
+                <form onSubmit={handleEditFormSubmit} className="flex flex-col m-0">
+                  {/* Body */}
+                  <div className="relative p-6 flex-auto max-h-[60vh] overflow-y-auto bg-slate-50/50">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      
+                      {/* Section 1: Stock & Support */}
+                      <div className="space-y-4">
+                        <h4 className="text-xs font-bold text-[#6804a1] uppercase tracking-wider border-b border-slate-100 pb-1.5">
+                          Stock & Support Details
+                        </h4>
+                        
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                            Stock Deposit
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            name="stock_deposit"
+                            value={editFormData.stock_deposit}
+                            onChange={handleEditInputChange}
+                            className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm outline-none focus:border-blue-600 transition-colors"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                            Support (20%)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            name="support"
+                            value={editFormData.support}
+                            onChange={handleEditInputChange}
+                            className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm outline-none focus:border-blue-600 transition-colors"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                            Paid Support
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            name="paid_support"
+                            value={editFormData.paid_support}
+                            onChange={handleEditInputChange}
+                            className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm outline-none focus:border-blue-600 transition-colors"
+                          />
+                        </div>
+
+                        <div className="p-3.5 bg-blue-50/60 border border-blue-100 rounded-xl flex items-center justify-between">
+                          <span className="text-xs font-bold text-blue-800 uppercase tracking-wider">Total Stock Invest</span>
+                          <span className="text-base font-extrabold text-blue-900">
+                            {formatVal(Number(editFormData.stock_deposit) + Number(editFormData.support) + Number(editFormData.paid_support))}
+                          </span>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                            Current Stock
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            name="current_stock"
+                            value={editFormData.current_stock}
+                            onChange={handleEditInputChange}
+                            className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm outline-none focus:border-blue-600 transition-colors"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Section 2: Cash Deposit & Credit */}
+                      <div className="space-y-4">
+                        <h4 className="text-xs font-bold text-[#6804a1] uppercase tracking-wider border-b border-slate-100 pb-1.5">
+                          Cash Deposit & Credit Details
+                        </h4>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                            Opening Cash Deposit Pending
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            name="opening_cash_deposit_pending"
+                            value={editFormData.opening_cash_deposit_pending}
+                            onChange={handleEditInputChange}
+                            className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm outline-none focus:border-blue-600 transition-colors"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                            Cash Deposit
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            name="cash_deposit"
+                            value={editFormData.cash_deposit}
+                            onChange={handleEditInputChange}
+                            className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm outline-none focus:border-blue-600 transition-colors"
+                          />
+                        </div>
+
+                        <div className="p-3.5 bg-amber-50/60 border border-amber-100 rounded-xl flex items-center justify-between">
+                          <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">Pending Cash Deposit</span>
+                          <span className="text-base font-extrabold text-amber-900">
+                            {formatVal(Number(editFormData.opening_cash_deposit_pending) - Number(editFormData.cash_deposit))}
+                          </span>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                            Credit / Debit
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            name="credit_debit"
+                            value={editFormData.credit_debit}
+                            onChange={handleEditInputChange}
+                            className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm outline-none focus:border-blue-600 transition-colors"
+                          />
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* Calculated Available Limit Prominent Display */}
+                    <div className="mt-6">
+                      {(() => {
+                        const totalStockInvest = Number(editFormData.stock_deposit) + Number(editFormData.support) + Number(editFormData.paid_support);
+                        const pendingCashDeposit = Number(editFormData.opening_cash_deposit_pending) - Number(editFormData.cash_deposit);
+                        const availableLimit = totalStockInvest - Number(editFormData.current_stock) + pendingCashDeposit;
+                        const isPositive = availableLimit >= 0;
+
+                        return (
+                          <div className={`p-4 rounded-xl border flex flex-col md:flex-row items-center justify-between text-center md:text-left gap-2.5 transition-all duration-200 ${
+                            isPositive 
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+                              : 'bg-rose-50 border-rose-200 text-rose-800'
+                          }`}>
+                            <div>
+                              <span className="text-xs font-bold uppercase tracking-wider block opacity-75">Calculated Available Limit</span>
+                              <span className="text-[10px] opacity-75 mt-0.5 block">Formula: Total Stock Invest - Current Stock + Pending Cash Deposit</span>
+                            </div>
+                            <span className="text-2xl font-extrabold tracking-tight">
+                              {formatVal(availableLimit)}
+                            </span>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Footer Action Buttons */}
+                  <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-100 bg-white rounded-b-2xl">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditModalOpen(false)}
+                      disabled={updatingRecord}
+                      className="px-4 h-10 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-all duration-150 cursor-pointer focus:outline-none disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={updatingRecord}
+                      className="flex items-center justify-center gap-2 px-5 h-10 rounded-lg bg-[#6804a1] hover:bg-[#520380] text-white text-sm font-semibold transition-all duration-150 shadow-md cursor-pointer border-none focus:outline-none disabled:opacity-50"
+                    >
+                      {updatingRecord ? (
+                        <>
+                          <div className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent"></div>
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <i className="fa-solid fa-check"></i>
+                          Save Changes
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

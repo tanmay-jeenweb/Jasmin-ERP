@@ -5,7 +5,8 @@ const {
     importCurrentStockController,
     importOpeningCashAndCreditController,
     importCashDepositController,
-    getAbmWiseCashDepositReportController
+    getAbmWiseCashDepositReportController,
+    updateStockCashDepositRecordController
 } = require('../controllers/stockCashDepositController.js');
 const { verifyToken, verifyPermission } = require('../middleware/authMiddleware.js');
 
@@ -17,5 +18,6 @@ router.post('/import', verifyToken, verifyPermission('stock_vs_cash_deposit', 'w
 router.post('/import-current-stock', verifyToken, verifyPermission('stock_vs_cash_deposit', 'write'), importCurrentStockController);
 router.post('/import-opening-credit', verifyToken, verifyPermission('stock_vs_cash_deposit', 'write'), importOpeningCashAndCreditController);
 router.post('/import-cash-deposit', verifyToken, verifyPermission('stock_vs_cash_deposit', 'write'), importCashDepositController);
+router.put('/update/:branchId', verifyToken, verifyPermission('stock_vs_cash_deposit', 'write'), updateStockCashDepositRecordController);
 
 module.exports = router;
