@@ -308,6 +308,9 @@ export default function Navbar() {
         return true;
     });
 
+    const mastersDropdownWidth = availableMasters.length <= 3 ? "w-80" : "w-140";
+    const mastersGridCols = availableMasters.length <= 3 ? "grid-cols-1" : "grid-cols-2";
+
     const isPrecedingTabsHidden = !isAdmin && availableMasters.length === 0;
     const priceListDropdownPositionClass = isPrecedingTabsHidden
         ? "left-0 origin-top-left"
