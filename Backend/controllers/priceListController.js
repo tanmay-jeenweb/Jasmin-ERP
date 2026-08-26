@@ -326,20 +326,44 @@ const getModelGroupStockInfoController = async (req, res) => {
         }
 
         const isForceSync = sync === 'true' || sync === '1';
+        const userBranchCodes = await getUserBranchCodes(req.user?.id);
+
+        // Helper to serve filtered stock data from the database cache
+        const serveFromCache = async (warningMessage = null) => {
+            const cached = await getStockCacheByModelGroup(modelGroup);
+            if (cached) {
+                let userFilteredItems = cached.data;
+                if (userBranchCodes && userBranchCodes.length > 0) {
+                    const branchSet = new Set(userBranchCodes.map(c => String(c).trim().toLowerCase()));
+                    userFilteredItems = cached.data.filter(item =>
+                        item.BRANCH_CODE && branchSet.has(String(item.BRANCH_CODE).trim().toLowerCase())
+                    );
+                }
+                const validItems = userFilteredItems.filter(i => Number(i.SALEABLE_STOCK || 0) >= 1);
+                const uniqueBranches = new Set(validItems.map(i => (i.BRANCH_NAME || i.BRANCH_CODE || "").trim()));
+                const totalStockSum = validItems.reduce((acc, i) => acc + Number(i.SALEABLE_STOCK || 0), 0);
+
+                const responseData = {
+                    success: true,
+                    data: userFilteredItems,
+                    isCached: true,
+                    updatedAt: cached.updatedAt,
+                    totalLocations: uniqueBranches.size,
+                    totalStock: totalStockSum
+                };
+                if (warningMessage) {
+                    responseData.warning = warningMessage;
+                }
+                res.status(200).json(responseData);
+                return true;
+            }
+            return false;
+        };
 
         // 1. If not forcing sync, check database cache first
         if (!isForceSync) {
-            const cached = await getStockCacheByModelGroup(modelGroup);
-            if (cached) {
-                return res.status(200).json({
-                    success: true,
-                    data: cached.data,
-                    isCached: true,
-                    updatedAt: cached.updatedAt,
-                    totalLocations: cached.totalLocations,
-                    totalStock: cached.totalStock
-                });
-            }
+            const handled = await serveFromCache();
+            if (handled) return;
         }
 
         // 2. Query item_model_master for model group codes/names
@@ -358,82 +382,38 @@ const getModelGroupStockInfoController = async (req, res) => {
             console.warn("Could not query item_model_master for model group stock filtering:", e.message);
         }
 
-        // 3. Fetch external stock data from APX API for permitted branches
+        // 3. Fetch external stock data from APX API for all branches in a single query
         const encodedMg = encodeURIComponent(modelGroup);
-        const userBranchCodes = await getUserBranchCodes(req.user?.id);
         const headers = {
             'userid': process.env.MODEL_API_USERID || 'WebSite',
             'Securitycode': process.env.MODEL_API_SECURITYCODE || '1151-8111-6444-4166',
             'Accept': 'application/json'
         };
 
-        let rawItems = [];
+        const apiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetStockInfo?CompanyCode=JITPL&ItemClassificationValue=${encodedMg}`;
+        const response = await fetch(apiUrl, { method: 'GET', headers });
 
-        if (userBranchCodes && userBranchCodes.length > 0) {
-            // Execute parallel requests for each permitted BranchCode
-            const branchPromises = userBranchCodes.map(async (branchCode) => {
-                const apiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetStockInfo?CompanyCode=JITPL&ItemClassificationValue=${encodedMg}&BranchCode=${encodeURIComponent(branchCode)}`;
-                try {
-                    const response = await fetch(apiUrl, { method: 'GET', headers });
-                    if (!response.ok) return [];
-                    const result = await response.json();
-                    if (result && result.StatusCode === 0 && Array.isArray(result.Data)) {
-                        return result.Data;
-                    }
-                } catch (e) {
-                    console.warn(`Failed to fetch APX stock for branch ${branchCode}:`, e.message);
-                }
-                return [];
+        if (!response.ok) {
+            const handled = await serveFromCache(`APX API failed (${response.statusText}). Displaying saved DB stock data.`);
+            if (handled) return;
+            return res.status(response.status).json({
+                success: false,
+                message: `Failed to fetch from external API: Server returned ${response.statusText}`
             });
-
-            const branchResults = await Promise.all(branchPromises);
-            rawItems = branchResults.flat();
         }
 
-        // Fallback: If rawItems is empty, perform a single general query
-        if (rawItems.length === 0) {
-            const apiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetStockInfo?CompanyCode=JITPL&ItemClassificationValue=${encodedMg}`;
-            const response = await fetch(apiUrl, { method: 'GET', headers });
+        const result = await response.json();
 
-            if (!response.ok) {
-                const cached = await getStockCacheByModelGroup(modelGroup);
-                if (cached) {
-                    return res.status(200).json({
-                        success: true,
-                        data: cached.data,
-                        isCached: true,
-                        updatedAt: cached.updatedAt,
-                        warning: `APX API failed (${response.statusText}). Displaying saved DB stock data.`
-                    });
-                }
-                return res.status(response.status).json({
-                    success: false,
-                    message: `Failed to fetch from external API: Server returned ${response.statusText}`
-                });
-            }
-
-            const result = await response.json();
-
-            if (result.StatusCode !== 0) {
-                const cached = await getStockCacheByModelGroup(modelGroup);
-                if (cached) {
-                    return res.status(200).json({
-                        success: true,
-                        data: cached.data,
-                        isCached: true,
-                        updatedAt: cached.updatedAt,
-                        warning: `APX API Error: ${result.StatusMessage || 'Unknown error'}. Displaying saved DB stock data.`
-                    });
-                }
-                return res.status(400).json({
-                    success: false,
-                    message: `External API Error: ${result.StatusMessage || 'Unknown error'}`
-                });
-            }
-
-            rawItems = result.Data || [];
+        if (result.StatusCode !== 0) {
+            const handled = await serveFromCache(`APX API Error: ${result.StatusMessage || 'Unknown error'}. Displaying saved DB stock data.`);
+            if (handled) return;
+            return res.status(400).json({
+                success: false,
+                message: `External API Error: ${result.StatusMessage || 'Unknown error'}`
+            });
         }
 
+        const rawItems = result.Data || [];
 
         // 4. Filter stock data strictly to devices belonging to this model group
         let filteredItems = rawItems;
@@ -455,46 +435,55 @@ const getModelGroupStockInfoController = async (req, res) => {
             });
         }
 
-        // Calculate metrics
-        const validItems = filteredItems.filter(i => Number(i.SALEABLE_STOCK || 0) >= 1);
-        const uniqueBranches = new Set(validItems.map(i => (i.BRANCH_NAME || i.BRANCH_CODE || "").trim()));
-        const totalStockSum = validItems.reduce((acc, i) => acc + Number(i.SALEABLE_STOCK || 0), 0);
+        // Calculate metrics for the full dataset to save in database cache
+        const allValidItems = filteredItems.filter(i => Number(i.SALEABLE_STOCK || 0) >= 1);
+        const allUniqueBranches = new Set(allValidItems.map(i => (i.BRANCH_NAME || i.BRANCH_CODE || "").trim()));
+        const allTotalStockSum = allValidItems.reduce((acc, i) => acc + Number(i.SALEABLE_STOCK || 0), 0);
 
-        // 5. Save to database cache
+        // 5. Save the complete stock data to database cache
         try {
-            await saveStockCache(modelGroup, filteredItems, uniqueBranches.size, totalStockSum);
+            await saveStockCache(modelGroup, filteredItems, allUniqueBranches.size, allTotalStockSum);
         } catch (e) {
             console.error("Failed to save stock cache to database:", e.message);
         }
 
+        // 6. Filter final response items to user's permitted branches in memory
+        let userFilteredItems = filteredItems;
+        if (userBranchCodes && userBranchCodes.length > 0) {
+            const branchSet = new Set(userBranchCodes.map(c => String(c).trim().toLowerCase()));
+            userFilteredItems = filteredItems.filter(item =>
+                item.BRANCH_CODE && branchSet.has(String(item.BRANCH_CODE).trim().toLowerCase())
+            );
+        }
+
+        // Calculate metrics for the user's filtered dataset
+        const userValidItems = userFilteredItems.filter(i => Number(i.SALEABLE_STOCK || 0) >= 1);
+        const userUniqueBranches = new Set(userValidItems.map(i => (i.BRANCH_NAME || i.BRANCH_CODE || "").trim()));
+        const userTotalStockSum = userValidItems.reduce((acc, i) => acc + Number(i.SALEABLE_STOCK || 0), 0);
+
         return res.status(200).json({
             success: true,
-            data: filteredItems,
+            data: userFilteredItems,
             isCached: false,
             updatedAt: new Date(),
-            totalLocations: uniqueBranches.size,
-            totalStock: totalStockSum
+            totalLocations: userUniqueBranches.size,
+            totalStock: userTotalStockSum
         });
     } catch (error) {
         console.error('Error in getModelGroupStockInfoController:', error);
         try {
             const { modelGroup } = req.query;
             if (modelGroup) {
-                const cached = await getStockCacheByModelGroup(modelGroup);
-                if (cached) {
-                    return res.status(200).json({
-                        success: true,
-                        data: cached.data,
-                        isCached: true,
-                        updatedAt: cached.updatedAt,
-                        warning: `Connection issue: ${error.message}. Displaying saved DB stock data.`
-                    });
-                }
+                const handled = await serveFromCache(`Connection issue: ${error.message}. Displaying saved DB stock data.`);
+                if (handled) return;
             }
         } catch (e) {
             // Ignore fallback error
         }
-        return res.status(500).json({ success: false, message: error.message || 'Internal server error' });
+        return res.status(500).json({
+            success: false,
+            message: error.message || 'Internal server error occurred fetching stock'
+        });
     }
 };
 
