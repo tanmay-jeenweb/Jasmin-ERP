@@ -15,6 +15,11 @@ export default function OfferForm() {
   const [brand_name, setBrandName] = useState("");
   const [selectedModelGroups, setSelectedModelGroups] = useState([]);
   const [state_id, setStateId] = useState("");
+  const [selectedStates, setSelectedStates] = useState([]); // Array of state IDs (integers)
+  const [isStateDropdownOpen, setIsStateDropdownOpen] = useState(false);
+  const [stateSearch, setStateSearch] = useState("");
+  const stateDropdownRef = useRef(null);
+  const stateSearchInputRef = useRef(null);
   const [offer_type, setOfferType] = useState("Cashback Offer");
   const [from_date, setFromDate] = useState("");
   const [to_date, setToDate] = useState("");
@@ -65,6 +70,13 @@ export default function OfferForm() {
           if (data) {
             setBrandName(data.brand_name || "");
             setSelectedModelGroups(data.model_groups || []);
+            if (data.state_ids && data.state_ids.length > 0) {
+              setSelectedStates(data.state_ids.map(sid => parseInt(sid, 10)));
+            } else if (data.state_id) {
+              setSelectedStates([parseInt(data.state_id, 10)]);
+            } else {
+              setSelectedStates([]);
+            }
             setStateId(data.state_id || "");
             setOfferType(data.offer_type || "Cashback Offer");
             setFromDate(data.from_date ? data.from_date.substring(0, 10) : "");
@@ -105,11 +117,14 @@ export default function OfferForm() {
     );
   }, [uniqueBrands, brandSearch]);
 
-  // Click outside brand dropdown listener
+  // Click outside brand & state dropdown listener
   useEffect(() => {
     function handleClickOutside(event) {
       if (brandDropdownRef.current && !brandDropdownRef.current.contains(event.target)) {
         setIsBrandDropdownOpen(false);
+      }
+      if (stateDropdownRef.current && !stateDropdownRef.current.contains(event.target)) {
+        setIsStateDropdownOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -124,6 +139,13 @@ export default function OfferForm() {
       brandSearchInputRef.current.focus();
     }
   }, [isBrandDropdownOpen]);
+
+  // Auto-focus search input when state dropdown opens
+  useEffect(() => {
+    if (isStateDropdownOpen && stateSearchInputRef.current) {
+      stateSearchInputRef.current.focus();
+    }
+  }, [isStateDropdownOpen]);
 
   // Extract model groups for selected brand
   const modelGroupsForSelectedBrand = useMemo(() => {
@@ -141,6 +163,45 @@ export default function OfferForm() {
       mg.toLowerCase().includes(modelGroupSearch.toLowerCase())
     );
   }, [modelGroupsForSelectedBrand, modelGroupSearch]);
+
+  // State dropdown computed values
+  const filteredStates = useMemo(() => {
+    return statesList.filter(s =>
+      s.name.toLowerCase().includes(stateSearch.toLowerCase())
+    );
+  }, [statesList, stateSearch]);
+
+  const isAllStatesSelected = useMemo(() => {
+    return statesList.length > 0 && selectedStates.length === statesList.length;
+  }, [statesList, selectedStates]);
+
+  const handleAllStatesToggle = () => {
+    if (isAllStatesSelected) {
+      setSelectedStates([]);
+    } else {
+      setSelectedStates(statesList.map(s => s.id));
+    }
+  };
+
+  const handleStateToggle = (stateId) => {
+    const numericId = parseInt(stateId, 10);
+    if (selectedStates.includes(numericId)) {
+      setSelectedStates(selectedStates.filter(id => id !== numericId));
+    } else {
+      setSelectedStates([...selectedStates, numericId]);
+    }
+  };
+
+  const getStateLabel = () => {
+    if (selectedStates.length === 0) return "Select State(s)";
+    if (selectedStates.length === statesList.length) return "All States";
+    
+    const selectedNames = statesList
+      .filter(s => selectedStates.includes(s.id))
+      .map(s => s.name);
+      
+    return selectedNames.join(", ");
+  };
 
   // Toggle model group selection
   const handleModelGroupToggle = (mgName) => {
@@ -185,7 +246,7 @@ export default function OfferForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!brand_name || !state_id || !from_date || !to_date) {
+    if (!brand_name || selectedStates.length === 0 || !from_date || !to_date) {
       toast.error("Please fill in all required fields.");
       return;
     }
@@ -208,7 +269,8 @@ export default function OfferForm() {
     const payload = {
       brand_name,
       model_groups: selectedModelGroups,
-      state_id: parseInt(state_id, 10),
+      state_id: selectedStates[0], // first state ID for legacy/compatibility
+      state_ids: selectedStates,   // list of state IDs
       offer_type,
       from_date,
       to_date,
@@ -236,19 +298,10 @@ export default function OfferForm() {
     <div className="flex flex-col min-h-screen bg-slate-50 font-sans">
       <Navbar title="ERP Admin" />
 
-      <main className="flex-1 w-full max-w-[1200px] mx-auto py-7 px-6">
+      <main className="flex-1 w-full mx-auto py-7 px-6">
         
         {/* Back navigation & Title */}
-        <div className="flex items-center gap-3 mb-6">
-          <button
-            onClick={() => navigate("/admin/offers")}
-            className="flex items-center justify-center w-[38px] h-[38px] rounded-lg border-[1.5px] border-slate-200 bg-white text-slate-600 cursor-pointer shadow-sm hover:bg-slate-50 transition-colors"
-            title="Go back"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-            </svg>
-          </button>
+        <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="m-0 text-xl font-extrabold text-slate-900">
               {isEdit ? "Edit Offer" : "Create New Offer"}
@@ -257,6 +310,22 @@ export default function OfferForm() {
               {isEdit ? "Modify existing offer details and parameters" : "Configure brand and model groups offer parameters"}
             </p>
           </div>
+          <button
+            onClick={() => navigate("/admin/offers")}
+            className="text-slate-500 hover:text-slate-700 font-medium text-sm flex items-center gap-1 transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+              className="w-4 h-4"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+            </svg>
+            Back to List
+          </button>
         </div>
 
         {loading ? (
@@ -360,22 +429,111 @@ export default function OfferForm() {
                       )}
                     </div>
 
-                    {/* State */}
-                    <div>
+                    {/* State Selector */}
+                    <div ref={stateDropdownRef} className="relative">
                       <label className="block text-xs font-bold text-slate-655 uppercase tracking-wider mb-2">
-                        State  <span className="text-rose-600">*</span>
+                        State(s) <span className="text-rose-600">*</span>
                       </label>
-                      <select
-                        value={state_id}
-                        onChange={(e) => setStateId(e.target.value)}
-                        required
-                        className="w-full border-[1.5px] border-slate-350 rounded-[9px] px-3.5 py-[11px] text-sm outline-none text-slate-800 bg-white focus:border-indigo-655 transition-colors"
+                      
+                      {/* Dropdown trigger header */}
+                      <div
+                        onClick={() => setIsStateDropdownOpen(!isStateDropdownOpen)}
+                        className={`w-full border-[1.5px] rounded-[9px] px-3.5 py-[11px] text-sm outline-none bg-white cursor-pointer flex justify-between items-center select-none transition-all ${
+                          isStateDropdownOpen 
+                            ? "border-indigo-650 shadow-[0_0_0_3px_rgba(104,4,161,0.15)]" 
+                            : "border-slate-300"
+                        } ${selectedStates.length > 0 ? "text-slate-800" : "text-slate-400"}`}
                       >
-                        <option value="">Select State</option>
-                        {statesList.map((s) => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                      </select>
+                        <span className="truncate">{getStateLabel()}</span>
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          strokeWidth={2.5}
+                          stroke="currentColor"
+                          className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${
+                            isStateDropdownOpen ? "rotate-180" : ""
+                          }`}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                        </svg>
+                      </div>
+
+                      {/* Dropdown panel */}
+                      {isStateDropdownOpen && (
+                        <div className="absolute top-full left-0 right-0 z-[100] mt-1.5 bg-white border border-slate-200 rounded-lg shadow-lg p-2.5 flex flex-col gap-2 animate-in fade-in slide-in-from-top-1 duration-150">
+                          {/* Search bar inside dropdown */}
+                          <div className="relative flex items-center">
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              strokeWidth={2}
+                              stroke="currentColor"
+                              className="absolute left-2.5 w-[15px] h-[15px] text-slate-400"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                            </svg>
+                            <input
+                              ref={stateSearchInputRef}
+                              type="text"
+                              placeholder="Search state..."
+                              value={stateSearch}
+                              onChange={(e) => setStateSearch(e.target.value)}
+                              onClick={(e) => e.stopPropagation()} // Keep dropdown open when searching
+                              className="w-full border-[1.5px] border-slate-300 rounded-md py-1.5 pl-8 pr-3 text-sm outline-none text-slate-800 bg-white focus:border-indigo-650 transition-colors"
+                            />
+                          </div>
+
+                          {/* Options list */}
+                          <div className="max-h-[200px] overflow-y-auto flex flex-col gap-0.5">
+                            {/* "All States" Select Option */}
+                            {stateSearch === "" && (
+                              <label
+                                className="flex items-center gap-2.5 py-2 px-2 text-sm text-slate-700 font-semibold cursor-pointer rounded-md hover:bg-slate-50 transition-colors border-b border-slate-100/80 mb-1"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isAllStatesSelected}
+                                  onChange={handleAllStatesToggle}
+                                  className="w-4 h-4 accent-indigo-650 rounded border-slate-300 cursor-pointer"
+                                />
+                                <span className={isAllStatesSelected ? "text-indigo-655" : "text-slate-700"}>
+                                  All States
+                                </span>
+                              </label>
+                            )}
+
+                            {filteredStates.length > 0 ? (
+                              filteredStates.map((s) => {
+                                const isChecked = selectedStates.includes(s.id);
+                                return (
+                                  <label
+                                    key={s.id}
+                                    className="flex items-center gap-2.5 py-1.5 px-2 text-[13.5px] text-slate-650 cursor-pointer rounded-md hover:bg-slate-50 transition-colors"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => handleStateToggle(s.id)}
+                                      className="w-4 h-4 accent-indigo-650 rounded border-slate-300 cursor-pointer"
+                                    />
+                                    <span className={isChecked ? "font-semibold text-indigo-655" : "font-normal text-slate-600"}>
+                                      {s.name}
+                                    </span>
+                                  </label>
+                                );
+                              })
+                            ) : (
+                              <div className="py-4 px-3 text-[13px] text-slate-400 text-center">
+                                No states found
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Offer Type */}
@@ -392,6 +550,8 @@ export default function OfferForm() {
                         <option value="Cashback Offer">Cashback Offer</option>
                         <option value="Bundle Offer">Bundle Offer</option>
                         <option value="Upgrade Offer">Upgrade Offer</option>
+                        <option value="Exchange Offer">Exchange Offer</option>
+                        <option value="Other Offer">Other Offer</option>
                       </select>
                     </div>
 

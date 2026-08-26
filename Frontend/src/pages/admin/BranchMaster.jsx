@@ -29,6 +29,7 @@ function BranchViewModal({ isOpen, row, onClose }) {
     { label: "State", value: row.state_name || "—" },
     { label: "City", value: row.city },
     { label: "Area Branch Manager (ABM)", value: row.abm || "—" },
+    { label: "Zone", value: row.branch_cls_05 || "—" },
     { label: "Status", value: row.status ? row.status.toUpperCase() : "—", isStatus: true },
     { label: "Address", value: row.address, fullWidth: true },
   ];
@@ -90,6 +91,7 @@ export default function BranchMaster() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const [showActive, setShowActive] = useState(true);
+  const [selectedClass05, setSelectedClass05] = useState("");
 
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -131,7 +133,8 @@ export default function BranchMaster() {
         city: row.city,
         address: row.address,
         abm: row.abm,
-        status: nextStatus
+        status: nextStatus,
+        branch_cls_05: row.branch_cls_05 || ""
       };
       await updateBranch(row.id, updatedData);
       toast.success(`Branch status updated to ${nextStatus}`);
@@ -186,6 +189,7 @@ export default function BranchMaster() {
         "PHONE": row.phone || "",
         "Other phones": "",
         "Store type": row.store_type ? row.store_type.charAt(0).toUpperCase() + row.store_type.slice(1) : "",
+        "Zone": row.branch_cls_05 || "",
         "Status": row.status === "active" ? "Active" : "InActive"
       }));
 
@@ -212,9 +216,20 @@ export default function BranchMaster() {
     }
   };
 
+  const uniqueClass05Values = useMemo(() => {
+    const values = branches
+      .map(b => b.branch_cls_05)
+      .filter(val => val !== undefined && val !== null && val !== "");
+    return Array.from(new Set(values)).sort();
+  }, [branches]);
+
   const filteredBranches = useMemo(() => {
-    return branches.filter(b => b.status === (showActive ? "active" : "inactive"));
-  }, [branches, showActive]);
+    return branches.filter(b => {
+      const matchStatus = b.status === (showActive ? "active" : "inactive");
+      const matchClass05 = !selectedClass05 || b.branch_cls_05 === selectedClass05;
+      return matchStatus && matchClass05;
+    });
+  }, [branches, showActive, selectedClass05]);
 
   const columns = useMemo(() => {
     const cols = [
@@ -246,6 +261,10 @@ export default function BranchMaster() {
             {row.store_type}
           </span>
         )
+      },
+      {
+        key: "branch_cls_05", label: "Zone",
+        render: (row) => <span className="text-slate-650">{row.branch_cls_05 || "—"}</span>
       }
     ];
 
@@ -353,12 +372,24 @@ export default function BranchMaster() {
           loading={loading}
           searchPlaceholder="Search branches by name, code, city..."
           toggleActions={
-            <div className="flex items-center gap-2.5 mr-4 cursor-pointer select-none" onClick={() => setShowActive(v => !v)}>
-              <span className={`text-[13px] font-bold transition-colors ${!showActive ? "text-rose-600" : "text-slate-400"}`}>Inactive</span>
-              <div className={`relative w-[38px] h-5 rounded-full transition-colors ${showActive ? "bg-indigo-650" : "bg-slate-300"}`}>
-                <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.15)] transition-transform ${showActive ? "translate-x-[18px]" : "translate-x-0"}`} />
+            <div className="flex items-center gap-4">
+              <select
+                value={selectedClass05}
+                onChange={(e) => setSelectedClass05(e.target.value)}
+                className="h-10 rounded-lg border border-slate-300 bg-slate-50 px-3 text-sm outline-none text-slate-700 focus:border-indigo-650 transition-colors"
+              >
+                <option value="">All Zones</option>
+                {uniqueClass05Values.map(val => (
+                  <option key={val} value={val}>{val}</option>
+                ))}
+              </select>
+              <div className="flex items-center gap-2.5 mr-4 cursor-pointer select-none" onClick={() => setShowActive(v => !v)}>
+                <span className={`text-[13px] font-bold transition-colors ${!showActive ? "text-rose-600" : "text-slate-400"}`}>Inactive</span>
+                <div className={`relative w-[38px] h-5 rounded-full transition-colors ${showActive ? "bg-indigo-650" : "bg-slate-300"}`}>
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.15)] transition-transform ${showActive ? "translate-x-[18px]" : "translate-x-0"}`} />
+                </div>
+                <span className={`text-[13px] font-bold transition-colors ${showActive ? "text-emerald-500" : "text-slate-400"}`}>Active</span>
               </div>
-              <span className={`text-[13px] font-bold transition-colors ${showActive ? "text-emerald-500" : "text-slate-400"}`}>Active</span>
             </div>
           }
           actionButton={

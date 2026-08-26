@@ -126,6 +126,7 @@ const getAllTargetVsAchievements = async () => {
             COALESCE(u.name, 'Unknown') AS added_by_name,
             COALESCE(abm_u.name, bm.abm, t.updated_abm_name, '—') AS abm_name,
             bm.id AS branch_id,
+            bm.branch_cls_05 AS zone,
             COALESCE(sm.name, '—') AS state_name
         FROM target_vs_achievements t
         LEFT JOIN branch_master bm ON t.branch_name = bm.name
@@ -152,6 +153,7 @@ const getABMWiseTargetVsAchievements = async (state = null, states = null) => {
             COALESCE(u.name, 'Unknown') AS added_by_name,
             COALESCE(abm_u.name, bm.abm, t.updated_abm_name, '—') AS abm_name,
             bm.id AS branch_id,
+            bm.branch_cls_05 AS zone,
             COALESCE(sm.name, '—') AS state_name
         FROM target_vs_achievements t
         LEFT JOIN branch_master bm ON t.branch_name = bm.name

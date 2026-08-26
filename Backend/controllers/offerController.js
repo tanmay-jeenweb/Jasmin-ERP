@@ -11,7 +11,7 @@ const createOfferController = async (req, res) => {
     try {
         const addedBy = req.user.id;
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
-        const { brand_name, model_groups, state_id, offer_type, from_date, to_date, transactions } = req.body;
+        const { brand_name, model_groups, state_id, state_ids, offer_type, from_date, to_date, transactions } = req.body;
 
         // Validation
         if (!brand_name || !state_id || !offer_type || !from_date || !to_date) {
@@ -36,7 +36,7 @@ const createOfferController = async (req, res) => {
         }
 
         const offerId = await createOffer(
-            { brand_name, state_id, offer_type, from_date, to_date },
+            { brand_name, state_id, state_ids, offer_type, from_date, to_date },
             model_groups,
             transactions,
             addedBy,
@@ -119,7 +119,7 @@ const updateOfferController = async (req, res) => {
     try {
         const { id } = req.params;
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
-        const { brand_name, model_groups, state_id, offer_type, from_date, to_date, transactions } = req.body;
+        const { brand_name, model_groups, state_id, state_ids, offer_type, from_date, to_date, transactions } = req.body;
 
         const beforeData = await getOfferById(id);
         if (!beforeData) {
@@ -153,7 +153,7 @@ const updateOfferController = async (req, res) => {
 
         await updateOffer(
             id,
-            { brand_name, state_id, offer_type, from_date, to_date },
+            { brand_name, state_id, state_ids, offer_type, from_date, to_date },
             model_groups,
             transactions,
             deviceId

@@ -132,22 +132,19 @@ export default function Navbar() {
     }, [location.pathname]);
 
     const canSeePriceListView = isAdmin || hasPermission("price_list_view", "read");
-    const canSeePriceListTab = isAdmin || hasPermission("price_list", "read") || hasPermission("price_list_report", "read") || hasPermission("price_list_view", "read");
+    const canSeePriceListTab = isAdmin || hasPermission("price_list", "read") || hasPermission("price_list_view", "read");
     const canSeePriceListTables = isAdmin || hasPermission("price_list", "read");
     const canSeePriceListReports = isAdmin || hasPermission("price_list_report", "read");
 
     let colsCount = 0;
     if (canSeePriceListTables) colsCount++;
-    if (canSeePriceListReports) colsCount++;
     if (canSeePriceListView) colsCount++;
 
     let dropdownWidthClass = "w-72";
     if (colsCount === 2) dropdownWidthClass = "w-[540px]";
-    else if (colsCount === 3) dropdownWidthClass = "w-[800px]";
 
     let gridColsClass = "grid-cols-1 gap-3";
     if (colsCount === 2) gridColsClass = "grid-cols-2 divide-x divide-slate-100 gap-4";
-    else if (colsCount === 3) gridColsClass = "grid-cols-3 divide-x divide-slate-100 gap-4";
 
     const handleLogout = async () => {
         try {
@@ -291,6 +288,15 @@ export default function Navbar() {
             color: "bg-indigo-50 text-indigo-600 border border-indigo-100/50",
             activeColor: "bg-indigo-100 text-indigo-700",
             desc: "Map branches to active users"
+        },
+        {
+            name: "Settings Master",
+            path: "/admin/settings/icat",
+            masterKey: "price_list",
+            icon: "fa-solid fa-sliders",
+            color: "bg-amber-50 text-amber-600 border border-amber-100/50",
+            activeColor: "bg-amber-100 text-amber-700",
+            desc: "Configure Price List exclusions"
         }
     ];
 
@@ -558,8 +564,8 @@ export default function Navbar() {
                                 </button>
 
                                 {isOpen && (
-                                    <div className={`absolute left-0 top-full mt-1.5 ${mastersDropdownWidth} bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200`}>
-                                        <div className={`grid ${mastersGridCols} gap-1.5`}>
+                                    <div className="absolute left-0 top-full mt-1.5 w-[760px] max-w-[90vw] bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
                                             {availableMasters.map((m, idx) => {
                                                 const isActive = location.pathname === m.path;
                                                 return (
@@ -672,52 +678,9 @@ export default function Navbar() {
                                                     </div>
                                                 )}
 
-                                                {/* Section 2: Price List Reports */}
-                                                {canSeePriceListReports && (
-                                                    <div className={`flex flex-col gap-1.5 ${canSeePriceListTables ? "pl-4" : ""}`}>
-                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1 flex items-center gap-1.5">
-                                                            <i className="fa-solid fa-chart-pie text-emerald-500"></i>
-                                                            Price List Reports
-                                                        </p>
-                                                        <div className="flex flex-col gap-1">
-                                                            {priceFormats.map((f, idx) => {
-                                                                const brandsList = f.brand_configs
-                                                                    ? (typeof f.brand_configs === 'string' ? JSON.parse(f.brand_configs) : f.brand_configs)
-                                                                    : [];
-                                                                const label = `${f.format_name || f.state_name} Report`;
-                                                                const path = `/admin/price-list-report/${f.id}`;
-                                                                const isActive = location.pathname === path;
-                                                                return (
-                                                                    <button
-                                                                        key={idx}
-                                                                        onClick={() => {
-                                                                            navigate(path);
-                                                                            setIsPriceListOpen(false);
-                                                                        }}
-                                                                        className={`relative group flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border border-transparent ${isActive
-                                                                            ? "bg-emerald-50/70 text-emerald-700 font-semibold border-emerald-100/50"
-                                                                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
-                                                                            }`}
-                                                                    >
-                                                                        <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${isActive ? "bg-emerald-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"}`} />
-                                                                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${isActive ? "bg-emerald-100/80 text-emerald-700" : "bg-slate-100/80 text-slate-500 group-hover:scale-105"}`}>
-                                                                            <i className="fa-solid fa-square-poll-vertical text-xs"></i>
-                                                                        </div>
-                                                                        <div className="flex-1">
-                                                                            <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-emerald-900 font-bold" : "text-slate-800 group-hover:text-slate-950"}`}>
-                                                                                {label}
-                                                                            </p>
-                                                                        </div>
-                                                                    </button>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    </div>
-                                                )}
-
                                                 {/* Section 3: Price List View */}
                                                 {canSeePriceListView && (
-                                                    <div className={`flex flex-col gap-1.5 ${(canSeePriceListTables || canSeePriceListReports) ? "pl-4" : ""}`}>
+                                                    <div className={`flex flex-col gap-1.5 ${canSeePriceListTables ? "pl-4" : ""}`}>
                                                         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1 flex items-center gap-1.5">
                                                             <i className="fa-solid fa-eye text-cyan-500"></i>
                                                             Price List View
@@ -858,11 +821,11 @@ export default function Navbar() {
                             </div>
                         )}
                         {/* Reports Dropdown */}
-                        {availableReports.length > 0 && (
+                        {(availableReports.length > 0 || (canSeePriceListReports && priceFormats.length > 0)) && (
                             <div className="relative" id="reports-dropdown">
                                 <button
                                     onClick={toggleReportsMenu}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/abm-wise-tva") || location.pathname.startsWith("/admin/stock-vs-cash-deposit") || location.pathname.startsWith("/admin/finance-brand-mapping") || location.pathname.startsWith("/admin/finance-brand-report")
+                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/abm-wise-tva") || location.pathname.startsWith("/admin/stock-vs-cash-deposit") || location.pathname.startsWith("/admin/finance-brand-mapping") || location.pathname.startsWith("/admin/finance-brand-report") || location.pathname.startsWith("/admin/price-list-report")
                                         ? "bg-white/15"
                                         : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
@@ -882,44 +845,103 @@ export default function Navbar() {
                                     </span>
                                 </button>
 
-                                {isReportsOpen && (
-                                    <div className="absolute right-0 top-full mt-1.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top-right animate-in fade-in slide-in-from-top-2 duration-200">
-                                        <div className="flex flex-col gap-1">
-                                            {availableReports.map((r, idx) => {
-                                                const isActive = location.pathname === r.path;
-                                                return (
-                                                    <button
-                                                        key={idx}
-                                                        onClick={() => {
-                                                            navigate(r.path);
-                                                            setIsReportsOpen(false);
-                                                        }}
-                                                        className={`relative group flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border border-transparent ${isActive
-                                                            ? "bg-indigo-50/70 text-indigo-700 font-semibold border-indigo-100/50"
-                                                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
-                                                            }`}
-                                                    >
-                                                        {/* Side Highlight Bar */}
-                                                        <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${isActive ? "bg-indigo-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"
-                                                            }`} />
+                                {isReportsOpen && (() => {
+                                    const hasGeneralReports = availableReports.length > 0;
+                                    const hasPriceListReports = canSeePriceListReports && priceFormats.length > 0;
+                                    let reportsColsCount = 0;
+                                    if (hasGeneralReports) reportsColsCount++;
+                                    if (hasPriceListReports) reportsColsCount++;
 
-                                                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${isActive ? "bg-indigo-100/80 text-indigo-700" : "bg-slate-100/80 text-slate-500 group-hover:scale-105"
-                                                            }`}>
-                                                            <i className={`${r.icon || "fa-solid fa-folder"} text-xs`}></i>
-                                                        </div>
+                                    let reportsDropdownWidthClass = "w-80";
+                                    if (reportsColsCount === 2) reportsDropdownWidthClass = "w-[560px]";
 
-                                                        <div className="flex-1">
-                                                            <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-indigo-900 font-bold" : "text-slate-800 group-hover:text-slate-950"
-                                                                }`}>
-                                                                {r.name}
-                                                            </p>
+                                    let reportsGridColsClass = "grid-cols-1 gap-3";
+                                    if (reportsColsCount === 2) reportsGridColsClass = "grid-cols-2 divide-x divide-slate-100 gap-4";
+
+                                    return (
+                                        <div className={`absolute right-0 top-full mt-1.5 ${reportsDropdownWidthClass} bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top-right animate-in fade-in slide-in-from-top-2 duration-200`}>
+                                            <div className={`grid ${reportsGridColsClass} max-h-96 overflow-y-auto`}>
+                                                {/* Section 1: General Reports */}
+                                                {hasGeneralReports && (
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1 flex items-center gap-1.5">
+                                                            <i className="fa-solid fa-chart-line text-indigo-500"></i>
+                                                            General Reports
+                                                        </p>
+                                                        <div className="flex flex-col gap-1">
+                                                            {availableReports.map((r, idx) => {
+                                                                const isActive = location.pathname === r.path;
+                                                                return (
+                                                                    <button
+                                                                        key={idx}
+                                                                        onClick={() => {
+                                                                            navigate(r.path);
+                                                                            setIsReportsOpen(false);
+                                                                        }}
+                                                                        className={`relative group flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border border-transparent ${isActive
+                                                                            ? "bg-indigo-50/70 text-indigo-700 font-semibold border-indigo-100/50"
+                                                                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
+                                                                            }`}
+                                                                    >
+                                                                        <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${isActive ? "bg-indigo-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"}`} />
+                                                                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${isActive ? "bg-indigo-100/80 text-indigo-700" : "bg-slate-100/80 text-slate-500 group-hover:scale-105"}`}>
+                                                                            <i className={`${r.icon || "fa-solid fa-folder"} text-xs`}></i>
+                                                                        </div>
+                                                                        <div className="flex-1">
+                                                                            <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-indigo-900 font-bold" : "text-slate-800 group-hover:text-slate-950"}`}>
+                                                                                {r.name}
+                                                                            </p>
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
                                                         </div>
-                                                    </button>
-                                                );
-                                            })}
+                                                    </div>
+                                                )}
+
+                                                {/* Section 2: Price List Reports */}
+                                                {hasPriceListReports && (
+                                                    <div className={`flex flex-col gap-1.5 ${hasGeneralReports ? "pl-4" : ""}`}>
+                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1 flex items-center gap-1.5">
+                                                            <i className="fa-solid fa-chart-pie text-emerald-500"></i>
+                                                            Price List Reports
+                                                        </p>
+                                                        <div className="flex flex-col gap-1">
+                                                            {priceFormats.map((f, idx) => {
+                                                                const label = `${f.format_name || f.state_name} Report`;
+                                                                const path = `/admin/price-list-report/${f.id}`;
+                                                                const isActive = location.pathname === path;
+                                                                return (
+                                                                    <button
+                                                                        key={idx}
+                                                                        onClick={() => {
+                                                                            navigate(path);
+                                                                            setIsReportsOpen(false);
+                                                                        }}
+                                                                        className={`relative group flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border border-transparent ${isActive
+                                                                            ? "bg-emerald-50/70 text-emerald-700 font-semibold border-emerald-100/50"
+                                                                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
+                                                                            }`}
+                                                                    >
+                                                                        <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${isActive ? "bg-emerald-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"}`} />
+                                                                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${isActive ? "bg-emerald-100/80 text-emerald-700" : "bg-slate-100/80 text-slate-500 group-hover:scale-105"}`}>
+                                                                            <i className="fa-solid fa-square-poll-vertical text-xs"></i>
+                                                                        </div>
+                                                                        <div className="flex-1">
+                                                                            <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-emerald-900 font-bold" : "text-slate-800 group-hover:text-slate-950"}`}>
+                                                                                {label}
+                                                                            </p>
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    );
+                                })()}
                             </div>
                         )}
 

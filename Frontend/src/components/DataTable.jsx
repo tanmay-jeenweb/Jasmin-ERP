@@ -75,6 +75,7 @@ export default function DataTable({
   toggleActions = null,
   searchPlaceholder = "Search...",
   tableId = null,
+  subHeader = null,
 }) {
   // Full ordered list (visible + hidden). Visible ones come first.
   const [columns, setColumns] = useState(initialColumns);
@@ -396,6 +397,12 @@ export default function DataTable({
           </div>
         </div>
 
+        {subHeader && (
+          <div className="px-4 py-2 bg-slate-50/50 border-b border-slate-200">
+            {subHeader}
+          </div>
+        )}
+
         {/* ── Table ────────────────────────────────────────────────────── */}
         <div
           className="overflow-x-auto flex-1"
@@ -441,6 +448,22 @@ export default function DataTable({
                   );
                 })}
               </tr>
+              {totalRow && (
+                <tr className="border-b-2 border-slate-350 bg-slate-100 font-bold">
+                  {visibleColumns.map((column) => {
+                    const originalColumn = initialColumns.find(c => c.key === column.key) || column;
+                    return (
+                      <td
+                        key={column.key}
+                        className="px-3 py-2.5 text-sm text-slate-900 border-b border-slate-300 bg-slate-100 font-bold"
+                        style={{ minWidth: originalColumn.minWidth || '140px' }}
+                      >
+                        {originalColumn.render ? originalColumn.render(totalRow) : totalRow[column.key]}
+                      </td>
+                    );
+                  })}
+                </tr>
+              )}
             </thead>
             <tbody>
               {loading ? (
@@ -474,24 +497,6 @@ export default function DataTable({
                 </tr>
               )}
             </tbody>
-            {totalRow && (
-              <tfoot className="sticky bottom-0 z-10 bg-slate-100 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
-                <tr className="border-t-2 border-slate-350 bg-slate-100 font-bold">
-                  {visibleColumns.map((column) => {
-                    const originalColumn = initialColumns.find(c => c.key === column.key) || column;
-                    return (
-                      <td
-                        key={column.key}
-                        className="px-3 py-3 text-sm text-slate-900 border-t border-slate-350 sticky bottom-0 bg-slate-100"
-                        style={{ minWidth: originalColumn.minWidth || '140px' }}
-                      >
-                        {originalColumn.render ? originalColumn.render(totalRow) : totalRow[column.key]}
-                      </td>
-                    );
-                  })}
-                </tr>
-              </tfoot>
-            )}
           </table>
         </div>
 

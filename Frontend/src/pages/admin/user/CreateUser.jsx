@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Navbar from "../../../components/Navbar";
 import { createUserByAdmin } from "../../../api/authApi";
 import { getUserTypes } from "../../../api/userTypeMasterApi";
@@ -16,18 +16,21 @@ export default function CreateUser() {
     
     // Master lists options
     const [statesList, setStatesList] = useState([]);
+    const [branchesList, setBranchesList] = useState([]);
     const [productTypesList, setProductTypesList] = useState([]);
     const [brandsList, setBrandsList] = useState([]);
     const [landingTypesList, setLandingTypesList] = useState([]);
 
     // Dropdown visibility states
     const [isStateDropdownOpen, setIsStateDropdownOpen] = useState(false);
+    const [isZoneDropdownOpen, setIsZoneDropdownOpen] = useState(false);
     const [isProductTypeDropdownOpen, setIsProductTypeDropdownOpen] = useState(false);
     const [isLandingTypeDropdownOpen, setIsLandingTypeDropdownOpen] = useState(false);
     const [isBrandDropdownOpen, setIsBrandDropdownOpen] = useState(false);
 
     // Selected multiple values
     const [selectedStates, setSelectedStates] = useState([]);
+    const [selectedZones, setSelectedZones] = useState([]);
     const [selectedProductTypes, setSelectedProductTypes] = useState([]);
     const [selectedLandingTypes, setSelectedLandingTypes] = useState([]);
     const [selectedBrands, setSelectedBrands] = useState([]);
@@ -35,6 +38,7 @@ export default function CreateUser() {
 
     // Search query states
     const [stateSearch, setStateSearch] = useState("");
+    const [zoneSearch, setZoneSearch] = useState("");
     const [productTypeSearch, setProductTypeSearch] = useState("");
     const [landingTypeSearch, setLandingTypeSearch] = useState("");
     const [brandSearch, setBrandSearch] = useState("");
@@ -43,6 +47,28 @@ export default function CreateUser() {
     const filteredProductTypes = productTypesList.filter(pt => pt.product_type_name.toLowerCase().includes(productTypeSearch.toLowerCase()));
     const filteredLandingTypes = landingTypesList.filter(lt => lt.name.toLowerCase().includes(landingTypeSearch.toLowerCase()));
     const filteredBrands = brandsList.filter(b => b.mobile_brand.toLowerCase().includes(brandSearch.toLowerCase()));
+
+    const zonesList = useMemo(() => {
+        if (!selectedStates || selectedStates.length === 0) return [];
+        const selectedStatesUpper = new Set(selectedStates.map(s => String(s).trim().toUpperCase()));
+        const uniqueZones = new Set();
+        branchesList.forEach(branch => {
+            const branchStateUpper = branch.state_name ? String(branch.state_name).trim().toUpperCase() : '';
+            if (selectedStatesUpper.has(branchStateUpper)) {
+                const zone = branch.branch_cls_05 ? String(branch.branch_cls_05).trim() : '';
+                if (zone) {
+                    uniqueZones.add(zone);
+                }
+            }
+        });
+        return Array.from(uniqueZones).sort();
+    }, [selectedStates, branchesList]);
+
+    const filteredZones = zonesList.filter(z => z.toLowerCase().includes(zoneSearch.toLowerCase()));
+
+    useEffect(() => {
+        setSelectedZones(prev => prev.filter(z => zonesList.includes(z)));
+    }, [zonesList]);
 
     const [newUserForm, setNewUserForm] = useState({
         name: "",
@@ -61,18 +87,20 @@ export default function CreateUser() {
 
     const loadFormData = async () => {
         try {
-            const [utRes, stateRes, ptRes, brandRes, ltRes] = await Promise.all([
+            const [utRes, stateRes, ptRes, brandRes, ltRes, branchRes] = await Promise.all([
                 getUserTypes(),
                 getStates(),
                 getProductTypes(),
                 getMobileBrands(),
-                getLandingTypes()
+                getLandingTypes(),
+                getBranches()
             ]);
             setUserTypes(utRes.data.data || []);
             setStatesList((stateRes.data.data || []).filter(s => s.live === "Yes"));
             setProductTypesList(ptRes.data.data || []);
             setBrandsList(brandRes.data.data || []);
             setLandingTypesList((ltRes.data.data || []).filter(lt => lt.live === "Yes"));
+            setBranchesList(branchRes.data.data || []);
         } catch (error) {
             console.error("Error loading form data:", error);
             toast.error("Failed to load options for user registration.");
@@ -86,10 +114,12 @@ export default function CreateUser() {
         const handleClickOutside = (event) => {
             if (!event.target.closest(".relative")) {
                 setIsStateDropdownOpen(false);
+                setIsZoneDropdownOpen(false);
                 setIsProductTypeDropdownOpen(false);
                 setIsLandingTypeDropdownOpen(false);
                 setIsBrandDropdownOpen(false);
                 setStateSearch("");
+                setZoneSearch("");
                 setProductTypeSearch("");
                 setLandingTypeSearch("");
                 setBrandSearch("");
@@ -243,6 +273,41 @@ export default function CreateUser() {
         return `${selectedBrands.length} Brands Selected`;
     };
 
+    const handleToggleZone = (name) => {
+        let updated = [...selectedZones];
+        if (name === "All") {
+            const allFiltered = filteredZones;
+            const isAllFilteredSelected = allFiltered.every(item => updated.includes(item));
+            if (isAllFilteredSelected) {
+                updated = updated.filter(val => !allFiltered.includes(val) && val !== "All");
+            } else {
+                allFiltered.forEach(item => {
+                    if (!updated.includes(item)) updated.push(item);
+                });
+                if (zonesList.every(z => updated.includes(z))) {
+                    updated.push("All");
+                }
+            }
+        } else {
+            if (updated.includes(name)) {
+                updated = updated.filter(val => val !== name && val !== "All");
+            } else {
+                updated.push(name);
+                if (zonesList.every(z => updated.includes(z))) {
+                    updated.push("All");
+                }
+            }
+        }
+        setSelectedZones(updated);
+    };
+
+    const getZoneLabel = () => {
+        if (selectedZones.includes("All")) return "All";
+        if (selectedZones.length === 0) return "Select Zones";
+        if (selectedZones.length <= 2) return selectedZones.join(", ");
+        return `${selectedZones.length} Zones Selected`;
+    };
+
     const handleCreateUser = async (e) => {
         e.preventDefault();
 
@@ -260,7 +325,8 @@ export default function CreateUser() {
                 branch: null,
                 productType: selectedProductTypes,
                 landingType: selectedLandingTypes,
-                brand: selectedBrands
+                brand: selectedBrands,
+                zone: selectedZones
             };
             await createUserByAdmin(payload);
             toast.success("User created successfully");
@@ -278,6 +344,7 @@ export default function CreateUser() {
                 mobileAccess: true
             });
             setSelectedStates([]);
+            setSelectedZones([]);
             setCity("");
             setSelectedProductTypes([]);
             setSelectedLandingTypes([]);
@@ -414,12 +481,14 @@ export default function CreateUser() {
                                      className="w-full min-h-[38px] px-3 py-2 border border-slate-300 rounded-lg bg-white sm:text-sm cursor-pointer flex justify-between items-center"
                                      onClick={() => {
                                          setIsStateDropdownOpen(!isStateDropdownOpen);
-                                         setIsBranchDropdownOpen(false);
+                                         setIsZoneDropdownOpen(false);
                                          setIsProductTypeDropdownOpen(false);
                                          setIsLandingTypeDropdownOpen(false);
-                                         setBranchSearch("");
+                                         setIsBrandDropdownOpen(false);
+                                         setZoneSearch("");
                                          setProductTypeSearch("");
                                          setLandingTypeSearch("");
+                                         setBrandSearch("");
                                          if (isStateDropdownOpen) setStateSearch("");
                                      }}
                                  >
@@ -467,6 +536,69 @@ export default function CreateUser() {
                                      </div>
                                  )}
                              </div>
+
+                             {/* Zone Multiple Selection Dropdown */}
+                             <div className="relative">
+                                 <label className="block text-sm font-medium text-slate-700 mb-1">Zone</label>
+                                 <div
+                                     className="w-full min-h-[38px] px-3 py-2 border border-slate-300 rounded-lg bg-white sm:text-sm cursor-pointer flex justify-between items-center"
+                                     onClick={() => {
+                                         setIsZoneDropdownOpen(!isZoneDropdownOpen);
+                                         setIsStateDropdownOpen(false);
+                                         setIsProductTypeDropdownOpen(false);
+                                         setIsLandingTypeDropdownOpen(false);
+                                         setIsBrandDropdownOpen(false);
+                                         setStateSearch("");
+                                         setProductTypeSearch("");
+                                         setLandingTypeSearch("");
+                                         setBrandSearch("");
+                                         if (isZoneDropdownOpen) setZoneSearch("");
+                                     }}
+                                 >
+                                     <span className="truncate text-slate-700">{getZoneLabel()}</span>
+                                     <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                     </svg>
+                                 </div>
+                                 {isZoneDropdownOpen && (
+                                     <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto p-2 space-y-1">
+                                         <div className="px-1 py-1 sticky top-0 bg-white z-10">
+                                             <input
+                                                 type="text"
+                                                 placeholder="Search Zone..."
+                                                 value={zoneSearch}
+                                                 onChange={(e) => setZoneSearch(e.target.value)}
+                                                 className="w-full px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-[#6804a1] focus:border-[#6804a1]"
+                                                 onClick={(e) => e.stopPropagation()}
+                                             />
+                                         </div>
+                                         <label className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer text-sm font-medium text-slate-700">
+                                             <input
+                                                 type="checkbox"
+                                                 checked={filteredZones.length > 0 && filteredZones.every(z => selectedZones.includes(z))}
+                                                 onChange={() => handleToggleZone("All")}
+                                                 className="h-4 w-4 text-[#6804a1] border-slate-300 rounded focus:ring-[#6804a1]"
+                                             />
+                                             All
+                                         </label>
+                                         {filteredZones.length === 0 ? (
+                                             <div className="text-xs text-slate-400 p-1.5">No zones found (select states first)</div>
+                                         ) : (
+                                             filteredZones.map(z => (
+                                                 <label key={z} className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer text-sm text-slate-700">
+                                                     <input
+                                                         type="checkbox"
+                                                         checked={selectedZones.includes(z)}
+                                                         onChange={() => handleToggleZone(z)}
+                                                         className="h-4 w-4 text-[#6804a1] border-slate-300 rounded focus:ring-[#6804a1]"
+                                                     />
+                                                     {z}
+                                                 </label>
+                                             ))
+                                         )}
+                                     </div>
+                                 )}
+                             </div>
  
                              {/* City User Input */}
                              <div>
@@ -488,11 +620,13 @@ export default function CreateUser() {
                                      onClick={() => {
                                          setIsProductTypeDropdownOpen(!isProductTypeDropdownOpen);
                                          setIsStateDropdownOpen(false);
-                                         setIsBranchDropdownOpen(false);
+                                         setIsZoneDropdownOpen(false);
                                          setIsLandingTypeDropdownOpen(false);
+                                         setIsBrandDropdownOpen(false);
                                          setStateSearch("");
-                                         setBranchSearch("");
+                                         setZoneSearch("");
                                          setLandingTypeSearch("");
+                                         setBrandSearch("");
                                          if (isProductTypeDropdownOpen) setProductTypeSearch("");
                                      }}
                                  >
@@ -549,11 +683,11 @@ export default function CreateUser() {
                                      onClick={() => {
                                          setIsLandingTypeDropdownOpen(!isLandingTypeDropdownOpen);
                                          setIsStateDropdownOpen(false);
-                                         setIsBranchDropdownOpen(false);
+                                         setIsZoneDropdownOpen(false);
                                          setIsProductTypeDropdownOpen(false);
                                          setIsBrandDropdownOpen(false);
                                          setStateSearch("");
-                                         setBranchSearch("");
+                                         setZoneSearch("");
                                          setProductTypeSearch("");
                                          setBrandSearch("");
                                          if (isLandingTypeDropdownOpen) setLandingTypeSearch("");
@@ -612,11 +746,11 @@ export default function CreateUser() {
                                      onClick={() => {
                                          setIsBrandDropdownOpen(!isBrandDropdownOpen);
                                          setIsStateDropdownOpen(false);
-                                         setIsBranchDropdownOpen(false);
+                                         setIsZoneDropdownOpen(false);
                                          setIsProductTypeDropdownOpen(false);
                                          setIsLandingTypeDropdownOpen(false);
                                          setStateSearch("");
-                                         setBranchSearch("");
+                                         setZoneSearch("");
                                          setProductTypeSearch("");
                                          setLandingTypeSearch("");
                                          if (isBrandDropdownOpen) setBrandSearch("");

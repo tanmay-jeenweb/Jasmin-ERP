@@ -172,11 +172,46 @@ const importCashDepositData = async (records) => {
     }
 };
 
+const updateStockCashDepositRecordData = async (branchId, data) => {
+    const query = `
+        INSERT INTO branch_stock_cash_deposits (
+            branch_id, 
+            stock_deposit, 
+            support, 
+            paid_support, 
+            current_stock, 
+            opening_cash_deposit_pending, 
+            cash_deposit, 
+            credit_debit
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            stock_deposit = VALUES(stock_deposit),
+            support = VALUES(support),
+            paid_support = VALUES(paid_support),
+            current_stock = VALUES(current_stock),
+            opening_cash_deposit_pending = VALUES(opening_cash_deposit_pending),
+            cash_deposit = VALUES(cash_deposit),
+            credit_debit = VALUES(credit_debit)
+    `;
+    const [result] = await db.execute(query, [
+        branchId,
+        data.stock_deposit || 0.00,
+        data.support || 0.00,
+        data.paid_support || 0.00,
+        data.current_stock || 0.00,
+        data.opening_cash_deposit_pending || 0.00,
+        data.cash_deposit || 0.00,
+        data.credit_debit || 0.00
+    ]);
+    return result;
+};
+
 module.exports = {
     createStockCashDepositTable,
     getStockCashDepositReportData,
     importStockCashDepositData,
     importCurrentStockData,
     importOpeningCashAndCreditData,
-    importCashDepositData
+    importCashDepositData,
+    updateStockCashDepositRecordData
 };

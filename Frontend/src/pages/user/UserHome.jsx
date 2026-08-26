@@ -3,6 +3,7 @@ import Navbar from "../../components/Navbar";
 import DataTable from "../../components/DataTable";
 import { getAbmWiseCashDepositReport } from "../../api/stockCashDepositApi";
 import { getStates } from "../../api/stateApi";
+import { getBranches } from "../../api/branchApi";
 import { getTargetVsAchievements, syncTargetVsAchievements } from "../../api/targetVsAchievementApi";
 import { getMobileBrands } from "../../api/mobileBrandApi";
 import { getBrandWiseSales, syncBrandWiseSales } from "../../api/brandWiseSalesApi";
@@ -24,6 +25,12 @@ export default function UserHome() {
     const [loading, setLoading] = useState(false);
 
     // Brand Wise Sales States
+    const [userBranches, setUserBranches] = useState([]);
+    const [selectedBrandStates, setSelectedBrandStates] = useState([]);
+    const [selectedBrandZones, setSelectedBrandZones] = useState([]);
+    const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+    const [stateFilterSearch, setStateFilterSearch] = useState("");
+    const [zoneFilterSearch, setZoneFilterSearch] = useState("");
     const [targetData, setTargetData] = useState([]);
     const [brandsList, setBrandsList] = useState([]);
     const [brandSalesData, setBrandSalesData] = useState([]);
@@ -61,9 +68,11 @@ export default function UserHome() {
         }
     };
 
-    const loadBrandSalesData = async (date, state = "All") => {
+    const loadBrandSalesData = async (date, statesArr = [], zonesArr = []) => {
         try {
-            const res = await getBrandWiseSales(date, state);
+            const stateParam = statesArr.length > 0 ? statesArr.join(",") : "All";
+            const zoneParam = zonesArr.length > 0 ? zonesArr.join(",") : "All";
+            const res = await getBrandWiseSales(date, stateParam, zoneParam);
             setBrandSalesData(res.data?.data || []);
         } catch (err) {
             console.error("Failed to load brand wise sales:", err);
@@ -74,7 +83,7 @@ export default function UserHome() {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [statesRes, targetRes, brandsRes] = await Promise.all([
+            const [statesRes, targetRes, brandsRes, branchesRes] = await Promise.all([
                 getStates().catch(err => {
                     console.error("Failed to load states from API:", err);
                     return { data: { data: [] } };
@@ -86,19 +95,24 @@ export default function UserHome() {
                 getMobileBrands().catch(err => {
                     console.error("Failed to load brands from API:", err);
                     return { data: { data: [] } };
+                }),
+                getBranches({ assignedOnly: true }).catch(err => {
+                    console.error("Failed to load branches from API:", err);
+                    return { data: { data: [] } };
                 })
             ]);
 
             setStates(statesRes.data.data || []);
             setTargetData(targetRes.data.data || []);
             setBrandsList(brandsRes.data.data || []);
+            setUserBranches(branchesRes.data.data || []);
             
             const promises = [];
             if (canViewCashDeposit) {
                 promises.push(loadCashDepositData(selectedState));
             }
             if (canViewBrandSales) {
-                promises.push(loadBrandSalesData(brandSyncDate, selectedState));
+                promises.push(loadBrandSalesData(brandSyncDate, selectedBrandStates, selectedBrandZones));
             }
             await Promise.all(promises);
         } catch (err) {
@@ -128,15 +142,52 @@ export default function UserHome() {
 
     useEffect(() => {
         if (brandSyncDate && states.length > 0 && canViewBrandSales) {
-            loadBrandSalesData(brandSyncDate, selectedState);
+            loadBrandSalesData(brandSyncDate, selectedBrandStates, selectedBrandZones);
         }
-    }, [brandSyncDate, selectedState, canViewBrandSales, states]);
+    }, [brandSyncDate, selectedBrandStates, selectedBrandZones, canViewBrandSales, states]);
 
-    // Get list of states that actually have data in the report as fallback/helper
-    const activeStates = useMemo(() => {
-        const dbStates = states.map(s => s.name);
-        return Array.from(new Set(dbStates)).sort((a, b) => a.localeCompare(b));
-    }, [states]);
+    // Extract unique states available from user's branches (fallback to all database states)
+    const availableStates = useMemo(() => {
+        if (userBranches.length === 0) {
+            return states.map(s => s.name).sort((a, b) => a.localeCompare(b));
+        }
+        const list = userBranches
+            .map(b => b.state_name)
+            .filter(name => name && name.trim() !== "");
+        return Array.from(new Set(list)).sort((a, b) => a.localeCompare(b));
+    }, [userBranches, states]);
+
+    // Extract unique zones for brand sales based on selectedBrandStates array
+    const availableBrandZones = useMemo(() => {
+        let filtered = userBranches;
+        if (selectedBrandStates.length > 0) {
+            filtered = userBranches.filter(b => b.state_name && selectedBrandStates.includes(b.state_name));
+        }
+        const list = filtered
+            .map(b => b.branch_cls_05)
+            .filter(zone => zone && zone.trim() !== "");
+        return Array.from(new Set(list)).sort((a, b) => a.localeCompare(b));
+    }, [userBranches, selectedBrandStates]);
+
+    // Cleanup selected zones when available brand zones changes (e.g. state deselection)
+    useEffect(() => {
+        setSelectedBrandZones(prev => prev.filter(z => availableBrandZones.includes(z)));
+    }, [availableBrandZones]);
+
+    // Click outside listener for filter popover
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            const dropdownEl = document.getElementById("brand-filter-popover");
+            const buttonEl = document.getElementById("brand-filter-button");
+            if (dropdownEl && !dropdownEl.contains(event.target) && buttonEl && !buttonEl.contains(event.target)) {
+                setIsFilterDropdownOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, []);
 
     // Format data with Total row appended for the table
     const formattedData = useMemo(() => {
@@ -396,7 +447,9 @@ export default function UserHome() {
 
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Brand Wise Sales Summary");
-            XLSX.writeFile(workbook, `Brand_Wise_Sales_Report.xlsx`);
+            const statesSuffix = selectedBrandStates.length > 0 ? `${selectedBrandStates.length}_States` : "All_States";
+            const zonesSuffix = selectedBrandZones.length > 0 ? `${selectedBrandZones.length}_Zones` : "All_Zones";
+            XLSX.writeFile(workbook, `Brand_Wise_Sales_Report_${statesSuffix}_${zonesSuffix}.xlsx`);
             toast.success("Excel report exported successfully!");
         } catch (err) {
             console.error("Failed to export Excel report:", err);
@@ -411,7 +464,7 @@ export default function UserHome() {
             const response = await syncBrandWiseSales(brandSyncDate);
             if (response.data?.success) {
                 toast.success(response.data.message || "Brand Wise Sales synced successfully!");
-                await loadBrandSalesData(brandSyncDate);
+                await loadBrandSalesData(brandSyncDate, selectedBrandStates, selectedBrandZones);
             } else {
                 toast.error(response.data?.message || "Sync failed");
             }
@@ -582,7 +635,7 @@ export default function UserHome() {
                 className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-700 outline-none focus:border-[#6804a1] focus:ring-1 focus:ring-[#6804a1] shadow-sm transition-all duration-150 cursor-pointer min-w-[150px]"
             >
                 <option value="All">All States</option>
-                {activeStates.map(state => (
+                {availableStates.map(state => (
                     <option key={state} value={state}>{state}</option>
                 ))}
             </select>
@@ -603,7 +656,7 @@ export default function UserHome() {
 
     // Filters/sync elements for Brand Wise Sales tab
     const brandSyncElement = (
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 relative">
             <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-lg px-2 h-10">
                 <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Sync Date</span>
                 <input
@@ -613,19 +666,159 @@ export default function UserHome() {
                     className="bg-transparent border-none text-sm text-slate-700 font-medium focus:outline-none cursor-pointer"
                 />
             </div>
-            <label className="text-sm font-semibold text-slate-600 flex items-center gap-1.5 whitespace-nowrap">
-                State:
-            </label>
-            <select
-                value={selectedState}
-                onChange={(e) => setSelectedState(e.target.value)}
-                className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-700 outline-none focus:border-[#6804a1] focus:ring-1 focus:ring-[#6804a1] shadow-sm transition-all duration-150 cursor-pointer min-w-[150px]"
-            >
-                <option value="All">All States</option>
-                {activeStates.map(state => (
-                    <option key={state} value={state}>{state}</option>
-                ))}
-            </select>
+            
+            {/* Filter Popover Trigger Button */}
+            <div className="relative">
+                <button
+                    id="brand-filter-button"
+                    onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
+                    className="flex items-center gap-2 h-10 px-4 rounded-lg bg-white border border-slate-300 hover:border-slate-400 text-sm font-semibold text-slate-700 shadow-sm transition-all duration-150 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#6804a1]"
+                >
+                    <i className="fa-solid fa-filter text-slate-400 text-xs"></i>
+                    <span>Filter</span>
+                    <i className={`fa-solid fa-chevron-down text-slate-400 text-xs transition-transform duration-200 ${isFilterDropdownOpen ? 'rotate-180' : ''}`}></i>
+                </button>
+
+                {/* Popover Card */}
+                {isFilterDropdownOpen && (
+                    <div
+                        id="brand-filter-popover"
+                        className="absolute right-0 mt-2 w-[480px] bg-white border border-slate-200 rounded-xl shadow-xl p-4 z-50 grid grid-cols-2 gap-4"
+                    >
+                        {/* Column 1: States */}
+                        <div className="flex flex-col border-r border-slate-100 pr-3">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">States</span>
+                                <span className="text-[10px] bg-indigo-55 text-indigo-700 px-1.5 py-0.5 rounded font-semibold">
+                                    {selectedBrandStates.length === 0 ? "All" : selectedBrandStates.length}
+                                </span>
+                            </div>
+                            
+                            {/* Search box */}
+                            <div className="px-2 py-1.5 border border-slate-200 rounded-lg flex items-center gap-1.5 mb-2 bg-slate-50">
+                                <i className="fa-solid fa-magnifying-glass text-slate-400 text-xs"></i>
+                                <input
+                                    type="text"
+                                    placeholder="Search states..."
+                                    value={stateFilterSearch}
+                                    onChange={(e) => setStateFilterSearch(e.target.value)}
+                                    className="w-full text-xs border-none outline-none bg-transparent"
+                                />
+                            </div>
+
+                            {/* Bulk Actions */}
+                            <div className="flex justify-between items-center text-[10px] font-bold text-indigo-600 mb-2 px-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedBrandStates(availableStates)}
+                                    className="bg-transparent border-none cursor-pointer hover:underline text-indigo-650 font-semibold"
+                                >
+                                    Select All
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedBrandStates([])}
+                                    className="bg-transparent border-none cursor-pointer hover:underline text-indigo-655 font-semibold"
+                                >
+                                    Deselect All
+                                </button>
+                            </div>
+
+                            {/* Checklist */}
+                            <div className="max-h-48 overflow-y-auto px-1 py-1 space-y-0.5 border border-slate-100 rounded-lg">
+                                {availableStates
+                                    .filter(name => name.toLowerCase().includes(stateFilterSearch.toLowerCase()))
+                                    .map(stateName => {
+                                        const isChecked = selectedBrandStates.includes(stateName);
+                                        return (
+                                            <label key={stateName} className="flex items-center gap-2 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 rounded cursor-pointer select-none">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={() => {
+                                                        if (isChecked) {
+                                                            setSelectedBrandStates(selectedBrandStates.filter(name => name !== stateName));
+                                                        } else {
+                                                            setSelectedBrandStates([...selectedBrandStates, stateName]);
+                                                        }
+                                                    }}
+                                                    className="accent-[#6804a1] h-3.5 w-3.5 flex-shrink-0"
+                                                />
+                                                <span className="truncate">{stateName}</span>
+                                            </label>
+                                        );
+                                    })}
+                            </div>
+                        </div>
+
+                        {/* Column 2: Zones */}
+                        <div className="flex flex-col pl-1">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">Zones</span>
+                                <span className="text-[10px] bg-indigo-55 text-indigo-750 px-1.5 py-0.5 rounded font-semibold text-indigo-600">
+                                    {selectedBrandZones.length === 0 ? "All" : selectedBrandZones.length}
+                                </span>
+                            </div>
+                            
+                            {/* Search box */}
+                            <div className="px-2 py-1.5 border border-slate-200 rounded-lg flex items-center gap-1.5 mb-2 bg-slate-50">
+                                <i className="fa-solid fa-magnifying-glass text-slate-400 text-xs"></i>
+                                <input
+                                    type="text"
+                                    placeholder="Search zones..."
+                                    value={zoneFilterSearch}
+                                    onChange={(e) => setZoneFilterSearch(e.target.value)}
+                                    className="w-full text-xs border-none outline-none bg-transparent"
+                                />
+                            </div>
+
+                            {/* Bulk Actions */}
+                            <div className="flex justify-between items-center text-[10px] font-bold text-indigo-600 mb-2 px-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedBrandZones(availableBrandZones)}
+                                    className="bg-transparent border-none cursor-pointer hover:underline text-indigo-650 font-semibold"
+                                >
+                                    Select All
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedBrandZones([])}
+                                    className="bg-transparent border-none cursor-pointer hover:underline text-indigo-655 font-semibold"
+                                >
+                                    Deselect All
+                                </button>
+                            </div>
+
+                            {/* Checklist */}
+                            <div className="max-h-48 overflow-y-auto px-1 py-1 space-y-0.5 border border-slate-100 rounded-lg">
+                                {availableBrandZones
+                                    .filter(name => name.toLowerCase().includes(zoneFilterSearch.toLowerCase()))
+                                    .map(zoneName => {
+                                        const isChecked = selectedBrandZones.includes(zoneName);
+                                        return (
+                                            <label key={zoneName} className="flex items-center gap-2 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 rounded cursor-pointer select-none">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={() => {
+                                                        if (isChecked) {
+                                                            setSelectedBrandZones(selectedBrandZones.filter(name => name !== zoneName));
+                                                        } else {
+                                                            setSelectedBrandZones([...selectedBrandZones, zoneName]);
+                                                        }
+                                                    }}
+                                                    className="accent-[#6804a1] h-3.5 w-3.5 flex-shrink-0"
+                                                />
+                                                <span className="truncate">{zoneName}</span>
+                                            </label>
+                                        );
+                                    })}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
     );
 

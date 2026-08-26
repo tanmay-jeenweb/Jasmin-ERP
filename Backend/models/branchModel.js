@@ -16,6 +16,7 @@ const createBranchTable = async () => {
             city VARCHAR(255) NOT NULL,
             address TEXT NOT NULL,
             abm VARCHAR(255) NOT NULL,
+            branch_cls_05 VARCHAR(255) NOT NULL DEFAULT '',
             status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
             added_by INT NOT NULL,
             device_id VARCHAR(255),
@@ -36,6 +37,11 @@ const createBranchTable = async () => {
         await db.execute(`ALTER TABLE branch_master MODIFY COLUMN GSTIN VARCHAR(100) NOT NULL`);
         await db.execute(`ALTER TABLE branch_master MODIFY COLUMN city VARCHAR(255) NOT NULL`);
         await db.execute(`ALTER TABLE branch_master MODIFY COLUMN abm VARCHAR(255) NOT NULL`);
+        try {
+            await db.execute(`ALTER TABLE branch_master ADD COLUMN branch_cls_05 VARCHAR(255) NOT NULL DEFAULT ''`);
+        } catch (err) {
+            // ignore if column already exists
+        }
     } catch (err) {
         console.error("Error altering branch_master columns:", err);
     }
@@ -44,8 +50,8 @@ const createBranchTable = async () => {
 const createBranch = async (data, addedBy, deviceId) => {
     const query = `
         INSERT INTO branch_master (
-            name, code, phone, email, pincode, GSTIN, opened_on, store_type, state_id, city, address, abm, status, added_by, device_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            name, code, phone, email, pincode, GSTIN, opened_on, store_type, state_id, city, address, abm, status, added_by, device_id, branch_cls_05
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     const [result] = await db.execute(query, [
         data.name,
@@ -62,7 +68,8 @@ const createBranch = async (data, addedBy, deviceId) => {
         data.abm,
         data.status || 'active',
         addedBy,
-        deviceId
+        deviceId,
+        data.branch_cls_05 || ''
     ]);
     return result;
 };
@@ -87,7 +94,8 @@ const getAllBranches = async () => {
             bm.status,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             bm.device_id,
-            bm.timestamp
+            bm.timestamp,
+            bm.branch_cls_05
         FROM branch_master bm
         LEFT JOIN state_master sm ON bm.state_id = sm.id
         LEFT JOIN users u ON bm.added_by = u.id
@@ -118,7 +126,8 @@ const updateBranch = async (id, data) => {
             city = ?, 
             address = ?, 
             abm = ?, 
-            status = ?
+            status = ?,
+            branch_cls_05 = ?
         WHERE id = ?
     `;
     const [result] = await db.execute(query, [
@@ -135,6 +144,7 @@ const updateBranch = async (id, data) => {
         data.address,
         data.abm,
         data.status,
+        data.branch_cls_05 || '',
         id
     ]);
     return result;
@@ -166,7 +176,8 @@ const getBranchById = async (id) => {
             bm.status,
             bm.added_by,
             bm.device_id,
-            bm.timestamp
+            bm.timestamp,
+            bm.branch_cls_05
         FROM branch_master bm
         LEFT JOIN state_master sm ON bm.state_id = sm.id
         LEFT JOIN user_branch_mappings abm_m ON bm.id = abm_m.branch_id AND abm_m.user_id IN (
@@ -214,8 +225,8 @@ const upsertBranches = async (branches, addedBy, deviceId) => {
             const query = `
                 INSERT INTO branch_master (
                     name, code, phone, email, pincode, GSTIN, opened_on, 
-                    store_type, state_id, city, address, abm, status, added_by, device_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    store_type, state_id, city, address, abm, status, added_by, device_id, branch_cls_05
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     name = VALUES(name),
                     phone = VALUES(phone),
@@ -230,7 +241,8 @@ const upsertBranches = async (branches, addedBy, deviceId) => {
                     abm = VALUES(abm),
                     status = VALUES(status),
                     added_by = VALUES(added_by),
-                    device_id = VALUES(device_id)
+                    device_id = VALUES(device_id),
+                    branch_cls_05 = VALUES(branch_cls_05)
             `;
 
             await connection.execute(query, [
@@ -248,7 +260,8 @@ const upsertBranches = async (branches, addedBy, deviceId) => {
                 b.abm || '',
                 b.status || 'active',
                 addedBy,
-                deviceId
+                deviceId,
+                b.branch_cls_05 || ''
             ]);
         }
 

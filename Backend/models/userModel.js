@@ -22,6 +22,7 @@ const createUsersTable = async () => {
             branch JSON DEFAULT NULL,
             product_type JSON DEFAULT NULL,
             landing_type JSON DEFAULT NULL,
+            zone JSON DEFAULT NULL,
             web_access BOOLEAN DEFAULT TRUE,
             mobile_access BOOLEAN DEFAULT TRUE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -92,6 +93,10 @@ const createUsersTable = async () => {
         {
             name: 'mobile_access',
             query: 'ALTER TABLE users ADD COLUMN mobile_access BOOLEAN DEFAULT TRUE'
+        },
+        {
+            name: 'zone',
+            query: 'ALTER TABLE users ADD COLUMN zone JSON DEFAULT NULL'
         }
     ];
 
@@ -171,13 +176,14 @@ const createUser = async (
     brand = null,
     plainPassword = null,
     webAccess = true,
-    mobileAccess = true
+    mobileAccess = true,
+    zone = null
 ) => {
 
     const query = `
         INSERT INTO users
-        (name, username, email, password, user_type_id, mob_no, date_of_join, device_verification_required, active, role, state, city, branch, product_type, landing_type, brand, plain_password, web_access, mobile_access)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (name, username, email, password, user_type_id, mob_no, date_of_join, device_verification_required, active, role, state, city, branch, product_type, landing_type, brand, plain_password, web_access, mobile_access, zone)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const [result] = await db.execute(query, [
@@ -199,7 +205,8 @@ const createUser = async (
         brand ? JSON.stringify(brand) : null,
         plainPassword,
         webAccess ? 1 : 0,
-        mobileAccess ? 1 : 0
+        mobileAccess ? 1 : 0,
+        zone ? JSON.stringify(zone) : null
     ]);
 
     return result;
@@ -236,7 +243,7 @@ const getAllUsers = async (includeInactive = false) => {
             u.id, u.name, u.username, u.email,
             u.user_type_id, u.mob_no, u.date_of_join, u.device_verification_required,
             ut.type_name AS user_type_name, u.active,
-            u.state, u.city, u.branch, u.product_type, u.landing_type, u.brand,
+            u.state, u.city, u.branch, u.product_type, u.landing_type, u.brand, u.zone,
             u.web_access, u.mobile_access
         FROM users u
         LEFT JOIN user_types ut ON u.user_type_id = ut.id
