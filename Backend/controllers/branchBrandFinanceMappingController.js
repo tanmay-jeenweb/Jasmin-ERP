@@ -7,6 +7,7 @@ const {
 } = require('../models/branchBrandFinanceMappingModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
 const db = require('../config/db.js');
+const { syncToCrm } = require('../utils/syncWebhookHelper.js');
 
 const getBranchMappingsController = async (req, res) => {
     try {
@@ -51,7 +52,7 @@ const getBranchMappingsController = async (req, res) => {
         const brands = allBrands.filter(b => b.for_code === 'Yes');
 
         // Fetch current mappings for this branch
-        const mappings = await getMappingsByBranchId(branchId);
+        const mappings = await getMappingsByBranchId(branch.id);
 
         res.status(200).json({
             success: true,
@@ -112,9 +113,9 @@ const saveBranchMappingsController = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Invalid mappings parameter' });
         }
 
-        const beforeMappings = await getMappingsByBranchId(branchId);
+        const beforeMappings = await getMappingsByBranchId(branch.id);
 
-        await saveBranchBrandFinanceMappings(branchId, mappings, userId);
+        await saveBranchBrandFinanceMappings(branch.id, mappings, userId);
 
         await createAuditLog(
             userId,
@@ -125,6 +126,13 @@ const saveBranchMappingsController = async (req, res) => {
             beforeMappings,
             mappings
         );
+
+        // Sync to CRM if not originating from CRM sync
+        const isSyncIncoming = req.headers['x-sync-source'] === 'JASMIN-CRM';
+        if (!isSyncIncoming) {
+            syncToCrm(branch.code, 'mappings', { mappings });
+        }
+
 
         res.status(200).json({
             success: true,
