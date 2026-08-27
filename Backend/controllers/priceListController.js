@@ -129,16 +129,16 @@ const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs
 
             let val = rec[colName];
             if (val === undefined || val === null || val === "") {
-                val = NaN;
+                val = 0;
             } else if (typeof val === 'string') {
                 const cleanedVal = val.replace(/,/g, '').trim();
                 if (cleanedVal === '-' || cleanedVal === '' || cleanedVal === '—') {
-                    val = NaN;
+                    val = 0;
                 } else {
-                    val = !isNaN(Number(cleanedVal)) ? Number(cleanedVal) : NaN;
+                    val = !isNaN(Number(cleanedVal)) ? Number(cleanedVal) : 0;
                 }
             } else if (typeof val !== 'number') {
-                val = NaN;
+                val = 0;
             }
 
             // Replace cell references like F2, F12, F (case-insensitive word boundaries)
