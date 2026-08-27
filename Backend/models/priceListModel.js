@@ -20,7 +20,12 @@ const filterByIcatSettings = async (records) => {
 
 const getPriceListData = async (variationId) => {
     const tableName = `price_list_format_${variationId}`;
-    const query = `SELECT * FROM \`${tableName}\` ORDER BY brand ASC, model_name ASC`;
+    const query = `
+        SELECT p.*, COALESCE(imm.product_name, p.icat_name) AS icat_name
+        FROM \`${tableName}\` p
+        LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
+        ORDER BY p.brand ASC, p.model_name ASC
+    `;
     const [results] = await db.execute(query);
     return filterByIcatSettings(results);
 };
@@ -164,15 +169,19 @@ const upsertPriceListData = async (variationId, columnsList = [], records = [], 
 const getPriceListHistoryData = async (variationId, productCode = null) => {
     const historyTableName = `price_list_format_history_${variationId}`;
     try {
-        let query = `SELECT * FROM \`${historyTableName}\``;
+        let query = `
+            SELECT p.*, COALESCE(imm.product_name, p.icat_name) AS icat_name
+            FROM \`${historyTableName}\` p
+            LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
+        `;
         const params = [];
 
         if (productCode) {
-            query += ` WHERE product_code = ?`;
+            query += ` WHERE p.product_code = ?`;
             params.push(productCode);
         }
 
-        query += ` ORDER BY timestamp DESC, id DESC`;
+        query += ` ORDER BY p.timestamp DESC, p.id DESC`;
         const [results] = await db.execute(query, params);
         return results;
     } catch (e) {
@@ -215,7 +224,7 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
             if (trimmedDate.includes(':')) {
                 const formattedTs = trimmedDate.replace('T', ' ');
                 query = `
-                    SELECT p.*, imm.product_name AS imm_product_name
+                    SELECT p.*, COALESCE(imm.product_name, p.icat_name) AS icat_name, imm.product_name AS imm_product_name
                     FROM \`${historyTableName}\` p
                     LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
                     WHERE DATE_FORMAT(p.timestamp, '%Y-%m-%d %H:%i:%s') = ?
@@ -224,7 +233,7 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
                 queryParams = [formattedTs];
             } else {
                 query = `
-                    SELECT p.*, imm.product_name AS imm_product_name
+                    SELECT p.*, COALESCE(imm.product_name, p.icat_name) AS icat_name, imm.product_name AS imm_product_name
                     FROM \`${historyTableName}\` p
                     LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
                     WHERE DATE_FORMAT(p.timestamp, '%Y-%m-%d') = ?
@@ -242,7 +251,7 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
                     ? trimmedDate.replace('T', ' ') 
                     : `${trimmedDate} 23:59:59`;
                 const fallbackQuery = `
-                    SELECT p.*, imm.product_name AS imm_product_name
+                    SELECT p.*, COALESCE(imm.product_name, p.icat_name) AS icat_name, imm.product_name AS imm_product_name
                     FROM \`${historyTableName}\` p
                     LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
                     WHERE p.timestamp <= ?
@@ -261,7 +270,7 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
             const tableName = `price_list_format_${variationId}`;
             try {
                 const query = `
-                    SELECT p.*, imm.product_name AS imm_product_name
+                    SELECT p.*, COALESCE(imm.product_name, p.icat_name) AS icat_name, imm.product_name AS imm_product_name
                     FROM \`${tableName}\` p
                     LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
                     ORDER BY p.brand ASC, imm.product_name ASC, p.model_group_name ASC
@@ -276,7 +285,7 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
         const tableName = `price_list_format_${variationId}`;
         try {
             const query = `
-                SELECT p.*, imm.product_name AS imm_product_name
+                SELECT p.*, COALESCE(imm.product_name, p.icat_name) AS icat_name, imm.product_name AS imm_product_name
                 FROM \`${tableName}\` p
                 LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
                 ORDER BY p.brand ASC, imm.product_name ASC, p.model_group_name ASC
