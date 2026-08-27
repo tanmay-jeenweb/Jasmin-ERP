@@ -10,7 +10,7 @@ const { verifyToken, verifyPermission } = require('../middleware/authMiddleware.
 const router = express.Router();
 
 router.post('/add', verifyToken, verifyPermission('user_type', 'write'), addUserType);
-router.get('/all', verifyToken, verifyPermission('user_type', 'read'), getAllUserTypesController);
+router.get('/all', verifyToken, verifyPermission(['user_type', 'user_master'], 'read'), getAllUserTypesController);
 router.put('/update/:id', verifyToken, verifyPermission('user_type', 'update'), updateUserTypeController);
 router.delete('/delete/:id', verifyToken, verifyPermission('user_type', 'delete'), deleteUserTypeController);
 

@@ -23,8 +23,8 @@ router.get("/users", verifyToken, verifyPermission("user_master", "read"), fetch
 router.post("/create-user", verifyToken, verifyPermission("user_master", "write"), createUserByAdmin);
 router.patch("/user/:id/toggle-active", verifyToken, verifyPermission("user_master", "update"), toggleUserActiveController);
 
-router.get("/super-admin/users", verifyToken, verifyAdmin, fetchSuperAdminUsers);
-router.put("/super-admin/users/:userId", verifyToken, verifyAdmin, updateUserBySuperAdmin);
+router.get("/super-admin/users", verifyToken, verifyPermission("user_master", "read"), fetchSuperAdminUsers);
+router.put("/super-admin/users/:userId", verifyToken, verifyPermission("user_master", "update"), updateUserBySuperAdmin);
 
 router.get("/pending-devices", verifyToken, verifyPermission("device_approval", "read"), fetchPendingDevices);
 router.put("/approve-device/:deviceRowId", verifyToken, verifyPermission("device_approval", "write"), approveDeviceController);

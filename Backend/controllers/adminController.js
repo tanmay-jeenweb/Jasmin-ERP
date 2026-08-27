@@ -26,9 +26,10 @@ const fetchUsers = async (req, res) => {
         const query = `
             SELECT 
                 u.id, u.name, u.username, u.email, u.mob_no, u.role,
-                ut.type_name,
-                device_verification_required, u.active,
+                u.user_type_id, ut.type_name,
+                u.device_verification_required, u.active,
                 u.state, u.city, u.branch, u.product_type, u.landing_type, u.zone,
+                u.web_access, u.mobile_access,
                 (SELECT COUNT(*) FROM user_devices WHERE user_id = u.id AND status = 'approved' AND closed_at IS NULL) AS approved_devices_count,
                 (SELECT COUNT(*) FROM user_devices WHERE user_id = u.id AND status = 'pending' AND closed_at IS NULL) AS pending_devices_count
             FROM users u
@@ -326,10 +327,6 @@ const revokeSpecificDeviceController = async (req, res) => {
 
 const fetchSuperAdminUsers = async (req, res) => {
     try {
-        if (req.user.role !== 'super admin') {
-            return res.status(403).json({ success: false, message: "Forbidden. Super Admin only." });
-        }
-
         const query = `
             SELECT 
                 u.id, u.name, u.username, u.email, u.mob_no, u.role,
@@ -356,10 +353,6 @@ const fetchSuperAdminUsers = async (req, res) => {
 
 const updateUserBySuperAdmin = async (req, res) => {
     try {
-        if (req.user.role !== 'super admin') {
-            return res.status(403).json({ success: false, message: "Forbidden. Super Admin only." });
-        }
-
         const { userId } = req.params;
         const {
             name,
@@ -389,9 +382,36 @@ const updateUserBySuperAdmin = async (req, res) => {
 
         const currentUser = userRows[0];
 
-        if (currentUser.role === 'super admin' && currentUser.id !== req.user.id) {
+        // Security check: non-super-admins cannot modify super admin
+        if (currentUser.role === 'super admin' && req.user.role !== 'super admin') {
             return res.status(403).json({ success: false, message: "Cannot modify super admin" });
         }
+
+        // Security check: non-super-admins cannot assign super admin role
+        if (role === 'super admin' && req.user.role !== 'super admin') {
+            return res.status(403).json({ success: false, message: "Only super admins can assign the super admin role" });
+        }
+
+        const beforeData = {
+            id: currentUser.id,
+            name: currentUser.name,
+            username: currentUser.username,
+            email: currentUser.email,
+            user_type_id: currentUser.user_type_id,
+            mob_no: currentUser.mob_no,
+            device_verification_required: currentUser.device_verification_required,
+            active: currentUser.active,
+            role: currentUser.role,
+            web_access: currentUser.web_access,
+            mobile_access: currentUser.mobile_access,
+            state: currentUser.state,
+            city: currentUser.city,
+            branch: currentUser.branch,
+            product_type: currentUser.product_type,
+            landing_type: currentUser.landing_type,
+            brand: currentUser.brand,
+            zone: currentUser.zone
+        };
 
         let query = `
             UPDATE users SET 
@@ -443,6 +463,38 @@ const updateUserBySuperAdmin = async (req, res) => {
         queryParams.push(userId);
 
         await db.execute(query, queryParams);
+
+        const afterData = {
+            id: currentUser.id,
+            name: name !== undefined ? name : currentUser.name,
+            username: username !== undefined ? username : currentUser.username,
+            email: email !== undefined ? email : currentUser.email,
+            user_type_id: userTypeId !== undefined ? userTypeId : currentUser.user_type_id,
+            mob_no: mobNo !== undefined ? mobNo : currentUser.mob_no,
+            device_verification_required: deviceVerificationRequired !== undefined ? (deviceVerificationRequired ? 1 : 0) : currentUser.device_verification_required,
+            active: active !== undefined ? (active ? 1 : 0) : currentUser.active,
+            role: role !== undefined ? role : currentUser.role,
+            web_access: webAccess !== undefined ? (webAccess ? 1 : 0) : currentUser.web_access,
+            mobile_access: mobileAccess !== undefined ? (mobileAccess ? 1 : 0) : currentUser.mobile_access,
+            state: state !== undefined ? (state ? JSON.stringify(state) : null) : currentUser.state,
+            city: city !== undefined ? city : currentUser.city,
+            branch: branch !== undefined ? (branch ? JSON.stringify(branch) : null) : currentUser.branch,
+            product_type: productType !== undefined ? (productType ? JSON.stringify(productType) : null) : currentUser.product_type,
+            landing_type: landingType !== undefined ? (landingType ? JSON.stringify(landingType) : null) : currentUser.landing_type,
+            brand: brand !== undefined ? (brand ? JSON.stringify(brand) : null) : currentUser.brand,
+            zone: zone !== undefined ? (zone ? JSON.stringify(zone) : null) : currentUser.zone
+        };
+
+        const adminDeviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+        await createAuditLog(
+            req.user?.id,
+            req.user?.name || req.user?.username || 'Unknown',
+            adminDeviceId,
+            'User Master',
+            'updated',
+            beforeData,
+            afterData
+        );
 
         return res.status(200).json({ success: true, message: "User updated successfully" });
     } catch (error) {
