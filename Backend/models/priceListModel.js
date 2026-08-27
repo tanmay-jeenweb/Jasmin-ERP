@@ -24,6 +24,7 @@ const getPriceListData = async (variationId) => {
         SELECT p.*, COALESCE(imm.product_name, p.icat_name) AS icat_name
         FROM \`${tableName}\` p
         LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
+        WHERE imm.item_status IS NULL OR LOWER(imm.item_status) != 'inactive'
         ORDER BY p.brand ASC, p.model_name ASC
     `;
     const [results] = await db.execute(query);
@@ -173,11 +174,12 @@ const getPriceListHistoryData = async (variationId, productCode = null) => {
             SELECT p.*, COALESCE(imm.product_name, p.icat_name) AS icat_name
             FROM \`${historyTableName}\` p
             LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
+            WHERE imm.item_status IS NULL OR LOWER(imm.item_status) != 'inactive'
         `;
         const params = [];
 
         if (productCode) {
-            query += ` WHERE p.product_code = ?`;
+            query += ` AND p.product_code = ?`;
             params.push(productCode);
         }
 
@@ -228,6 +230,7 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
                     FROM \`${historyTableName}\` p
                     LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
                     WHERE DATE_FORMAT(p.timestamp, '%Y-%m-%d %H:%i:%s') = ?
+                      AND (imm.item_status IS NULL OR LOWER(imm.item_status) != 'inactive')
                     ORDER BY p.timestamp DESC, p.brand ASC, imm.product_name ASC, p.model_group_name ASC
                 `;
                 queryParams = [formattedTs];
@@ -237,6 +240,7 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
                     FROM \`${historyTableName}\` p
                     LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
                     WHERE DATE_FORMAT(p.timestamp, '%Y-%m-%d') = ?
+                      AND (imm.item_status IS NULL OR LOWER(imm.item_status) != 'inactive')
                     ORDER BY p.timestamp DESC, p.brand ASC, imm.product_name ASC, p.model_group_name ASC
                 `;
                 queryParams = [trimmedDate];
@@ -255,6 +259,7 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
                     FROM \`${historyTableName}\` p
                     LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
                     WHERE p.timestamp <= ?
+                      AND (imm.item_status IS NULL OR LOWER(imm.item_status) != 'inactive')
                     ORDER BY p.timestamp DESC, p.brand ASC, imm.product_name ASC, p.model_group_name ASC
                 `;
                 const [fallbackResults] = await db.execute(fallbackQuery, [cutoffTimestamp]);
@@ -273,6 +278,7 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
                     SELECT p.*, COALESCE(imm.product_name, p.icat_name) AS icat_name, imm.product_name AS imm_product_name
                     FROM \`${tableName}\` p
                     LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
+                    WHERE imm.item_status IS NULL OR LOWER(imm.item_status) != 'inactive'
                     ORDER BY p.brand ASC, imm.product_name ASC, p.model_group_name ASC
                 `;
                 const [results] = await db.execute(query);
@@ -288,6 +294,7 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
                 SELECT p.*, COALESCE(imm.product_name, p.icat_name) AS icat_name, imm.product_name AS imm_product_name
                 FROM \`${tableName}\` p
                 LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
+                WHERE imm.item_status IS NULL OR LOWER(imm.item_status) != 'inactive'
                 ORDER BY p.brand ASC, imm.product_name ASC, p.model_group_name ASC
             `;
             const [results] = await db.execute(query);
