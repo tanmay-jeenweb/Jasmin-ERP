@@ -10,7 +10,7 @@ const verifyExternalApi = require('../middleware/verifyExternalApi.js');
 router.get('/master-data', getExternalMasterData);
 
 // Incoming synchronization endpoints from Jasmin CRM
-router.post('/sync/brand-finance-mapping/:branchId', verifyExternalApi, saveBranchMappingsController);
+router.post('/sync/brand-finance-relations/:branchId', verifyExternalApi, saveBranchMappingsController);
 router.post('/sync/finance-codes/:branchId', verifyExternalApi, saveBranchFinanceCodesController);
 
 module.exports = router;

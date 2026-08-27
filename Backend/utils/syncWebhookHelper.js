@@ -11,7 +11,7 @@ const syncToCrm = async (branchId, type, payload) => {
         const expectedSecuritycode = process.env.EXTERNAL_API_SECURITYCODE || process.env.MODEL_API_SECURITYCODE || '1151-8111-6444-4166';
 
         const endpoint = type === 'mappings' 
-            ? `${crmBaseUrl}/v1/api/franchise/sync-mappings/${branchId}`
+            ? `${crmBaseUrl}/v1/api/franchise/sync-relations/${branchId}`
             : `${crmBaseUrl}/v1/api/franchise/sync-finance-codes/${branchId}`;
 
         console.log(`[Sync] Initiating webhook request to CRM: POST ${endpoint}`);
@@ -22,7 +22,8 @@ const syncToCrm = async (branchId, type, payload) => {
                 'Content-Type': 'application/json',
                 'userid': expectedUserid,
                 'securitycode': expectedSecuritycode,
-                'x-sync-source': 'JASMIN-ERP'
+                'x-sync-source': 'JASMIN-ERP',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             },
             body: JSON.stringify(payload)
         });
