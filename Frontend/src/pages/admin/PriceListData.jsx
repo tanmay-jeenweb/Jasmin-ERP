@@ -5,6 +5,7 @@ import DataTable from "../../components/DataTable";
 import { getPriceListData, importPriceListData } from "../../api/priceListApi";
 import { getPricingFormulas as getVariations } from "../../api/pricingFormulaApi";
 import { getItemModels } from "../../api/itemModelApi";
+import { getIcatSettings } from "../../api/settingApi";
 import { usePermission } from "../../context/PermissionContext";
 import ExcelJS from "exceljs";
 import toast from "react-hot-toast";
@@ -250,10 +251,28 @@ export default function PriceListData() {
       const modelsRes = await getItemModels();
       const allModels = modelsRes.data?.data || [];
 
-      // Filter active models (include all active product models)
-      const activeModels = allModels.filter(m =>
-        !m.item_status || String(m.item_status).toLowerCase() === "active"
-      );
+      // Fetch ICAT settings to filter out deselected classifications
+      let icatSettings = {};
+      try {
+        const settingsRes = await getIcatSettings();
+        if (settingsRes.data?.success) {
+          icatSettings = settingsRes.data.settings || {};
+        }
+      } catch (err) {
+        console.warn("Failed to fetch ICAT settings, displaying all:", err);
+      }
+
+      // Filter active models (include active models and check ICAT settings)
+      const activeModels = allModels.filter(m => {
+        const isActive = !m.item_status || String(m.item_status).toLowerCase() === "active";
+        if (!isActive) return false;
+
+        const icatName = m.icat_name;
+        if (icatName && icatSettings[icatName] === false) {
+          return false;
+        }
+        return true;
+      });
 
       if (activeModels.length === 0) {
         toast.error("No active product models found in database.", { id: loadToastId });
