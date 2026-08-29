@@ -108,12 +108,14 @@ export default function AdminDashboard() {
     };
 
     useEffect(() => {
-        if (user.role === "super admin") {
+        if (permissionLoading) return;
+        const canReadUserTypes = hasPermission("user_type", "read") || hasPermission("user_master", "read") || user.role === "admin" || user.role === "super admin";
+        if (canReadUserTypes) {
             getUserTypes()
                 .then(res => setUserTypes(res.data.data || []))
                 .catch(err => console.error("Error loading user types:", err));
         }
-    }, [user.role]);
+    }, [user.role, permissionLoading, hasPermission]);
 
     useEffect(() => {
         if (!permissionLoading) {
@@ -467,6 +469,14 @@ export default function AdminDashboard() {
                 const canMap = hasPermission("user_branch_mapping", "read") || user.role === "admin";
                 return (
                     <div className="flex items-center gap-3">
+                        {canToggle && (
+                            <button
+                                onClick={() => handleOpenSuperAdminModal(row)}
+                                className="text-[#6804a1] hover:text-[#52037e] text-xs font-semibold"
+                            >
+                                Edit User
+                            </button>
+                        )}
                         {canRevoke && (
                             <button
                                 onClick={() => handleOpenManageDevicesModal(row)}
@@ -962,7 +972,7 @@ export default function AdminDashboard() {
                             {/* Header */}
                             <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-[#6804a1]/5">
                                 <h3 className="text-lg font-bold text-[#6804a1]">
-                                    Super Admin settings for {selectedUser.name} ({selectedUser.username})
+                                    Edit settings for {selectedUser.name} ({selectedUser.username})
                                 </h3>
                                 <button onClick={() => setIsSuperAdminModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1026,7 +1036,7 @@ export default function AdminDashboard() {
                                             >
                                                 <option value="user">User</option>
                                                 <option value="admin">Admin</option>
-                                                <option value="super admin">Super Admin</option>
+                                                {user.role === "super admin" && <option value="super admin">Super Admin</option>}
                                             </select>
                                         </div>
                                         <div>
