@@ -181,7 +181,7 @@ export default function PriceListData() {
         label: c.column_name,
         render: (row) => {
           const val = row[c.column_name];
-          if (val === undefined || val === null || val === '' || val === '-' || val === '—') return "—";
+          if (val === undefined || val === null || val === '' || val === '-' || val === '—') return "0";
           return <span className="font-medium text-slate-800">{val}</span>;
         }
       });
@@ -348,7 +348,7 @@ export default function PriceListData() {
                 const num = Number(existingVal);
                 rowData[col.column_name] = !isNaN(num) && String(existingVal).trim() !== "" ? num : existingVal;
               } else {
-                rowData[col.column_name] = "-";
+                rowData[col.column_name] = 0;
               }
             }
           } else {
@@ -358,7 +358,7 @@ export default function PriceListData() {
               const num = Number(existingVal);
               rowData[col.column_name] = !isNaN(num) && String(existingVal).trim() !== "" ? num : existingVal;
             } else {
-              rowData[col.column_name] = "-";
+              rowData[col.column_name] = 0;
             }
           }
         });

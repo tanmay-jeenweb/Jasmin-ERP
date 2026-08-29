@@ -91,7 +91,7 @@ const getAllItemModels = async () => {
             imm.model_group_name,
             imm.created_on,
             imm.product_name,
-            imm.icat_name,
+            COALESCE(imm.product_name, imm.icat_name) AS icat_name,
             imm.prod_catg_name,
             imm.uqc,
             imm.serialno_status,
@@ -136,10 +136,10 @@ const getDistinctBrands = async () => {
 
 const getDistinctIcatNames = async () => {
     const query = `
-        SELECT DISTINCT icat_name 
+        SELECT DISTINCT product_name AS icat_name 
         FROM item_model_master 
-        WHERE icat_name IS NOT NULL AND icat_name != '' 
-        ORDER BY icat_name ASC
+        WHERE product_name IS NOT NULL AND product_name != '' 
+        ORDER BY product_name ASC
     `;
     const [results] = await db.execute(query);
     return results.map(row => row.icat_name);
