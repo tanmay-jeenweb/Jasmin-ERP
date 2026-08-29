@@ -57,6 +57,36 @@ const getPriceListDataController = async (req, res) => {
 };
 
 const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs, records) => {
+    if (!records || !Array.isArray(records) || records.length === 0) return records;
+
+    // Fetch product_name mapping from item_model_master for imported codes to use as category
+    const prodCodes = records.map(r => r.product_code).filter(Boolean);
+    let prodNameToCatMap = new Map();
+    if (prodCodes.length > 0) {
+        try {
+            const placeholders = prodCodes.map(() => '?').join(', ');
+            const [modelRows] = await db.execute(
+                `SELECT item_code, product_name FROM item_model_master WHERE item_code IN (${placeholders})`,
+                prodCodes
+            );
+            modelRows.forEach(row => {
+                if (row.item_code && row.product_name) {
+                    prodNameToCatMap.set(String(row.item_code).trim(), row.product_name);
+                }
+            });
+        } catch (err) {
+            console.warn("Failed to fetch product names for category mapping:", err.message);
+        }
+    }
+
+    // Process each record to map category to product_name
+    for (const rec of records) {
+        const prodCode = rec.product_code ? String(rec.product_code).trim() : "";
+        if (prodCode && prodNameToCatMap.has(prodCode)) {
+            rec.icat_name = prodNameToCatMap.get(prodCode);
+        }
+    }
+
     if (!columnsList || !Array.isArray(columnsList) || columnsList.length === 0) return records;
 
     const formulaCols = columnsList.filter(c => c.type === 'default formulation' || c.type === 'formulation');
@@ -99,16 +129,16 @@ const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs
 
             let val = rec[colName];
             if (val === undefined || val === null || val === "") {
-                val = NaN;
+                val = 0;
             } else if (typeof val === 'string') {
                 const cleanedVal = val.replace(/,/g, '').trim();
                 if (cleanedVal === '-' || cleanedVal === '' || cleanedVal === '—') {
-                    val = NaN;
+                    val = 0;
                 } else {
-                    val = !isNaN(Number(cleanedVal)) ? Number(cleanedVal) : NaN;
+                    val = !isNaN(Number(cleanedVal)) ? Number(cleanedVal) : 0;
                 }
             } else if (typeof val !== 'number') {
-                val = NaN;
+                val = 0;
             }
 
             // Replace cell references like F2, F12, F (case-insensitive word boundaries)
