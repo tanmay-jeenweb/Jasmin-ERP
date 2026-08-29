@@ -6,12 +6,19 @@
  */
 const syncToCrm = async (branchId, type, payload) => {
     try {
-        const crmBaseUrl = process.env.CRM_API_URL || 'https://crm-api.jasminmobile.com';
+        const rawCrmUrl = process.env.CRM_API_URL || 'https://crm.jasminmobile.com';
+        let crmBaseUrl = rawCrmUrl.replace(/\/$/, '');
+
+        // Ensure /api prefix is present for production domain routing
+        if (crmBaseUrl.includes('crm.jasminmobile.com') && !crmBaseUrl.endsWith('/api') && !crmBaseUrl.includes('/api/')) {
+            crmBaseUrl += '/api';
+        }
+
         const expectedUserid = process.env.EXTERNAL_API_USERID || process.env.MODEL_API_USERID || 'WebSite';
         const expectedSecuritycode = process.env.EXTERNAL_API_SECURITYCODE || process.env.MODEL_API_SECURITYCODE || '1151-8111-6444-4166';
 
-        const endpoint = type === 'mappings' 
-            ? `${crmBaseUrl}/v1/api/franchise/sync-relations/${branchId}`
+        const endpoint = type === 'mappings'
+            ? `${crmBaseUrl}/v1/api/franchise/sync-mappings/${branchId}`
             : `${crmBaseUrl}/v1/api/franchise/sync-finance-codes/${branchId}`;
 
         console.log(`[Sync] Initiating webhook request to CRM: POST ${endpoint}`);
