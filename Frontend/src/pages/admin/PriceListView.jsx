@@ -35,6 +35,36 @@ const canUserViewColumn = (col, user) => {
   return userLandingTypes.some(ult => allowedLandingTypes.includes(ult));
 };
 
+const getTransactionTheme = (type) => {
+  const t = String(type || "").toLowerCase();
+  if (t.includes("cash")) {
+    return {
+      icon: "fa-solid fa-money-bill-wave",
+      badgeBg: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      accentText: "text-emerald-700"
+    };
+  }
+  if (t.includes("card") || t.includes("swipe")) {
+    return {
+      icon: "fa-solid fa-credit-card",
+      badgeBg: "bg-purple-50 text-purple-700 border-purple-200",
+      accentText: "text-purple-700"
+    };
+  }
+  if (t.includes("finance")) {
+    return {
+      icon: "fa-solid fa-building-columns",
+      badgeBg: "bg-blue-50 text-blue-700 border-blue-200",
+      accentText: "text-blue-700"
+    };
+  }
+  return {
+    icon: "fa-solid fa-boxes-packing",
+    badgeBg: "bg-amber-50 text-amber-700 border-amber-200",
+    accentText: "text-amber-700"
+  };
+};
+
 export default function PriceListView() {
   const { variationId } = useParams();
   const navigate = useNavigate();
@@ -58,6 +88,18 @@ export default function PriceListView() {
   const [productSearchText, setProductSearchText] = useState("");
   const [isBrandFilterOpen, setIsBrandFilterOpen] = useState(false);
   const [isProductFilterOpen, setIsProductFilterOpen] = useState(false);
+
+  // Deduplicate modal transactions defensively to avoid repeated cards
+  const uniqueModalTransactions = useMemo(() => {
+    if (!selectedOfferModal?.transactions) return [];
+    const seen = new Set();
+    return selectedOfferModal.transactions.filter(t => {
+      const key = `${t.id || ''}-${t.transaction_type}-${t.value_type}-${t.offer_type_value}-${t.upto_value}-${t.offer_text}-${t.relative_offer}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [selectedOfferModal]);
 
   useEffect(() => {
     setSelectedBrands([]);
@@ -519,54 +561,118 @@ export default function PriceListView() {
       {/* Offer Details Modal */}
       {selectedOfferModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col gap-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[85vh] p-6 shadow-2xl border border-slate-200 flex flex-col gap-4 overflow-hidden">
+            {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-base shadow-xs">
                   <i className="fa-solid fa-gift"></i>
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-base">{selectedOfferModal.offer_type}</h3>
-                  <p className="text-xs text-slate-500">{selectedOfferModal.brand_name}</p>
+                  <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                    {selectedOfferModal.offer_type}
+                    <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      Active
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">{selectedOfferModal.brand_name}</p>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedOfferModal(null)}
-                className="text-slate-400 hover:text-slate-600 text-lg cursor-pointer p-1"
+                className="text-slate-400 hover:text-slate-600 text-lg cursor-pointer p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                title="Close"
               >
                 <i className="fa-solid fa-xmark"></i>
               </button>
             </div>
 
-            <div className="flex flex-col gap-3">
-              <div className="bg-amber-50/60 rounded-xl p-3 border border-amber-100/80 flex items-center justify-between text-xs text-amber-900">
-                <span className="font-semibold">Offer Validity</span>
+            {/* Modal Body with smooth scrolling */}
+            <div className="flex flex-col gap-3.5 flex-1 overflow-y-auto pr-1">
+              {/* Validity Banner */}
+              <div className="bg-amber-50/70 rounded-xl p-3 border border-amber-100/80 flex items-center justify-between text-xs text-amber-900">
+                <span className="font-semibold flex items-center gap-1.5">
+                  <i className="fa-regular fa-calendar text-amber-600"></i>
+                  Offer Validity
+                </span>
                 <span className="font-mono font-bold">
-                  {new Date(selectedOfferModal.from_date).toLocaleDateString()} &mdash; {new Date(selectedOfferModal.to_date).toLocaleDateString()}
+                  {new Date(selectedOfferModal.from_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} &mdash; {new Date(selectedOfferModal.to_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                 </span>
               </div>
 
-              <div className="flex flex-col gap-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Offer Rules & Transactions</h4>
-                {(selectedOfferModal.transactions || []).length === 0 ? (
-                  <p className="text-xs text-slate-500 italic">No detailed transaction rules specified.</p>
+              {/* Transactions list */}
+              <div className="flex flex-col gap-2.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Offer Rules & Transactions
+                  </h4>
+                  {uniqueModalTransactions.length > 0 && (
+                    <span className="text-[11px] font-semibold text-slate-400">
+                      {uniqueModalTransactions.length} {uniqueModalTransactions.length === 1 ? "Rule" : "Rules"}
+                    </span>
+                  )}
+                </div>
+
+                {uniqueModalTransactions.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic py-4 text-center">No detailed transaction rules specified.</p>
                 ) : (
-                  (selectedOfferModal.transactions || []).map((t, idx) => (
-                    <div key={idx} className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 flex flex-col gap-1 text-xs text-slate-800">
-                      <div className="flex items-center justify-between font-semibold">
-                        <span className="text-indigo-700">{t.transaction_type}</span>
-                        <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-mono font-bold">{t.value_type}</span>
+                  uniqueModalTransactions.map((t, idx) => {
+                    const theme = getTransactionTheme(t.transaction_type);
+                    return (
+                      <div key={idx} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs hover:border-slate-300 transition-all flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold ${theme.badgeBg} border`}>
+                            <i className={theme.icon}></i>
+                            <span>{t.transaction_type}</span>
+                          </span>
+                          <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
+                            {t.value_type}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 flex-wrap pt-0.5">
+                          {t.offer_type_value && (
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-xs text-slate-500 font-medium">Value:</span>
+                              <span className="text-base font-extrabold text-slate-900 tracking-tight">
+                                {t.value_type === "In Rs." && !isNaN(Number(t.offer_type_value))
+                                  ? `₹${Number(t.offer_type_value).toLocaleString("en-IN")}`
+                                  : t.offer_type_value}
+                              </span>
+                              {t.value_type === "In %" && <span className="text-xs font-bold text-slate-700">%</span>}
+                            </div>
+                          )}
+
+                          {t.upto_value && (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200/80">
+                              <span className="text-slate-400">Upto:</span>
+                              <strong className="text-slate-800 font-mono">₹{Number(t.upto_value).toLocaleString("en-IN")}</strong>
+                            </span>
+                          )}
+                        </div>
+
+                        {t.offer_text && (
+                          <div className="flex items-start gap-2 text-xs text-slate-700 bg-slate-50/90 p-2.5 rounded-lg border border-slate-100">
+                            <i className="fa-solid fa-circle-info text-indigo-500 mt-0.5 flex-shrink-0"></i>
+                            <span className="leading-relaxed font-medium">{t.offer_text}</span>
+                          </div>
+                        )}
+
+                        {t.relative_offer && (
+                          <div className="text-[11px] text-slate-500 flex items-center gap-1 pt-0.5">
+                            <i className="fa-solid fa-link text-slate-400 text-[10px]"></i>
+                            <span>Linked offer: <strong className="text-slate-700">{t.relative_offer}</strong></span>
+                          </div>
+                        )}
                       </div>
-                      {t.offer_type_value && <p><span className="text-slate-500">Value:</span> <strong>{t.offer_type_value}</strong></p>}
-                      {t.upto_value && <p><span className="text-slate-500">Upto:</span> <strong>₹{t.upto_value}</strong></p>}
-                      {t.offer_text && <p><span className="text-slate-500">Description:</span> {t.offer_text}</p>}
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
 
-            <div className="flex justify-end pt-2 border-t border-slate-100">
+            {/* Modal Footer */}
+            <div className="flex justify-end pt-3 border-t border-slate-100">
               <button
                 onClick={() => setSelectedOfferModal(null)}
                 className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-semibold text-xs hover:bg-slate-200 transition-all cursor-pointer"

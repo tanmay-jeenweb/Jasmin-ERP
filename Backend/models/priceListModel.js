@@ -336,16 +336,9 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
                 o.offer_type,
                 o.from_date,
                 o.to_date,
-                omg.model_group_name,
-                ot.transaction_type,
-                ot.value_type,
-                ot.offer_type_value,
-                ot.upto_value,
-                ot.offer_text,
-                ot.relative_offer
+                omg.model_group_name
             FROM offers o
             JOIN offer_model_groups omg ON o.id = omg.offer_id
-            LEFT JOIN offer_transactions ot ON o.id = ot.offer_id
         `;
         const offerParams = [];
         if (targetDate && typeof targetDate === 'string' && targetDate.trim() !== '') {
@@ -358,40 +351,65 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
 
         const [offerRows] = await db.execute(activeOffersQuery, offerParams);
 
-        const offerMap = new Map();
-        const groupOfferMap = new Map();
+        if (offerRows.length > 0) {
+            const offerMap = new Map();
+            const groupOfferMap = new Map();
 
-        for (const r of offerRows) {
-            if (!offerMap.has(r.id)) {
-                offerMap.set(r.id, {
-                    id: r.id,
-                    brand_name: r.brand_name,
-                    offer_type: r.offer_type,
-                    from_date: r.from_date,
-                    to_date: r.to_date,
-                    transactions: []
-                });
-            }
-            const offerObj = offerMap.get(r.id);
-            if (r.transaction_type) {
-                offerObj.transactions.push({
-                    transaction_type: r.transaction_type,
-                    value_type: r.value_type,
-                    offer_type_value: r.offer_type_value,
-                    upto_value: r.upto_value,
-                    offer_text: r.offer_text,
-                    relative_offer: r.relative_offer
-                });
+            for (const r of offerRows) {
+                if (!offerMap.has(r.id)) {
+                    offerMap.set(r.id, {
+                        id: r.id,
+                        brand_name: r.brand_name,
+                        offer_type: r.offer_type,
+                        from_date: r.from_date,
+                        to_date: r.to_date,
+                        transactions: []
+                    });
+                }
+                if (!groupOfferMap.has(r.model_group_name)) {
+                    groupOfferMap.set(r.model_group_name, new Set());
+                }
+                groupOfferMap.get(r.model_group_name).add(r.id);
             }
 
-            if (!groupOfferMap.has(r.model_group_name)) {
-                groupOfferMap.set(r.model_group_name, new Set());
-            }
-            groupOfferMap.get(r.model_group_name).add(r.id);
-        }
+            // Fetch transactions for unique offers in a single efficient query (no Cartesian product duplication)
+            const uniqueOfferIds = Array.from(offerMap.keys());
+            if (uniqueOfferIds.length > 0) {
+                const placeholders = uniqueOfferIds.map(() => '?').join(',');
+                const [txRows] = await db.execute(`
+                    SELECT 
+                        id,
+                        offer_id,
+                        transaction_type,
+                        value_type,
+                        offer_type_value,
+                        upto_value,
+                        offer_text,
+                        relative_offer
+                    FROM offer_transactions
+                    WHERE offer_id IN (${placeholders})
+                    ORDER BY id ASC
+                `, uniqueOfferIds);
 
-        for (const [groupName, offerIdSet] of groupOfferMap.entries()) {
-            offersByGroup[groupName] = Array.from(offerIdSet).map(id => offerMap.get(id));
+                for (const tx of txRows) {
+                    const offerObj = offerMap.get(tx.offer_id);
+                    if (offerObj) {
+                        offerObj.transactions.push({
+                            id: tx.id,
+                            transaction_type: tx.transaction_type,
+                            value_type: tx.value_type,
+                            offer_type_value: tx.offer_type_value,
+                            upto_value: tx.upto_value,
+                            offer_text: tx.offer_text,
+                            relative_offer: tx.relative_offer
+                        });
+                    }
+                }
+            }
+
+            for (const [groupName, offerIdSet] of groupOfferMap.entries()) {
+                offersByGroup[groupName] = Array.from(offerIdSet).map(id => offerMap.get(id));
+            }
         }
     } catch (e) {
         console.warn("Failed to fetch active offers for price list report:", e.message);
