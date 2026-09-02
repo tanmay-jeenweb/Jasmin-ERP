@@ -341,9 +341,16 @@ export default function PriceListData() {
           if (isFormulaType) {
             let formulaToUse = "";
 
-            // Check brand configurations for specific formula override
+            // Check brand configurations for specific formula override (with flexible alias matching e.g. Apple / Apple India / iPhone, Vivo / Vivo India)
             const matchingConfig = configs.find(cfg =>
-              m.brand_name && cfg.brands && cfg.brands.map(b => String(b).trim().toUpperCase()).includes(String(m.brand_name).trim().toUpperCase())
+              m.brand_name && cfg.brands && cfg.brands.some(b => {
+                const brandStr = String(b).trim().toUpperCase();
+                const mBrand = String(m.brand_name).trim().toUpperCase();
+                if (brandStr === mBrand) return true;
+                if (mBrand.includes(brandStr) || brandStr.includes(mBrand)) return true;
+                if ((brandStr === 'APPLE' || brandStr === 'IPHONE') && (mBrand === 'APPLE' || mBrand === 'IPHONE')) return true;
+                return false;
+              })
             );
             if (matchingConfig) {
               const matchingColFormula = matchingConfig.columns?.find(c => c.column_id === col.column_id);
