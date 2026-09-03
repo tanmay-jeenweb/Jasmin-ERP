@@ -35,6 +35,15 @@ const canUserViewColumn = (col, user) => {
   return userLandingTypes.some(ult => allowedLandingTypes.includes(ult));
 };
 
+const formatPriceValue = (val) => {
+  if (val === undefined || val === null || val === '' || val === '-' || val === '—') return "0";
+  const num = Number(val);
+  if (!isNaN(num) && typeof val !== 'boolean') {
+    return Number.isInteger(num) ? String(num) : num.toFixed(2);
+  }
+  return val;
+};
+
 export default function PriceListReport() {
   const { variationId } = useParams();
   const navigate = useNavigate();
@@ -225,8 +234,7 @@ export default function PriceListReport() {
         label: c.column_name,
         render: (row) => {
           const val = row[c.column_name];
-          if (val === undefined || val === null || val === '' || val === '-' || val === '—') return "0";
-          return <span className="font-semibold text-slate-900">{val}</span>;
+          return <span className="font-semibold text-slate-900">{formatPriceValue(val)}</span>;
         }
       });
     });

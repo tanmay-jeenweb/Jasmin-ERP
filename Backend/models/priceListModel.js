@@ -18,6 +18,25 @@ const filterByIcatSettings = async (records) => {
     }
 };
 
+const roundRowDecimals = (row) => {
+    if (!row || typeof row !== 'object') return row;
+    const nonNumericKeys = new Set([
+        'id', 'product_code', 'brand', 'icat_name', 'model_group_name', 'model_name',
+        'added_by', 'device_id', 'timestamp', 'updated_at', 'active_offers',
+        'state_id', 'state_ids', 'product_name', 'imm_product_name'
+    ]);
+    for (const [key, val] of Object.entries(row)) {
+        if (nonNumericKeys.has(key)) continue;
+        if (val !== undefined && val !== null && val !== '' && val !== '-' && val !== '—') {
+            const num = Number(val);
+            if (!isNaN(num) && typeof val !== 'boolean') {
+                row[key] = Math.round(num * 100) / 100;
+            }
+        }
+    }
+    return row;
+};
+
 const getPriceListData = async (variationId) => {
     const tableName = `price_list_format_${variationId}`;
     const query = `
@@ -28,7 +47,7 @@ const getPriceListData = async (variationId) => {
         ORDER BY p.brand ASC, p.model_name ASC
     `;
     const [results] = await db.execute(query);
-    return filterByIcatSettings(results);
+    return filterByIcatSettings(results.map(roundRowDecimals));
 };
 
 const sanitize = (name) => {
@@ -185,7 +204,7 @@ const getPriceListHistoryData = async (variationId, productCode = null) => {
 
         query += ` ORDER BY p.timestamp DESC, p.id DESC`;
         const [results] = await db.execute(query, params);
-        return results;
+        return results.map(roundRowDecimals);
     } catch (e) {
         return [];
     }
@@ -421,7 +440,7 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
         active_offers: offersByGroup[rec.model_group_name] || []
     }));
 
-    return filterByIcatSettings(reportData);
+    return filterByIcatSettings(reportData.map(roundRowDecimals));
 };
 
 module.exports = {

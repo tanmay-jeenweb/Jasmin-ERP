@@ -179,7 +179,7 @@ const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs
         try {
             const safeResult = new Function(`"use strict"; return (${expr});`)();
             if (typeof safeResult === 'number' && !isNaN(safeResult) && isFinite(safeResult)) {
-                return Math.round(safeResult * 10000) / 10000;
+                return Math.round(safeResult * 100) / 100;
             }
             if (typeof safeResult === 'number' && (isNaN(safeResult) || !isFinite(safeResult))) {
                 return "";
@@ -289,6 +289,20 @@ const importPriceListController = async (req, res) => {
 
         // 2. Automatically evaluate formulation columns for all imported records
         const processedRecords = await evaluateFormulasForRecords(variationId, columnsList, brandConfigs, records);
+
+        // Ensure all numeric and formula column values are strictly capped at 2 decimal places
+        for (const rec of processedRecords) {
+            for (const col of columnsList) {
+                const colName = col.column_name;
+                const val = rec[colName];
+                if (val !== undefined && val !== null && val !== "" && val !== "-" && val !== "—") {
+                    const num = Number(val);
+                    if (!isNaN(num) && typeof val !== 'boolean') {
+                        rec[colName] = Math.round(num * 100) / 100;
+                    }
+                }
+            }
+        }
 
         // 3. Upsert data records
         await upsertPriceListData(variationId, columnsList, processedRecords, addedBy, deviceId);
