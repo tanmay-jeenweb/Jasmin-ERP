@@ -64,6 +64,29 @@ const buildHiddenSet = (initialCols, savedVisibleKeys) => {
   return new Set(initialCols.filter(c => !savedSet.has(c.key)).map(c => c.key));
 };
 
+/**
+ * Helper to parse a value into a number if possible, stripping formatting.
+ */
+const parseNumeric = (val) => {
+  if (val === null || val === undefined) return null;
+  if (typeof val === 'number') return val;
+  const str = String(val).trim();
+  if (str === '') return null;
+  // Remove commas, currency symbols, and percentage signs
+  const cleaned = str.replace(/[,%$₹£€]/g, '');
+  const num = Number(cleaned);
+  return isNaN(num) ? null : num;
+};
+
+/**
+ * Helper to check if a value is empty or a placeholder.
+ */
+const isEmptyValue = (val) => {
+  if (val === null || val === undefined) return true;
+  const str = String(val).trim();
+  return str === '' || str === '-' || str === '—';
+};
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function DataTable({
@@ -196,10 +219,29 @@ export default function DataTable({
       filtered.sort((a, b) => {
         const aVal = a[sortConfig.key];
         const bVal = b[sortConfig.key];
-        const aValue = aVal != null ? String(aVal).toLowerCase() : '';
-        const bValue = bVal != null ? String(bVal).toLowerCase() : '';
-        if (sortConfig.direction === 'asc') return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
-        return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
+
+        const aEmpty = isEmptyValue(aVal);
+        const bEmpty = isEmptyValue(bVal);
+
+        if (aEmpty && bEmpty) return 0;
+        if (aEmpty) return 1; // Empty/placeholder values go to the bottom
+        if (bEmpty) return -1;
+
+        const numA = parseNumeric(aVal);
+        const numB = parseNumeric(bVal);
+
+        if (numA !== null && numB !== null) {
+          if (sortConfig.direction === 'asc') return numA - numB;
+          return numB - numA;
+        }
+
+        const aValue = String(aVal).toLowerCase().trim();
+        const bValue = String(bVal).toLowerCase().trim();
+
+        if (sortConfig.direction === 'asc') {
+          return aValue.localeCompare(bValue, undefined, { numeric: true });
+        }
+        return bValue.localeCompare(aValue, undefined, { numeric: true });
       });
     }
 

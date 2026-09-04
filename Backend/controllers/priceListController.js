@@ -119,6 +119,19 @@ const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs
             expr = ifErrorMatch[1].trim();
         }
 
+        // Convert Excel percentage syntax like O% or 5% or ((G-N)*O%) into (/ 100)
+        expr = expr.replace(/(\([^)]+\)|\b[A-Za-z0-9_.]+\b)\s*%/g, '($1 / 100)');
+
+        // Replace Excel IF(cond, val1, val2) with JS ternary ((cond) ? (val1) : (val2))
+        expr = expr.replace(/IF\s*\(([^,]+),([^,]+),([^)]+)\)/gi, '(($1) ? ($2) : ($3))');
+
+        // Replace ROUND(val, decimals) with Math.round
+        expr = expr.replace(/ROUND\s*\(([^,]+),([^)]+)\)/gi, '(Math.round(($1) * Math.pow(10, $2)) / Math.pow(10, $2))');
+        expr = expr.replace(/ROUND\s*\(([^)]+)\)/gi, '(Math.round($1))');
+
+        // Replace SUM(a, b, ...) or SUM(a + b + ...) using a function callback to properly handle commas
+        expr = expr.replace(/SUM\s*\(([^)]+)\)/gi, (match, inner) => `(${inner.replace(/,/g, '+')})`);
+
         // Sort columns by column_id length descending (e.g. AA before A)
         const sortedCols = [...columnsList].sort((a, b) => (b.column_id || '').length - (a.column_id || '').length);
 
@@ -153,15 +166,12 @@ const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs
             }
         }
 
-        // Replace Excel IF(cond, val1, val2) with JS ternary ((cond) ? (val1) : (val2))
-        expr = expr.replace(/IF\s*\(([^,]+),([^,]+),([^)]+)\)/gi, '(($1) ? ($2) : ($3))');
+        // Clean any remaining percentage notations after column values are substituted
+        expr = expr.replace(/(\([^)]+\)|\b\d+(?:\.\d+)?\b)\s*%/g, '($1 / 100)');
 
-        // Replace ROUND(val, decimals) with Math.round
-        expr = expr.replace(/ROUND\s*\(([^,]+),([^)]+)\)/gi, '(Math.round(($1) * Math.pow(10, $2)) / Math.pow(10, $2))');
-        expr = expr.replace(/ROUND\s*\(([^)]+)\)/gi, '(Math.round($1))');
-
-        // Replace SUM(a, b, ...)
-        expr = expr.replace(/SUM\s*\(([^)]+)\)/gi, '($1)'.replace(/,/g, '+'));
+        // Replace any remaining unmapped uppercase column letters (e.g. unconfigured or deleted columns) with (0)
+        // to prevent ReferenceError from crashing the evaluator
+        expr = expr.replace(/\b[A-Z]{1,3}\d*\b/g, '(0)');
 
         // Replace single = with === in conditions
         expr = expr.replace(/([^=><!])=([^=])/g, '$1===$2');
@@ -169,7 +179,7 @@ const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs
         try {
             const safeResult = new Function(`"use strict"; return (${expr});`)();
             if (typeof safeResult === 'number' && !isNaN(safeResult) && isFinite(safeResult)) {
-                return Math.round(safeResult * 10000) / 10000;
+                return Math.round(safeResult * 100) / 100;
             }
             if (typeof safeResult === 'number' && (isNaN(safeResult) || !isFinite(safeResult))) {
                 return "";
@@ -195,12 +205,18 @@ const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs
             });
         }
 
-        // Determine brand override formulas if applicable
+        // Determine brand override formulas if applicable (with flexible alias matching e.g. Apple / Apple India / iPhone, Vivo / Vivo India)
         const recBrand = rec.brand ? String(rec.brand).trim().toUpperCase() : "";
         let brandOverrideMap = new Map();
         if (recBrand && Array.isArray(brandConfigs)) {
             const matchingConfig = brandConfigs.find(cfg =>
-                cfg.brands && Array.isArray(cfg.brands) && cfg.brands.some(b => String(b).trim().toUpperCase() === recBrand)
+                cfg.brands && Array.isArray(cfg.brands) && cfg.brands.some(b => {
+                    const brandStr = String(b).trim().toUpperCase();
+                    if (brandStr === recBrand) return true;
+                    if (recBrand.includes(brandStr) || brandStr.includes(recBrand)) return true;
+                    if ((brandStr === 'APPLE' || brandStr === 'IPHONE') && (recBrand === 'APPLE' || recBrand === 'IPHONE')) return true;
+                    return false;
+                })
             );
             if (matchingConfig && Array.isArray(matchingConfig.columns)) {
                 matchingConfig.columns.forEach(c => {
@@ -218,7 +234,12 @@ const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs
                 const formulaToUse = brandOverrideMap.get(col.column_id) || col.formula;
                 if (formulaToUse) {
                     const computedVal = evaluateSingleFormula(formulaToUse, rec);
-                    rec[col.column_name] = computedVal !== undefined && computedVal !== null ? computedVal : "";
+                    // Update calculated value, or preserve existing non-empty value if calculation was empty
+                    if (computedVal !== undefined && computedVal !== null && computedVal !== "") {
+                        rec[col.column_name] = computedVal;
+                    } else if (rec[col.column_name] === undefined || rec[col.column_name] === null) {
+                        rec[col.column_name] = "";
+                    }
                 }
             }
         }
@@ -268,6 +289,20 @@ const importPriceListController = async (req, res) => {
 
         // 2. Automatically evaluate formulation columns for all imported records
         const processedRecords = await evaluateFormulasForRecords(variationId, columnsList, brandConfigs, records);
+
+        // Ensure all numeric and formula column values are strictly capped at 2 decimal places
+        for (const rec of processedRecords) {
+            for (const col of columnsList) {
+                const colName = col.column_name;
+                const val = rec[colName];
+                if (val !== undefined && val !== null && val !== "" && val !== "-" && val !== "—") {
+                    const num = Number(val);
+                    if (!isNaN(num) && typeof val !== 'boolean') {
+                        rec[colName] = Math.round(num * 100) / 100;
+                    }
+                }
+            }
+        }
 
         // 3. Upsert data records
         await upsertPriceListData(variationId, columnsList, processedRecords, addedBy, deviceId);

@@ -36,6 +36,15 @@ const mapFormulaForRow = (formula, targetRow) => {
   return `IFERROR(${mappedFormula},"")`;
 };
 
+const formatPriceValue = (val) => {
+  if (val === undefined || val === null || val === '' || val === '-' || val === '—') return "0";
+  const num = Number(val);
+  if (!isNaN(num) && typeof val !== 'boolean') {
+    return Number.isInteger(num) ? String(num) : num.toFixed(2);
+  }
+  return val;
+};
+
 const canUserViewColumn = (col, user) => {
   const allowedLandingTypes = col.landing_types && Array.isArray(col.landing_types) && col.landing_types.length > 0
     ? col.landing_types
@@ -182,8 +191,7 @@ export default function PriceListData() {
         label: c.column_name,
         render: (row) => {
           const val = row[c.column_name];
-          if (val === undefined || val === null || val === '' || val === '-' || val === '—') return "0";
-          return <span className="font-medium text-slate-800">{val}</span>;
+          return <span className="font-medium text-slate-800">{formatPriceValue(val)}</span>;
         }
       });
     });
@@ -341,9 +349,16 @@ export default function PriceListData() {
           if (isFormulaType) {
             let formulaToUse = "";
 
-            // Check brand configurations for specific formula override
+            // Check brand configurations for specific formula override (with flexible alias matching e.g. Apple / Apple India / iPhone, Vivo / Vivo India)
             const matchingConfig = configs.find(cfg =>
-              m.brand_name && cfg.brands && cfg.brands.map(b => String(b).trim().toUpperCase()).includes(String(m.brand_name).trim().toUpperCase())
+              m.brand_name && cfg.brands && cfg.brands.some(b => {
+                const brandStr = String(b).trim().toUpperCase();
+                const mBrand = String(m.brand_name).trim().toUpperCase();
+                if (brandStr === mBrand) return true;
+                if (mBrand.includes(brandStr) || brandStr.includes(mBrand)) return true;
+                if ((brandStr === 'APPLE' || brandStr === 'IPHONE') && (mBrand === 'APPLE' || mBrand === 'IPHONE')) return true;
+                return false;
+              })
             );
             if (matchingConfig) {
               const matchingColFormula = matchingConfig.columns?.find(c => c.column_id === col.column_id);
@@ -386,8 +401,8 @@ export default function PriceListData() {
       });
 
       // Add borders and formatting
-      worksheet.eachRow({ includeHeader: false }, (row) => {
-        row.eachCell({ includeEmpty: true }, (cell) => {
+      worksheet.eachRow({ includeHeader: false }, (row, rowNumber) => {
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
           cell.font = { name: "Segoe UI", size: 10 };
           cell.border = {
             top: { style: "thin", color: { argb: "FFE2E8F0" } },
@@ -395,6 +410,12 @@ export default function PriceListData() {
             left: { style: "thin", color: { argb: "FFE2E8F0" } },
             right: { style: "thin", color: { argb: "FFE2E8F0" } },
           };
+          if (colNumber > fixedHeaders.length) {
+            cell.numFmt = "0.00";
+            cell.alignment = { horizontal: "right", vertical: "middle" };
+          } else {
+            cell.alignment = { horizontal: "left", vertical: "middle" };
+          }
         });
       });
 
@@ -494,6 +515,9 @@ export default function PriceListData() {
                   if ('error' in res) return "";
                   return "";
                 }
+                if (typeof res === 'number') {
+                  return Math.round(res * 100) / 100;
+                }
                 return res;
               }
               // 2. Formula object without evaluated result
@@ -509,6 +533,9 @@ export default function PriceListData() {
                 return "";
               }
               return "";
+            }
+            if (typeof val === 'number') {
+              return Math.round(val * 100) / 100;
             }
             return val;
           };
@@ -539,7 +566,8 @@ export default function PriceListData() {
               if (strVal === "-" || strVal === "") {
                 record[col.column_name] = "";
               } else {
-                record[col.column_name] = strVal;
+                const num = Number(strVal);
+                record[col.column_name] = !isNaN(num) ? Math.round(num * 100) / 100 : strVal;
               }
             });
 
