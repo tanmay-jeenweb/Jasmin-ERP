@@ -353,8 +353,8 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
                 o.id,
                 o.brand_name,
                 o.offer_type,
-                o.from_date,
-                o.to_date,
+                DATE_FORMAT(o.from_date, '%Y-%m-%d') AS from_date,
+                DATE_FORMAT(o.to_date, '%Y-%m-%d') AS to_date,
                 omg.model_group_name
             FROM offers o
             JOIN offer_model_groups omg ON o.id = omg.offer_id

@@ -174,8 +174,8 @@ const getAllOffers = async () => {
             o.state_ids,
             sm.name AS state_name,
             o.offer_type,
-            o.from_date,
-            o.to_date,
+            DATE_FORMAT(o.from_date, '%Y-%m-%d') AS from_date,
+            DATE_FORMAT(o.to_date, '%Y-%m-%d') AS to_date,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             o.device_id,
             o.timestamp
@@ -219,7 +219,20 @@ const getAllOffers = async () => {
 
 const getOfferById = async (id) => {
     const offerQuery = `
-        SELECT o.*, sm.name AS state_name
+        SELECT 
+            o.id,
+            o.brand_name,
+            o.model_group_name,
+            o.state_id,
+            o.state_ids,
+            o.offer_type,
+            DATE_FORMAT(o.from_date, '%Y-%m-%d') AS from_date,
+            DATE_FORMAT(o.to_date, '%Y-%m-%d') AS to_date,
+            o.added_by,
+            o.device_id,
+            o.timestamp,
+            o.updated_at,
+            sm.name AS state_name
         FROM offers o
         LEFT JOIN state_master sm ON o.state_id = sm.id
         WHERE o.id = ?

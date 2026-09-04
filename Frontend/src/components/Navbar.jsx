@@ -7,6 +7,17 @@ import { getVariations } from "../api/variationApi";
 
 const logo = "/Jasmin-Logo.png";
 
+const formatNavbarDate = (dateStr) => {
+    if (!dateStr) return "";
+    const clean = String(dateStr).substring(0, 10);
+    const parts = clean.split("-");
+    if (parts.length === 3) {
+        const [y, m, d] = parts;
+        return `${d}/${m}/${y}`;
+    }
+    return dateStr;
+};
+
 export default function Navbar() {
     const navigate = useNavigate();
     const location = useLocation();
@@ -373,7 +384,7 @@ export default function Navbar() {
     });
 
     let marqueeText = runningOffers.length > 0
-        ? runningOffers.map(o => `🔥 [${o.brand_name}] ${o.offer_type} (Valid: ${new Date(o.from_date).toLocaleDateString()} to ${new Date(o.to_date).toLocaleDateString()})`).join("   |   ")
+        ? runningOffers.map(o => `🔥 [${o.brand_name}] ${o.offer_type} (Valid: ${formatNavbarDate(o.from_date)} to ${formatNavbarDate(o.to_date)})`).join("   |   ")
         : "";
 
     // Repeat the text to ensure it's wide enough for a seamless circular loop

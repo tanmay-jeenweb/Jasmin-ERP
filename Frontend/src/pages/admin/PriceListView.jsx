@@ -6,6 +6,19 @@ import { getPriceListReport, getModelGroupStockInfo } from "../../api/priceListA
 import { usePermission } from "../../context/PermissionContext";
 import toast from "react-hot-toast";
 
+const formatOfferDate = (dateStr) => {
+  if (!dateStr) return "—";
+  const clean = String(dateStr).substring(0, 10);
+  const parts = clean.split("-");
+  if (parts.length === 3) {
+    const [year, month, day] = parts;
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthName = months[parseInt(month, 10) - 1] || month;
+    return `${parseInt(day, 10)} ${monthName} ${year}`;
+  }
+  return dateStr;
+};
+
 const canUserViewColumn = (col, user) => {
   const allowedLandingTypes = col.landing_types && Array.isArray(col.landing_types) && col.landing_types.length > 0
     ? col.landing_types
@@ -604,7 +617,7 @@ export default function PriceListView() {
                   Offer Validity
                 </span>
                 <span className="font-mono font-bold">
-                  {new Date(selectedOfferModal.from_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} &mdash; {new Date(selectedOfferModal.to_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  {formatOfferDate(selectedOfferModal.from_date)} &mdash; {formatOfferDate(selectedOfferModal.to_date)}
                 </span>
               </div>
 

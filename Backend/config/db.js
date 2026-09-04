@@ -7,6 +7,7 @@ const db = mysql.createPool({
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     port: process.env.DB_PORT,
+    dateStrings: true, // Return DATE and DATETIME as strings to avoid timezone shift
 
     waitForConnections: true,
     connectionLimit: 5,       // Keep low for shared CPanel hosting
