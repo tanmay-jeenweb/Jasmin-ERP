@@ -539,6 +539,24 @@ export default function DataTable({
                 </tr>
               )}
             </tbody>
+            {totalRow && (
+              <tfoot>
+                <tr className="border-t-2 border-slate-350 bg-slate-100 font-bold">
+                  {visibleColumns.map((column) => {
+                    const originalColumn = initialColumns.find(c => c.key === column.key) || column;
+                    return (
+                      <td
+                        key={column.key}
+                        className="px-3 py-2.5 text-sm text-slate-900 border-t border-slate-300 bg-slate-100 font-bold"
+                        style={{ minWidth: originalColumn.minWidth || '140px' }}
+                      >
+                        {originalColumn.render ? originalColumn.render(totalRow) : totalRow[column.key]}
+                      </td>
+                    );
+                  })}
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 

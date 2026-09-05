@@ -10,17 +10,25 @@ export default function ABMWiseTvAReport() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [exportingReport, setExportingReport] = useState(false);
+  const [syncDate, setSyncDate] = useState(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
 
   // Filter States
   const [selectedStates, setSelectedStates] = useState([]);
   const [stateSearchText, setStateSearchText] = useState("");
   const [isStateFilterOpen, setIsStateFilterOpen] = useState(false);
 
-  const loadData = async () => {
+  const loadData = async (dateToLoad) => {
     setLoading(true);
     setError("");
     try {
-      const response = await getABMWiseTargetVsAchievements();
+      const targetDate = dateToLoad !== undefined ? dateToLoad : syncDate;
+      const response = await getABMWiseTargetVsAchievements(targetDate);
       setData(response.data.data || []);
     } catch (err) {
       console.error("Failed to load target vs achievement data", err);
@@ -31,8 +39,10 @@ export default function ABMWiseTvAReport() {
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (syncDate) {
+      loadData(syncDate);
+    }
+  }, [syncDate]);
 
   // Format quantities, values and percentages
   const formatQty = (val) => {
@@ -186,6 +196,37 @@ export default function ABMWiseTvAReport() {
     return t;
   }, [groupedData]);
 
+  // Format grouped data with Total row appended for DataTable
+  const formattedData = useMemo(() => {
+    if (groupedData.length === 0) return [];
+
+    const totalRow = {
+      id: "Total",
+      sr_no: "",
+      abm_name: "TOTAL",
+      qty_tgt: totals.qty_tgt,
+      value_tgt: totals.value_tgt,
+      ftd_qty_ach: totals.ftd_qty_ach,
+      ftd_value_ach: totals.ftd_value_ach,
+      lmftd_qty_ach: totals.lmftd_qty_ach,
+      lmftd_value_ach: totals.lmftd_value_ach,
+      mtd_qty_ach: totals.mtd_qty_ach,
+      mtd_value_ach: totals.mtd_value_ach,
+      mtd_qty_percentage_ach: totals.mtd_qty_percentage_ach,
+      mtd_value_percentage_ach: totals.mtd_value_percentage_ach,
+      lmtd_qty_ach: totals.lmtd_qty_ach,
+      lmtd_value_ach: totals.lmtd_value_ach,
+      btd_qty: totals.btd_qty,
+      btd_value: totals.btd_value,
+      ddr_qty: totals.ddr_qty,
+      ddr_value: totals.ddr_value,
+      growth_qty_percentage: totals.growth_qty_percentage,
+      growth_value_percentage: totals.growth_value_percentage
+    };
+
+    return [...groupedData, totalRow];
+  }, [groupedData, totals]);
+
   // Export full report to Excel using xlsx-js-style
   const handleExportReport = async () => {
     if (groupedData.length === 0) {
@@ -194,7 +235,8 @@ export default function ABMWiseTvAReport() {
     }
     setExportingReport(true);
     try {
-      const monthYear = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
+      const exportDate = syncDate ? new Date(syncDate + 'T00:00:00') : new Date();
+      const monthYear = exportDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
 
       const headers = [
         "Sr. No",
@@ -382,61 +424,61 @@ export default function ABMWiseTvAReport() {
       key: "sr_no",
       label: "Sr. No",
       minWidth: "70px",
-      render: (row) => <span className="font-semibold text-slate-500">{row.sr_no}</span>
+      render: (row) => <span className={`font-semibold ${row.id === "Total" ? "text-slate-900 font-bold" : "text-slate-500"}`}>{row.sr_no}</span>
     },
     {
       key: "abm_name",
       label: "ABM NAME",
       minWidth: "180px",
-      render: (row) => <span className="font-semibold text-indigo-700">{row.abm_name || "—"}</span>
+      render: (row) => <span className={`font-semibold ${row.id === "Total" ? "text-slate-900 font-bold" : "text-indigo-700"}`}>{row.abm_name || (row.id === "Total" ? "TOTAL" : "—")}</span>
     },
     {
       key: "qty_tgt",
       label: "QTY TGT",
       minWidth: "110px",
-      render: (row) => <span className="font-medium text-slate-700">{formatQty(row.qty_tgt)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "font-medium text-slate-700"}>{formatQty(row.qty_tgt)}</span>
     },
     {
       key: "value_tgt",
       label: "Value TGT",
       minWidth: "130px",
-      render: (row) => <span className="font-medium text-slate-700">{formatVal(row.value_tgt)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "font-medium text-slate-700"}>{formatVal(row.value_tgt)}</span>
     },
     {
       key: "ftd_qty_ach",
       label: "FTD QTY ACH",
       minWidth: "130px",
-      render: (row) => <span className="text-emerald-700 font-semibold">{formatQty(row.ftd_qty_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-emerald-900" : "text-emerald-700 font-semibold"}>{formatQty(row.ftd_qty_ach)}</span>
     },
     {
       key: "ftd_value_ach",
       label: "FTD Value ACH",
       minWidth: "140px",
-      render: (row) => <span className="text-emerald-700 font-semibold">{formatVal(row.ftd_value_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-emerald-900" : "text-emerald-700 font-semibold"}>{formatVal(row.ftd_value_ach)}</span>
     },
     {
       key: "lmftd_qty_ach",
       label: "LMFTD QTY ACH",
       minWidth: "150px",
-      render: (row) => <span className="text-slate-600">{formatQty(row.lmftd_qty_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-600"}>{formatQty(row.lmftd_qty_ach)}</span>
     },
     {
       key: "lmftd_value_ach",
       label: "LMFTD Value ACH",
       minWidth: "160px",
-      render: (row) => <span className="text-slate-600">{formatVal(row.lmftd_value_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-600"}>{formatVal(row.lmftd_value_ach)}</span>
     },
     {
       key: "mtd_qty_ach",
       label: "MTD QTY ACH",
       minWidth: "130px",
-      render: (row) => <span className="text-blue-700 font-semibold">{formatQty(row.mtd_qty_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-blue-900" : "text-blue-700 font-semibold"}>{formatQty(row.mtd_qty_ach)}</span>
     },
     {
       key: "mtd_value_ach",
       label: "MTD Value ACH",
       minWidth: "170px",
-      render: (row) => <span className="text-blue-700 font-semibold">{formatVal(row.mtd_value_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-blue-900" : "text-blue-700 font-semibold"}>{formatVal(row.mtd_value_ach)}</span>
     },
     {
       key: "mtd_qty_percentage_ach",
@@ -445,7 +487,7 @@ export default function ABMWiseTvAReport() {
       render: (row) => {
         const pct = row.mtd_qty_percentage_ach;
         const color = pct >= 100 ? "text-emerald-600 font-bold" : "text-amber-600 font-semibold";
-        return <span className={color}>{formatPct(pct)}</span>;
+        return <span className={`${color} ${row.id === "Total" ? "font-extrabold" : ""}`}>{formatPct(pct)}</span>;
       }
     },
     {
@@ -455,44 +497,44 @@ export default function ABMWiseTvAReport() {
       render: (row) => {
         const pct = row.mtd_value_percentage_ach;
         const color = pct >= 100 ? "text-emerald-600 font-bold" : "text-amber-600 font-semibold";
-        return <span className={color}>{formatPct(pct)}</span>;
+        return <span className={`${color} ${row.id === "Total" ? "font-extrabold" : ""}`}>{formatPct(pct)}</span>;
       }
     },
     {
       key: "lmtd_qty_ach",
       label: "LMTD QTY ACH",
       minWidth: "140px",
-      render: (row) => <span className="text-slate-600">{formatQty(row.lmtd_qty_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-600"}>{formatQty(row.lmtd_qty_ach)}</span>
     },
     {
       key: "lmtd_value_ach",
       label: "LMTD Value ACH",
       minWidth: "170px",
-      render: (row) => <span className="text-slate-600">{formatVal(row.lmtd_value_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-600"}>{formatVal(row.lmtd_value_ach)}</span>
     },
     {
       key: "btd_qty",
       label: "BTD Qty.",
       minWidth: "110px",
-      render: (row) => <span className="text-slate-700">{formatQty(row.btd_qty)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-700"}>{formatQty(row.btd_qty)}</span>
     },
     {
       key: "btd_value",
       label: "BTD Value",
       minWidth: "120px",
-      render: (row) => <span className="text-slate-700">{formatVal(row.btd_value)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-700"}>{formatVal(row.btd_value)}</span>
     },
     {
       key: "ddr_qty",
       label: "DDR Qty.",
       minWidth: "110px",
-      render: (row) => <span className="text-slate-700">{formatDdrQty(row.ddr_qty)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-700"}>{formatDdrQty(row.ddr_qty)}</span>
     },
     {
       key: "ddr_value",
       label: "DDR Value",
       minWidth: "120px",
-      render: (row) => <span className="text-slate-700">{formatVal(row.ddr_value)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-700"}>{formatVal(row.ddr_value)}</span>
     },
     {
       key: "growth_qty_percentage",
@@ -501,7 +543,7 @@ export default function ABMWiseTvAReport() {
       render: (row) => {
         const pct = row.growth_qty_percentage;
         const color = pct >= 0 ? "text-emerald-600 font-bold" : "text-rose-600 font-bold";
-        return <span className={color}>{pct >= 0 ? `+${formatPct(pct)}` : formatPct(pct)}</span>;
+        return <span className={`${color} ${row.id === "Total" ? "font-extrabold" : ""}`}>{pct >= 0 ? `+${formatPct(pct)}` : formatPct(pct)}</span>;
       }
     },
     {
@@ -511,7 +553,7 @@ export default function ABMWiseTvAReport() {
       render: (row) => {
         const pct = row.growth_value_percentage;
         const color = pct >= 0 ? "text-emerald-600 font-bold" : "text-rose-600 font-bold";
-        return <span className={color}>{pct >= 0 ? `+${formatPct(pct)}` : formatPct(pct)}</span>;
+        return <span className={`${color} ${row.id === "Total" ? "font-extrabold" : ""}`}>{pct >= 0 ? `+${formatPct(pct)}` : formatPct(pct)}</span>;
       }
     }
   ], []);
@@ -614,23 +656,45 @@ export default function ABMWiseTvAReport() {
         <DataTable
           tableId="abm_wise_tva_report"
           title="ABM wise TvA Report"
-          data={groupedData}
+          data={formattedData}
           columns={columns}
           loading={loading}
           toggleActions={filtersElement}
           searchPlaceholder="Search ..."
           actionButton={
-            <button
-              onClick={handleExportReport}
-              disabled={exportingReport || loading}
-              className="flex items-center gap-2 h-10 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-semibold shadow-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none focus:outline-none"
-              title="Export Report to Excel"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-4 h-4 text-white flex-shrink-0 ${exportingReport ? 'animate-bounce' : ''}`}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11.35 16.15l2.25 2.25 3.75-3.75M19.5 8.25v11.25a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V4.5a2.25 2.25 0 0 1 2.25-2.25h9.123m0 0L19.5 8.25m-3.377-6v4.875c0 .621.504 1.125 1.125 1.125h4.875" />
-              </svg>
-              <span>Export Excel</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-lg px-2 h-10">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+                </svg>
+                <input
+                  type="date"
+                  value={syncDate}
+                  max={(() => {
+                    const d = new Date();
+                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                  })()}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setSyncDate(e.target.value);
+                    }
+                  }}
+                  className="bg-transparent border-none text-xs text-slate-700 font-semibold focus:outline-none cursor-pointer w-[110px] p-0"
+                  title="Select Date to View ABM wise Report"
+                />
+              </div>
+              <button
+                onClick={handleExportReport}
+                disabled={exportingReport || loading}
+                className="flex items-center gap-2 h-10 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-semibold shadow-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none focus:outline-none"
+                title="Export Report to Excel"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-4 h-4 text-white flex-shrink-0 ${exportingReport ? 'animate-bounce' : ''}`}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11.35 16.15l2.25 2.25 3.75-3.75M19.5 8.25v11.25a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V4.5a2.25 2.25 0 0 1 2.25-2.25h9.123m0 0L19.5 8.25m-3.377-6v4.875c0 .621.504 1.125 1.125 1.125h4.875" />
+                </svg>
+                <span>Export Excel</span>
+              </button>
+            </div>
           }
         />
       </main>

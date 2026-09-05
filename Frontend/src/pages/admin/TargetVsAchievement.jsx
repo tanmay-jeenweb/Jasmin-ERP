@@ -688,86 +688,164 @@ export default function TargetVsAchievement() {
     });
   }, [data, selectedBranches, selectedAbms, selectedStates, selectedZones]);
 
-  // Add serial number (Sr. No) sequentially based on row index
+  // Calculate Totals for Footer / Summary Row
+  const totals = useMemo(() => {
+    const t = {
+      qty_tgt: 0,
+      value_tgt: 0,
+      ftd_qty_ach: 0,
+      ftd_value_ach: 0,
+      lmftd_qty_ach: 0,
+      lmftd_value_ach: 0,
+      mtd_qty_ach: 0,
+      mtd_value_ach: 0,
+      lmtd_qty_ach: 0,
+      lmtd_value_ach: 0,
+      btd_qty: 0,
+      btd_value: 0,
+      ddr_qty: 0,
+      ddr_value: 0,
+      mtd_qty_percentage_ach: 0,
+      mtd_value_percentage_ach: 0,
+      growth_qty_percentage: 0,
+      growth_value_percentage: 0
+    };
+
+    filteredData.forEach(row => {
+      t.qty_tgt += Number(row.qty_tgt) || 0;
+      t.value_tgt += Number(row.value_tgt) || 0;
+      t.ftd_qty_ach += Number(row.ftd_qty_ach) || 0;
+      t.ftd_value_ach += Number(row.ftd_value_ach) || 0;
+      t.lmftd_qty_ach += Number(row.lmftd_qty_ach) || 0;
+      t.lmftd_value_ach += Number(row.lmftd_value_ach) || 0;
+      t.mtd_qty_ach += Number(row.mtd_qty_ach) || 0;
+      t.mtd_value_ach += Number(row.mtd_value_ach) || 0;
+      t.lmtd_qty_ach += Number(row.lmtd_qty_ach) || 0;
+      t.lmtd_value_ach += Number(row.lmtd_value_ach) || 0;
+      t.btd_qty += Number(row.btd_qty) || 0;
+      t.btd_value += Number(row.btd_value) || 0;
+      t.ddr_qty += Number(row.ddr_qty) || 0;
+      t.ddr_value += Number(row.ddr_value) || 0;
+    });
+
+    t.mtd_qty_percentage_ach = t.qty_tgt > 0 ? (t.mtd_qty_ach / t.qty_tgt) * 100 : 0;
+    t.mtd_value_percentage_ach = t.value_tgt > 0 ? (t.mtd_value_ach / t.value_tgt) * 100 : 0;
+    t.growth_qty_percentage = t.mtd_qty_ach !== 0 ? ((t.mtd_qty_ach - t.lmtd_qty_ach) / t.mtd_qty_ach) * 100 : 0;
+    t.growth_value_percentage = t.mtd_value_ach !== 0 ? ((t.mtd_value_ach - t.lmtd_value_ach) / t.mtd_value_ach) * 100 : 0;
+
+    return t;
+  }, [filteredData]);
+
+  // Add serial number (Sr. No) sequentially based on row index and append Total row
   const formattedData = useMemo(() => {
-    return filteredData.map((item, index) => ({
+    const base = filteredData.map((item, index) => ({
       ...item,
       sr_no: index + 1
     }));
-  }, [filteredData]);
+
+    if (base.length === 0) return [];
+
+    const totalRow = {
+      id: "Total",
+      sr_no: "",
+      branch_name: "TOTAL",
+      zone: "",
+      abm_name: "",
+      qty_tgt: totals.qty_tgt,
+      value_tgt: totals.value_tgt,
+      ftd_qty_ach: totals.ftd_qty_ach,
+      ftd_value_ach: totals.ftd_value_ach,
+      lmftd_qty_ach: totals.lmftd_qty_ach,
+      lmftd_value_ach: totals.lmftd_value_ach,
+      mtd_qty_ach: totals.mtd_qty_ach,
+      mtd_value_ach: totals.mtd_value_ach,
+      mtd_qty_percentage_ach: totals.mtd_qty_percentage_ach,
+      mtd_value_percentage_ach: totals.mtd_value_percentage_ach,
+      lmtd_qty_ach: totals.lmtd_qty_ach,
+      lmtd_value_ach: totals.lmtd_value_ach,
+      btd_qty: totals.btd_qty,
+      btd_value: totals.btd_value,
+      ddr_qty: totals.ddr_qty,
+      ddr_value: totals.ddr_value,
+      growth_qty_percentage: totals.growth_qty_percentage,
+      growth_value_percentage: totals.growth_value_percentage
+    };
+
+    return [...base, totalRow];
+  }, [filteredData, totals]);
 
   const columns = useMemo(() => [
     {
       key: "sr_no",
       label: "Sr. No",
       minWidth: "70px",
-      render: (row) => <span className="font-semibold text-slate-505">{row.sr_no}</span>
+      render: (row) => <span className={`font-semibold ${row.id === "Total" ? "text-slate-900 font-bold" : "text-slate-500"}`}>{row.sr_no}</span>
     },
     {
       key: "branch_name",
       label: "Branch Name",
       minWidth: "150px",
-      render: (row) => <span className="font-bold text-slate-800">{row.branch_name || "—"}</span>
+      render: (row) => <span className={`font-bold ${row.id === "Total" ? "text-slate-900 font-extrabold" : "text-slate-800"}`}>{row.branch_name || (row.id === "Total" ? "TOTAL" : "—")}</span>
     },
     {
       key: "zone",
       label: "Zone",
       minWidth: "120px",
-      render: (row) => <span className="text-slate-600">{row.zone || "—"}</span>
+      render: (row) => <span className="text-slate-600">{row.id === "Total" ? "" : (row.zone || "—")}</span>
     },
     {
       key: "abm_name",
       label: "ABM NAME",
       minWidth: "180px",
-      render: (row) => <span className="font-semibold text-indigo-700">{row.abm_name || "—"}</span>
+      render: (row) => <span className="font-semibold text-indigo-700">{row.id === "Total" ? "" : (row.abm_name || "—")}</span>
     },
     {
       key: "qty_tgt",
       label: "QTY TGT",
       minWidth: "110px",
-      render: (row) => <span className="font-medium text-slate-700">{formatQty(row.qty_tgt)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "font-medium text-slate-700"}>{formatQty(row.qty_tgt)}</span>
     },
     {
       key: "value_tgt",
       label: "Value TGT",
       minWidth: "130px",
-      render: (row) => <span className="font-medium text-slate-700">{formatVal(row.value_tgt)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "font-medium text-slate-700"}>{formatVal(row.value_tgt)}</span>
     },
     {
       key: "ftd_qty_ach",
       label: "FTD QTY ACH",
       minWidth: "130px",
-      render: (row) => <span className="text-emerald-700 font-semibold">{formatQty(row.ftd_qty_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-emerald-900" : "text-emerald-700 font-semibold"}>{formatQty(row.ftd_qty_ach)}</span>
     },
     {
       key: "ftd_value_ach",
       label: "FTD Value ACH",
       minWidth: "140px",
-      render: (row) => <span className="text-emerald-700 font-semibold">{formatVal(row.ftd_value_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-emerald-900" : "text-emerald-700 font-semibold"}>{formatVal(row.ftd_value_ach)}</span>
     },
     {
       key: "lmftd_qty_ach",
       label: "LMFTD QTY ACH",
       minWidth: "150px",
-      render: (row) => <span className="text-slate-600">{formatQty(row.lmftd_qty_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-600"}>{formatQty(row.lmftd_qty_ach)}</span>
     },
     {
       key: "lmftd_value_ach",
       label: "LMFTD Value ACH",
       minWidth: "160px",
-      render: (row) => <span className="text-slate-600">{formatVal(row.lmftd_value_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-600"}>{formatVal(row.lmftd_value_ach)}</span>
     },
     {
       key: "mtd_qty_ach",
       label: "MTD QTY ACH",
       minWidth: "130px",
-      render: (row) => <span className="text-blue-700 font-semibold">{formatQty(row.mtd_qty_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-blue-900" : "text-blue-700 font-semibold"}>{formatQty(row.mtd_qty_ach)}</span>
     },
     {
       key: "mtd_value_ach",
       label: "MTD Value ACH",
       minWidth: "170px",
-      render: (row) => <span className="text-blue-700 font-semibold">{formatVal(row.mtd_value_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-blue-900" : "text-blue-700 font-semibold"}>{formatVal(row.mtd_value_ach)}</span>
     },
     {
       key: "mtd_qty_percentage_ach",
@@ -776,7 +854,7 @@ export default function TargetVsAchievement() {
       render: (row) => {
         const pct = row.mtd_qty_percentage_ach;
         const color = pct >= 100 ? "text-emerald-600 font-bold" : "text-amber-600 font-semibold";
-        return <span className={color}>{formatPct(pct)}</span>;
+        return <span className={`${color} ${row.id === "Total" ? "font-extrabold" : ""}`}>{formatPct(pct)}</span>;
       }
     },
     {
@@ -786,44 +864,44 @@ export default function TargetVsAchievement() {
       render: (row) => {
         const pct = row.mtd_value_percentage_ach;
         const color = pct >= 100 ? "text-emerald-600 font-bold" : "text-amber-600 font-semibold";
-        return <span className={color}>{formatPct(pct)}</span>;
+        return <span className={`${color} ${row.id === "Total" ? "font-extrabold" : ""}`}>{formatPct(pct)}</span>;
       }
     },
     {
       key: "lmtd_qty_ach",
       label: "LMTD QTY ACH",
       minWidth: "140px",
-      render: (row) => <span className="text-slate-600">{formatQty(row.lmtd_qty_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-600"}>{formatQty(row.lmtd_qty_ach)}</span>
     },
     {
       key: "lmtd_value_ach",
       label: "LMTD Value ACH",
       minWidth: "170px",
-      render: (row) => <span className="text-slate-600">{formatVal(row.lmtd_value_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-600"}>{formatVal(row.lmtd_value_ach)}</span>
     },
     {
       key: "btd_qty",
       label: "BTD Qty.",
       minWidth: "110px",
-      render: (row) => <span className="text-slate-700">{formatQty(row.btd_qty)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-700"}>{formatQty(row.btd_qty)}</span>
     },
     {
       key: "btd_value",
       label: "BTD Value",
       minWidth: "120px",
-      render: (row) => <span className="text-slate-700">{formatVal(row.btd_value)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-700"}>{formatVal(row.btd_value)}</span>
     },
     {
       key: "ddr_qty",
       label: "DDR Qty.",
       minWidth: "110px",
-      render: (row) => <span className="text-slate-700">{formatDdrQty(row.ddr_qty)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-700"}>{formatDdrQty(row.ddr_qty)}</span>
     },
     {
       key: "ddr_value",
       label: "DDR Value",
       minWidth: "120px",
-      render: (row) => <span className="text-slate-700">{formatVal(row.ddr_value)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-700"}>{formatVal(row.ddr_value)}</span>
     },
     {
       key: "growth_qty_percentage",
@@ -832,7 +910,7 @@ export default function TargetVsAchievement() {
       render: (row) => {
         const pct = row.growth_qty_percentage;
         const color = pct >= 0 ? "text-emerald-600 font-bold" : "text-rose-600 font-bold";
-        return <span className={color}>{pct >= 0 ? `+${formatPct(pct)}` : formatPct(pct)}</span>;
+        return <span className={`${color} ${row.id === "Total" ? "font-extrabold" : ""}`}>{pct >= 0 ? `+${formatPct(pct)}` : formatPct(pct)}</span>;
       }
     },
     {
@@ -842,7 +920,7 @@ export default function TargetVsAchievement() {
       render: (row) => {
         const pct = row.growth_value_percentage;
         const color = pct >= 0 ? "text-emerald-600 font-bold" : "text-rose-600 font-bold";
-        return <span className={color}>{pct >= 0 ? `+${formatPct(pct)}` : formatPct(pct)}</span>;
+        return <span className={`${color} ${row.id === "Total" ? "font-extrabold" : ""}`}>{pct >= 0 ? `+${formatPct(pct)}` : formatPct(pct)}</span>;
       }
     }
   ], []);
