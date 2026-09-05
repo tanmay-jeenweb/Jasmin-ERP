@@ -76,6 +76,8 @@ export default function ABMWiseTvAReport() {
   // Apply state filter to raw data
   const filteredRawData = useMemo(() => {
     return data.filter(item => {
+      if (item.branch_name && String(item.branch_name).trim().toUpperCase() === 'TOTAL') return false;
+      if (item.abm_name && String(item.abm_name).trim().toUpperCase() === 'TOTAL') return false;
       return selectedStates.length === 0 || selectedStates.includes(item.state_name);
     });
   }, [data, selectedStates]);

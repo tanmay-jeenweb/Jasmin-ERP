@@ -117,6 +117,13 @@ const createTargetVsAchievementsTable = async () => {
     } catch (err) {
         console.error("Error modifying ddr_qty column in target_vs_achievements:", err);
     }
+
+    // Clean up any stray "TOTAL" row accidentally imported from templates
+    try {
+        await db.execute(`DELETE FROM target_vs_achievements WHERE UPPER(TRIM(branch_name)) = 'TOTAL'`);
+    } catch (err) {
+        console.error("Error cleaning up TOTAL row in target_vs_achievements:", err);
+    }
 };
 
 const getAllTargetVsAchievements = async () => {
@@ -138,6 +145,7 @@ const getAllTargetVsAchievements = async () => {
         )
         LEFT JOIN users abm_u ON abm_m.user_id = abm_u.id
         LEFT JOIN users u ON t.added_by = u.id
+        WHERE UPPER(TRIM(t.branch_name)) != 'TOTAL'
         ORDER BY 
             (t.qty_tgt IS NULL OR t.value_tgt IS NULL) ASC,
             t.timestamp DESC
@@ -168,7 +176,7 @@ const getABMWiseTargetVsAchievements = async (state = null, states = null) => {
     `;
     
     const params = [];
-    const conditions = [];
+    const conditions = ["UPPER(TRIM(t.branch_name)) != 'TOTAL'"];
 
     if (states) {
         const stateList = states.split(',').map(s => s.trim());

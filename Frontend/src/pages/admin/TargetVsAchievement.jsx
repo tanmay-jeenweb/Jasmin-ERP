@@ -563,7 +563,7 @@ export default function TargetVsAchievement() {
             qty_tgt: rawQtyTgt !== undefined && rawQtyTgt !== "" ? Number(rawQtyTgt) : null,
             value_tgt: rawQtyVal !== undefined && rawQtyVal !== "" ? Number(rawQtyVal) : null,
           };
-        }).filter(item => item.branch_name);
+        }).filter(item => item.branch_name && item.branch_name.trim().toUpperCase() !== 'TOTAL');
 
         if (mappedData.length === 0) {
           toast.error("No valid rows containing a Branch Name were found.");
@@ -640,7 +640,7 @@ export default function TargetVsAchievement() {
   const uniqueBranches = useMemo(() => {
     const list = data
       .map(r => ({ id: r.branch_id || r.id, name: r.branch_name }))
-      .filter(r => r.name);
+      .filter(r => r.name && String(r.name).trim().toUpperCase() !== 'TOTAL');
     const seen = new Set();
     return list.filter(item => {
       const duplicate = seen.has(item.name);
@@ -680,6 +680,7 @@ export default function TargetVsAchievement() {
   // Filtered dataset
   const filteredData = useMemo(() => {
     return data.filter(item => {
+      if (item.branch_name && String(item.branch_name).trim().toUpperCase() === 'TOTAL') return false;
       const branchMatch = selectedBranches.length === 0 || selectedBranches.includes(item.branch_name);
       const abmMatch = selectedAbms.length === 0 || selectedAbms.includes(item.abm_name);
       const stateMatch = selectedStates.length === 0 || selectedStates.includes(item.state_name);

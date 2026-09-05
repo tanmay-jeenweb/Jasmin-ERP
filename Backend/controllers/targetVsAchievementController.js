@@ -377,6 +377,9 @@ const calculateAchievementsForTargetDate = async (targetDateStr, baseRecords) =>
 
 const getAllTargetVsAchievementsController = async (req, res) => {
     try {
+        // Purge any dummy 'TOTAL' row from the DB table
+        await db.execute("DELETE FROM target_vs_achievements WHERE UPPER(TRIM(branch_name)) = 'TOTAL'").catch(() => {});
+
         let records = await getAllTargetVsAchievements();
         const allowedBranchNames = await getUserAllowedBranchNames(req.user);
 
@@ -386,6 +389,9 @@ const getAllTargetVsAchievementsController = async (req, res) => {
 
         // Apply user state restrictions
         records = await filterRecordsByUserState(req.user.id, records);
+
+        // Filter out any dummy TOTAL row
+        records = records.filter(r => r.branch_name && String(r.branch_name).trim().toUpperCase() !== 'TOTAL');
 
         // If date parameter is passed, dynamically compute achievements for that target date
         if (req.query.date) {
@@ -417,6 +423,9 @@ const getABMWiseTargetVsAchievementsController = async (req, res) => {
 
         // Apply user state restrictions
         records = await filterRecordsByUserState(req.user.id, records);
+
+        // Filter out any dummy TOTAL row
+        records = records.filter(r => r.branch_name && String(r.branch_name).trim().toUpperCase() !== 'TOTAL' && (!r.abm_name || String(r.abm_name).trim().toUpperCase() !== 'TOTAL'));
 
         // If date parameter is passed, dynamically compute achievements for that target date
         if (req.query.date) {
@@ -478,8 +487,21 @@ const importTargetVsAchievementsController = async (req, res) => {
             allowedStateBranchNames = new Set(branchRows.map(b => b.name));
         }
 
+        // Filter out summary/total rows (e.g. "TOTAL" row at the bottom of templates)
+        const validRecords = records.filter(r => {
+            const b = String(r.branch_name || '').trim().toUpperCase();
+            return b && b !== 'TOTAL';
+        });
+
+        if (validRecords.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No valid branch target records found to import'
+            });
+        }
+
         // Validate branch name is present in all rows and user has mapping/state access
-        for (const r of records) {
+        for (const r of validRecords) {
             if (!r.branch_name) {
                 return res.status(400).json({
                     success: false,
@@ -515,7 +537,7 @@ const importTargetVsAchievementsController = async (req, res) => {
         const remainingDays = totalDays - now.getDate() + 1;
         const remDays = remainingDays > 0 ? remainingDays : 1;
 
-        await upsertTargetVsAchievements(records, addedBy, deviceId, remDays);
+        await upsertTargetVsAchievements(validRecords, addedBy, deviceId, remDays);
 
         try {
             await createAuditLog(
