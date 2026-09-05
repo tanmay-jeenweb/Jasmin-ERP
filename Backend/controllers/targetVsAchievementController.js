@@ -140,6 +140,241 @@ const getUserAllowedBranchNames = async (user) => {
     return [];
 };
 
+// Date formatting and parsing helpers
+const toYYYYMMDD = (val) => {
+    if (!val) return '';
+    if (typeof val === 'string') {
+        const datePart = val.split('T')[0].split(' ')[0];
+        const parts = datePart.split('-');
+        if (parts.length === 3) {
+            return `${parts[0]}${parts[1].padStart(2, '0')}${parts[2].padStart(2, '0')}`;
+        }
+    }
+    if (val instanceof Date) {
+        const year = val.getFullYear();
+        const month = String(val.getMonth() + 1).padStart(2, '0');
+        const day = String(val.getDate()).padStart(2, '0');
+        return `${year}${month}${day}`;
+    }
+    return '';
+};
+
+const formatToDbDateStr = (d) => {
+    if (!d) return '';
+    if (typeof d === 'string') {
+        const datePart = d.split('T')[0].split(' ')[0];
+        if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return datePart;
+    }
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+const formatToYYYYMMDD = (d) => {
+    return toYYYYMMDD(d);
+};
+
+const calculateAchievementsForTargetDate = async (targetDateStr, baseRecords) => {
+    if (!targetDateStr || !Array.isArray(baseRecords) || baseRecords.length === 0) {
+        return baseRecords;
+    }
+
+    const parts = targetDateStr.split('-');
+    if (parts.length !== 3) return baseRecords;
+    const targetYear = parseInt(parts[0], 10);
+    const targetMonth = parseInt(parts[1], 10) - 1;
+    const targetDay = parseInt(parts[2], 10);
+    if (isNaN(targetYear) || isNaN(targetMonth) || isNaN(targetDay)) return baseRecords;
+
+    const targetDate = new Date(targetYear, targetMonth, targetDay);
+    const lmTargetDate = new Date(targetYear, targetMonth - 1, 1);
+    const maxDaysLastMonth = new Date(targetYear, targetMonth, 0).getDate();
+    lmTargetDate.setDate(Math.min(targetDay, maxDaysLastMonth));
+
+    const firstDayCurrentMonth = new Date(targetYear, targetMonth, 1);
+    const firstDayLastMonth = new Date(targetYear, targetMonth - 1, 1);
+
+    const startDateStr = formatToDbDateStr(firstDayLastMonth);
+    const endDateStr = formatToDbDateStr(targetDate);
+
+    // Load branches to map branch codes to names
+    const branches = await getAllBranches();
+    const branchNameLookup = {};
+    for (const b of branches) {
+        if (b.code) branchNameLookup[b.code.toUpperCase()] = b.name;
+        if (b.name) branchNameLookup[b.name.toUpperCase()] = b.name;
+    }
+
+    // Initialize achievement statistics map for all branches
+    const achievementsMap = {};
+    for (const b of branches) {
+        achievementsMap[b.name] = {
+            branch_name: b.name,
+            ftd_qty_ach: 0,
+            ftd_value_ach: 0.00,
+            lmftd_qty_ach: 0,
+            lmftd_value_ach: 0.00,
+            mtd_qty_ach: 0,
+            mtd_value_ach: 0.00,
+            lmtd_qty_ach: 0,
+            lmtd_value_ach: 0.00,
+            btd_qty: 0,
+            btd_value: 0.00,
+            ddr_qty: 0,
+            ddr_value: 0.00,
+            growth_qty_percentage: 0.00,
+            growth_value_percentage: 0.00
+        };
+    }
+
+    // Query sales_invoice_cache
+    const [dbRows] = await db.execute(
+        `SELECT branch_code, branch_name, invoice_date, qty, amount AS net_amount
+         FROM sales_invoice_cache
+         WHERE record_type = 'INVOICE'
+           AND invoice_date BETWEEN ? AND ?`,
+        [startDateStr, endDateStr]
+    );
+
+    const [dbSrnRows] = await db.execute(
+        `SELECT branch_code, branch_name, invoice_date AS sales_return_date, qty, amount AS net_amount
+         FROM sales_invoice_cache
+         WHERE record_type = 'RETURN'
+           AND invoice_date BETWEEN ? AND ?`,
+        [startDateStr, endDateStr]
+    );
+
+    const ftdYYYYMMDD = formatToYYYYMMDD(targetDate);
+    const lmftdYYYYMMDD = formatToYYYYMMDD(lmTargetDate);
+    const mtdStartYYYYMMDD = formatToYYYYMMDD(firstDayCurrentMonth);
+    const lmtdStartYYYYMMDD = formatToYYYYMMDD(firstDayLastMonth);
+
+    for (const row of dbRows) {
+        const invoiceCode = (row.branch_code || '').toUpperCase();
+        const invoiceName = (row.branch_name || '').toUpperCase();
+        const branchName = branchNameLookup[invoiceCode] || branchNameLookup[invoiceName];
+        if (!branchName || !achievementsMap[branchName]) continue;
+
+        const invYYYYMMDD = toYYYYMMDD(row.invoice_date);
+        const qty = parseFloat(row.qty) || 0;
+        const value = parseFloat(row.net_amount) || 0;
+
+        if (invYYYYMMDD === ftdYYYYMMDD) {
+            achievementsMap[branchName].ftd_qty_ach += qty;
+            achievementsMap[branchName].ftd_value_ach += value;
+        }
+        if (invYYYYMMDD === lmftdYYYYMMDD) {
+            achievementsMap[branchName].lmftd_qty_ach += qty;
+            achievementsMap[branchName].lmftd_value_ach += value;
+        }
+        if (invYYYYMMDD >= mtdStartYYYYMMDD && invYYYYMMDD <= ftdYYYYMMDD) {
+            achievementsMap[branchName].mtd_qty_ach += qty;
+            achievementsMap[branchName].mtd_value_ach += value;
+        }
+        if (invYYYYMMDD >= lmtdStartYYYYMMDD && invYYYYMMDD <= lmftdYYYYMMDD) {
+            achievementsMap[branchName].lmtd_qty_ach += qty;
+            achievementsMap[branchName].lmtd_value_ach += value;
+        }
+    }
+
+    // Subtract returns
+    for (const row of dbSrnRows) {
+        const srnCode = (row.branch_code || '').toUpperCase();
+        const srnName = (row.branch_name || '').toUpperCase();
+        const branchName = branchNameLookup[srnCode] || branchNameLookup[srnName];
+        if (!branchName || !achievementsMap[branchName]) continue;
+
+        const srnYYYYMMDD = toYYYYMMDD(row.sales_return_date);
+        const qty = parseFloat(row.qty) || 0;
+        const value = parseFloat(row.net_amount) || 0;
+
+        if (srnYYYYMMDD === ftdYYYYMMDD) {
+            achievementsMap[branchName].ftd_qty_ach -= qty;
+            achievementsMap[branchName].ftd_value_ach -= value;
+        }
+        if (srnYYYYMMDD === lmftdYYYYMMDD) {
+            achievementsMap[branchName].lmftd_qty_ach -= qty;
+            achievementsMap[branchName].lmftd_value_ach -= value;
+        }
+        if (srnYYYYMMDD >= mtdStartYYYYMMDD && srnYYYYMMDD <= ftdYYYYMMDD) {
+            achievementsMap[branchName].mtd_qty_ach += qty;
+            achievementsMap[branchName].mtd_value_ach += value;
+        }
+        if (srnYYYYMMDD >= lmtdStartYYYYMMDD && srnYYYYMMDD <= lmftdYYYYMMDD) {
+            achievementsMap[branchName].lmtd_qty_ach += qty;
+            achievementsMap[branchName].lmtd_value_ach += value;
+        }
+    }
+
+    // Clamp negative achievements to 0
+    for (const bName of Object.keys(achievementsMap)) {
+        const ach = achievementsMap[bName];
+        if (ach.ftd_qty_ach < 0) ach.ftd_qty_ach = 0;
+        if (ach.ftd_value_ach < 0) ach.ftd_value_ach = 0;
+        if (ach.lmftd_qty_ach < 0) ach.lmftd_qty_ach = 0;
+        if (ach.lmftd_value_ach < 0) ach.lmftd_value_ach = 0;
+        if (ach.mtd_qty_ach < 0) ach.mtd_qty_ach = 0;
+        if (ach.mtd_value_ach < 0) ach.mtd_value_ach = 0;
+        if (ach.lmtd_qty_ach < 0) ach.lmtd_qty_ach = 0;
+        if (ach.lmtd_value_ach < 0) ach.lmtd_value_ach = 0;
+    }
+
+    const totalDays = new Date(targetYear, targetMonth + 1, 0).getDate();
+    const remainingDays = totalDays - targetDay + 1;
+    const remDays = remainingDays > 0 ? remainingDays : 1;
+
+    return baseRecords.map(record => {
+        const bName = record.branch_name;
+        const ach = achievementsMap[bName] || {
+            ftd_qty_ach: 0, ftd_value_ach: 0.00,
+            lmftd_qty_ach: 0, lmftd_value_ach: 0.00,
+            mtd_qty_ach: 0, mtd_value_ach: 0.00,
+            lmtd_qty_ach: 0, lmtd_value_ach: 0.00
+        };
+
+        const qtyTgt = parseFloat(record.qty_tgt) || 0;
+        const valTgt = parseFloat(record.value_tgt) || 0;
+
+        const mtdQtyAch = ach.mtd_qty_ach;
+        const mtdValAch = ach.mtd_value_ach;
+        const lmtdQtyAch = ach.lmtd_qty_ach;
+        const lmtdValAch = ach.lmtd_value_ach;
+
+        const mtdQtyPct = qtyTgt > 0 ? (mtdQtyAch / qtyTgt) * 100 : 0.00;
+        const mtdValPct = valTgt > 0 ? (mtdValAch / valTgt) * 100 : 0.00;
+
+        const btdQty = qtyTgt - mtdQtyAch;
+        const btdVal = valTgt - mtdValAch;
+
+        const ddrQty = btdQty / remDays;
+        const ddrVal = btdVal / remDays;
+
+        const growthQtyPct = mtdQtyAch !== 0 ? ((mtdQtyAch - lmtdQtyAch) / mtdQtyAch) * 100 : 0.00;
+        const growthValPct = mtdValAch !== 0 ? ((mtdValAch - lmtdValAch) / mtdValAch) * 100 : 0.00;
+
+        return {
+            ...record,
+            ftd_qty_ach: ach.ftd_qty_ach,
+            ftd_value_ach: ach.ftd_value_ach,
+            lmftd_qty_ach: ach.lmftd_qty_ach,
+            lmftd_value_ach: ach.lmftd_value_ach,
+            mtd_qty_ach: mtdQtyAch,
+            mtd_value_ach: mtdValAch,
+            mtd_qty_percentage_ach: mtdQtyPct,
+            mtd_value_percentage_ach: mtdValPct,
+            lmtd_qty_ach: lmtdQtyAch,
+            lmtd_value_ach: lmtdValAch,
+            btd_qty: btdQty,
+            btd_value: btdVal,
+            ddr_qty: ddrQty,
+            ddr_value: ddrVal,
+            growth_qty_percentage: growthQtyPct,
+            growth_value_percentage: growthValPct
+        };
+    });
+};
+
 const getAllTargetVsAchievementsController = async (req, res) => {
     try {
         let records = await getAllTargetVsAchievements();
@@ -151,6 +386,11 @@ const getAllTargetVsAchievementsController = async (req, res) => {
 
         // Apply user state restrictions
         records = await filterRecordsByUserState(req.user.id, records);
+
+        // If date parameter is passed, dynamically compute achievements for that target date
+        if (req.query.date) {
+            records = await calculateAchievementsForTargetDate(req.query.date, records);
+        }
 
         res.status(200).json({
             success: true,
@@ -177,6 +417,11 @@ const getABMWiseTargetVsAchievementsController = async (req, res) => {
 
         // Apply user state restrictions
         records = await filterRecordsByUserState(req.user.id, records);
+
+        // If date parameter is passed, dynamically compute achievements for that target date
+        if (req.query.date) {
+            records = await calculateAchievementsForTargetDate(req.query.date, records);
+        }
 
         res.status(200).json({
             success: true,

@@ -103,11 +103,12 @@ export default function TargetVsAchievement() {
     };
   }, [showDropdown]);
 
-  const loadData = async () => {
+  const loadData = async (dateToLoad) => {
     setLoading(true);
     setError("");
     try {
-      const response = await getTargetVsAchievements();
+      const targetDate = dateToLoad !== undefined ? dateToLoad : syncDate;
+      const response = await getTargetVsAchievements(targetDate);
       setData(response.data.data || []);
     } catch (err) {
       console.error("Failed to load target vs achievement data", err);
@@ -118,7 +119,12 @@ export default function TargetVsAchievement() {
   };
 
   useEffect(() => {
-    loadData();
+    if (syncDate) {
+      loadData(syncDate);
+    }
+  }, [syncDate]);
+
+  useEffect(() => {
     getBranches()
       .then(res => setBranches(res.data.data || []))
       .catch(err => console.error("Failed to load branches for zones filter", err));
@@ -273,7 +279,8 @@ export default function TargetVsAchievement() {
     }
     setExportingReport(true);
     try {
-      const monthYear = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
+      const exportDate = syncDate ? new Date(syncDate + 'T00:00:00') : new Date();
+      const monthYear = exportDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
 
       const headers = [
         "Sr. No",
@@ -596,7 +603,7 @@ export default function TargetVsAchievement() {
       const response = await syncTargetVsAchievements(syncDate);
       if (response.data?.success) {
         toast.success(response.data.message || "Achievements synced successfully!");
-        loadData();
+        loadData(syncDate);
       } else {
         toast.error(response.data?.message || "Sync failed");
       }
@@ -1208,30 +1215,38 @@ export default function TargetVsAchievement() {
           searchPlaceholder="Search ..."
           actionButton={
             <div className="contents">
-              {/* Date selector and Sync Achievements button */}
-              {canWriteOrUpdate && (
-                <>
-                  <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-lg px-2 h-10">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-                    </svg>
-                    <input
-                      type="date"
-                      value={syncDate}
-                      onChange={(e) => setSyncDate(e.target.value)}
-                      className="bg-transparent border-none text-xs text-slate-700 font-semibold focus:outline-none cursor-pointer w-[110px] p-0"
-                    />
-                  </div>
+              {/* Date selector - Available to all users with view access */}
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-lg px-2 h-10">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+                </svg>
+                <input
+                  type="date"
+                  value={syncDate}
+                  max={(() => {
+                    const d = new Date();
+                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                  })()}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setSyncDate(e.target.value);
+                    }
+                  }}
+                  className="bg-transparent border-none text-xs text-slate-700 font-semibold focus:outline-none cursor-pointer w-[110px] p-0"
+                  title="Select Date to View Target vs Achievement"
+                />
+              </div>
 
-                  <button
-                    onClick={handleSync}
-                    disabled={syncing || exporting || exportingReport || importing}
-                    className="flex items-center justify-center h-10 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none focus:outline-none"
-                    title="Sync Achievements from External API"
-                  >
-                    {syncing ? "Syncing..." : "Sync"}
-                  </button>
-                </>
+              {/* Sync Achievements button - Available to Write/Update users */}
+              {canWriteOrUpdate && (
+                <button
+                  onClick={handleSync}
+                  disabled={syncing || exporting || exportingReport || importing}
+                  className="flex items-center justify-center h-10 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none focus:outline-none"
+                  title="Sync Achievements from External API"
+                >
+                  {syncing ? "Syncing..." : "Sync"}
+                </button>
               )}
 
               {/* Actions Dropdown */}
