@@ -395,7 +395,10 @@ export default function Navbar() {
         }
     }
 
-
+    const singleUnit = marqueeText ? ` :: :: :: OFFERS 📢──★    ${marqueeText}` : "";
+    // Calculate animation duration so movement speed has a comfortable max limit (~8 chars/sec / ~60px/sec)
+    // and never increases beyond this threshold even with 200+ offers.
+    const scrollDuration = singleUnit ? Math.max(35, Math.round(singleUnit.length / 8)) : 35;
 
     return (
         <nav className="bg-white shadow-sm border-b border-slate-200 flex flex-col relative z-50">
@@ -417,7 +420,7 @@ export default function Navbar() {
                                 display: flex;
                                 white-space: nowrap;
                                 width: max-content;
-                                animation: marquee-scroll 35s linear infinite;
+                                animation: marquee-scroll ${scrollDuration}s linear infinite;
                                 will-change: transform;
                             }
                             .marquee-container:hover {
@@ -427,15 +430,13 @@ export default function Navbar() {
                                 padding-right: 4rem;
                             }
                         `}</style>
-                        {(() => {
-                            const singleUnit = ` :: :: :: OFFERS 📢──★    ${marqueeText}`;
-                            return (
-                                <div className="marquee-container text-[12px] font-bold text-indigo-800">
-                                    <span className="marquee-item">{singleUnit}</span>
-                                    <span className="marquee-item">{singleUnit}</span>
-                                </div>
-                            );
-                        })()}
+                        <div
+                            className="marquee-container text-[12px] font-bold text-indigo-800"
+                            style={{ animationDuration: `${scrollDuration}s` }}
+                        >
+                            <span className="marquee-item">{singleUnit}</span>
+                            <span className="marquee-item">{singleUnit}</span>
+                        </div>
                     </div>
                 )}
 
