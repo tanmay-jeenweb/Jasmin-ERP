@@ -103,11 +103,12 @@ export default function TargetVsAchievement() {
     };
   }, [showDropdown]);
 
-  const loadData = async () => {
+  const loadData = async (dateToLoad) => {
     setLoading(true);
     setError("");
     try {
-      const response = await getTargetVsAchievements();
+      const targetDate = dateToLoad !== undefined ? dateToLoad : syncDate;
+      const response = await getTargetVsAchievements(targetDate);
       setData(response.data.data || []);
     } catch (err) {
       console.error("Failed to load target vs achievement data", err);
@@ -118,7 +119,12 @@ export default function TargetVsAchievement() {
   };
 
   useEffect(() => {
-    loadData();
+    if (syncDate) {
+      loadData(syncDate);
+    }
+  }, [syncDate]);
+
+  useEffect(() => {
     getBranches()
       .then(res => setBranches(res.data.data || []))
       .catch(err => console.error("Failed to load branches for zones filter", err));
@@ -273,7 +279,8 @@ export default function TargetVsAchievement() {
     }
     setExportingReport(true);
     try {
-      const monthYear = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
+      const exportDate = syncDate ? new Date(syncDate + 'T00:00:00') : new Date();
+      const monthYear = exportDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
 
       const headers = [
         "Sr. No",
@@ -556,7 +563,7 @@ export default function TargetVsAchievement() {
             qty_tgt: rawQtyTgt !== undefined && rawQtyTgt !== "" ? Number(rawQtyTgt) : null,
             value_tgt: rawQtyVal !== undefined && rawQtyVal !== "" ? Number(rawQtyVal) : null,
           };
-        }).filter(item => item.branch_name);
+        }).filter(item => item.branch_name && item.branch_name.trim().toUpperCase() !== 'TOTAL');
 
         if (mappedData.length === 0) {
           toast.error("No valid rows containing a Branch Name were found.");
@@ -596,7 +603,7 @@ export default function TargetVsAchievement() {
       const response = await syncTargetVsAchievements(syncDate);
       if (response.data?.success) {
         toast.success(response.data.message || "Achievements synced successfully!");
-        loadData();
+        loadData(syncDate);
       } else {
         toast.error(response.data?.message || "Sync failed");
       }
@@ -633,7 +640,7 @@ export default function TargetVsAchievement() {
   const uniqueBranches = useMemo(() => {
     const list = data
       .map(r => ({ id: r.branch_id || r.id, name: r.branch_name }))
-      .filter(r => r.name);
+      .filter(r => r.name && String(r.name).trim().toUpperCase() !== 'TOTAL');
     const seen = new Set();
     return list.filter(item => {
       const duplicate = seen.has(item.name);
@@ -673,6 +680,7 @@ export default function TargetVsAchievement() {
   // Filtered dataset
   const filteredData = useMemo(() => {
     return data.filter(item => {
+      if (item.branch_name && String(item.branch_name).trim().toUpperCase() === 'TOTAL') return false;
       const branchMatch = selectedBranches.length === 0 || selectedBranches.includes(item.branch_name);
       const abmMatch = selectedAbms.length === 0 || selectedAbms.includes(item.abm_name);
       const stateMatch = selectedStates.length === 0 || selectedStates.includes(item.state_name);
@@ -681,86 +689,164 @@ export default function TargetVsAchievement() {
     });
   }, [data, selectedBranches, selectedAbms, selectedStates, selectedZones]);
 
-  // Add serial number (Sr. No) sequentially based on row index
+  // Calculate Totals for Footer / Summary Row
+  const totals = useMemo(() => {
+    const t = {
+      qty_tgt: 0,
+      value_tgt: 0,
+      ftd_qty_ach: 0,
+      ftd_value_ach: 0,
+      lmftd_qty_ach: 0,
+      lmftd_value_ach: 0,
+      mtd_qty_ach: 0,
+      mtd_value_ach: 0,
+      lmtd_qty_ach: 0,
+      lmtd_value_ach: 0,
+      btd_qty: 0,
+      btd_value: 0,
+      ddr_qty: 0,
+      ddr_value: 0,
+      mtd_qty_percentage_ach: 0,
+      mtd_value_percentage_ach: 0,
+      growth_qty_percentage: 0,
+      growth_value_percentage: 0
+    };
+
+    filteredData.forEach(row => {
+      t.qty_tgt += Number(row.qty_tgt) || 0;
+      t.value_tgt += Number(row.value_tgt) || 0;
+      t.ftd_qty_ach += Number(row.ftd_qty_ach) || 0;
+      t.ftd_value_ach += Number(row.ftd_value_ach) || 0;
+      t.lmftd_qty_ach += Number(row.lmftd_qty_ach) || 0;
+      t.lmftd_value_ach += Number(row.lmftd_value_ach) || 0;
+      t.mtd_qty_ach += Number(row.mtd_qty_ach) || 0;
+      t.mtd_value_ach += Number(row.mtd_value_ach) || 0;
+      t.lmtd_qty_ach += Number(row.lmtd_qty_ach) || 0;
+      t.lmtd_value_ach += Number(row.lmtd_value_ach) || 0;
+      t.btd_qty += Number(row.btd_qty) || 0;
+      t.btd_value += Number(row.btd_value) || 0;
+      t.ddr_qty += Number(row.ddr_qty) || 0;
+      t.ddr_value += Number(row.ddr_value) || 0;
+    });
+
+    t.mtd_qty_percentage_ach = t.qty_tgt > 0 ? (t.mtd_qty_ach / t.qty_tgt) * 100 : 0;
+    t.mtd_value_percentage_ach = t.value_tgt > 0 ? (t.mtd_value_ach / t.value_tgt) * 100 : 0;
+    t.growth_qty_percentage = t.mtd_qty_ach !== 0 ? ((t.mtd_qty_ach - t.lmtd_qty_ach) / t.mtd_qty_ach) * 100 : 0;
+    t.growth_value_percentage = t.mtd_value_ach !== 0 ? ((t.mtd_value_ach - t.lmtd_value_ach) / t.mtd_value_ach) * 100 : 0;
+
+    return t;
+  }, [filteredData]);
+
+  // Add serial number (Sr. No) sequentially based on row index and append Total row
   const formattedData = useMemo(() => {
-    return filteredData.map((item, index) => ({
+    const base = filteredData.map((item, index) => ({
       ...item,
       sr_no: index + 1
     }));
-  }, [filteredData]);
+
+    if (base.length === 0) return [];
+
+    const totalRow = {
+      id: "Total",
+      sr_no: "",
+      branch_name: "TOTAL",
+      zone: "",
+      abm_name: "",
+      qty_tgt: totals.qty_tgt,
+      value_tgt: totals.value_tgt,
+      ftd_qty_ach: totals.ftd_qty_ach,
+      ftd_value_ach: totals.ftd_value_ach,
+      lmftd_qty_ach: totals.lmftd_qty_ach,
+      lmftd_value_ach: totals.lmftd_value_ach,
+      mtd_qty_ach: totals.mtd_qty_ach,
+      mtd_value_ach: totals.mtd_value_ach,
+      mtd_qty_percentage_ach: totals.mtd_qty_percentage_ach,
+      mtd_value_percentage_ach: totals.mtd_value_percentage_ach,
+      lmtd_qty_ach: totals.lmtd_qty_ach,
+      lmtd_value_ach: totals.lmtd_value_ach,
+      btd_qty: totals.btd_qty,
+      btd_value: totals.btd_value,
+      ddr_qty: totals.ddr_qty,
+      ddr_value: totals.ddr_value,
+      growth_qty_percentage: totals.growth_qty_percentage,
+      growth_value_percentage: totals.growth_value_percentage
+    };
+
+    return [...base, totalRow];
+  }, [filteredData, totals]);
 
   const columns = useMemo(() => [
     {
       key: "sr_no",
       label: "Sr. No",
       minWidth: "70px",
-      render: (row) => <span className="font-semibold text-slate-505">{row.sr_no}</span>
+      render: (row) => <span className={`font-semibold ${row.id === "Total" ? "text-slate-900 font-bold" : "text-slate-500"}`}>{row.sr_no}</span>
     },
     {
       key: "branch_name",
       label: "Branch Name",
       minWidth: "150px",
-      render: (row) => <span className="font-bold text-slate-800">{row.branch_name || "—"}</span>
+      render: (row) => <span className={`font-bold ${row.id === "Total" ? "text-slate-900 font-extrabold" : "text-slate-800"}`}>{row.branch_name || (row.id === "Total" ? "TOTAL" : "—")}</span>
     },
     {
       key: "zone",
       label: "Zone",
       minWidth: "120px",
-      render: (row) => <span className="text-slate-600">{row.zone || "—"}</span>
+      render: (row) => <span className="text-slate-600">{row.id === "Total" ? "" : (row.zone || "—")}</span>
     },
     {
       key: "abm_name",
       label: "ABM NAME",
       minWidth: "180px",
-      render: (row) => <span className="font-semibold text-indigo-700">{row.abm_name || "—"}</span>
+      render: (row) => <span className="font-semibold text-indigo-700">{row.id === "Total" ? "" : (row.abm_name || "—")}</span>
     },
     {
       key: "qty_tgt",
       label: "QTY TGT",
       minWidth: "110px",
-      render: (row) => <span className="font-medium text-slate-700">{formatQty(row.qty_tgt)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "font-medium text-slate-700"}>{formatQty(row.qty_tgt)}</span>
     },
     {
       key: "value_tgt",
       label: "Value TGT",
       minWidth: "130px",
-      render: (row) => <span className="font-medium text-slate-700">{formatVal(row.value_tgt)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "font-medium text-slate-700"}>{formatVal(row.value_tgt)}</span>
     },
     {
       key: "ftd_qty_ach",
       label: "FTD QTY ACH",
       minWidth: "130px",
-      render: (row) => <span className="text-emerald-700 font-semibold">{formatQty(row.ftd_qty_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-emerald-900" : "text-emerald-700 font-semibold"}>{formatQty(row.ftd_qty_ach)}</span>
     },
     {
       key: "ftd_value_ach",
       label: "FTD Value ACH",
       minWidth: "140px",
-      render: (row) => <span className="text-emerald-700 font-semibold">{formatVal(row.ftd_value_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-emerald-900" : "text-emerald-700 font-semibold"}>{formatVal(row.ftd_value_ach)}</span>
     },
     {
       key: "lmftd_qty_ach",
       label: "LMFTD QTY ACH",
       minWidth: "150px",
-      render: (row) => <span className="text-slate-600">{formatQty(row.lmftd_qty_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-600"}>{formatQty(row.lmftd_qty_ach)}</span>
     },
     {
       key: "lmftd_value_ach",
       label: "LMFTD Value ACH",
       minWidth: "160px",
-      render: (row) => <span className="text-slate-600">{formatVal(row.lmftd_value_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-600"}>{formatVal(row.lmftd_value_ach)}</span>
     },
     {
       key: "mtd_qty_ach",
       label: "MTD QTY ACH",
       minWidth: "130px",
-      render: (row) => <span className="text-blue-700 font-semibold">{formatQty(row.mtd_qty_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-blue-900" : "text-blue-700 font-semibold"}>{formatQty(row.mtd_qty_ach)}</span>
     },
     {
       key: "mtd_value_ach",
       label: "MTD Value ACH",
       minWidth: "170px",
-      render: (row) => <span className="text-blue-700 font-semibold">{formatVal(row.mtd_value_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-blue-900" : "text-blue-700 font-semibold"}>{formatVal(row.mtd_value_ach)}</span>
     },
     {
       key: "mtd_qty_percentage_ach",
@@ -769,7 +855,7 @@ export default function TargetVsAchievement() {
       render: (row) => {
         const pct = row.mtd_qty_percentage_ach;
         const color = pct >= 100 ? "text-emerald-600 font-bold" : "text-amber-600 font-semibold";
-        return <span className={color}>{formatPct(pct)}</span>;
+        return <span className={`${color} ${row.id === "Total" ? "font-extrabold" : ""}`}>{formatPct(pct)}</span>;
       }
     },
     {
@@ -779,44 +865,44 @@ export default function TargetVsAchievement() {
       render: (row) => {
         const pct = row.mtd_value_percentage_ach;
         const color = pct >= 100 ? "text-emerald-600 font-bold" : "text-amber-600 font-semibold";
-        return <span className={color}>{formatPct(pct)}</span>;
+        return <span className={`${color} ${row.id === "Total" ? "font-extrabold" : ""}`}>{formatPct(pct)}</span>;
       }
     },
     {
       key: "lmtd_qty_ach",
       label: "LMTD QTY ACH",
       minWidth: "140px",
-      render: (row) => <span className="text-slate-600">{formatQty(row.lmtd_qty_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-600"}>{formatQty(row.lmtd_qty_ach)}</span>
     },
     {
       key: "lmtd_value_ach",
       label: "LMTD Value ACH",
       minWidth: "170px",
-      render: (row) => <span className="text-slate-600">{formatVal(row.lmtd_value_ach)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-600"}>{formatVal(row.lmtd_value_ach)}</span>
     },
     {
       key: "btd_qty",
       label: "BTD Qty.",
       minWidth: "110px",
-      render: (row) => <span className="text-slate-700">{formatQty(row.btd_qty)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-700"}>{formatQty(row.btd_qty)}</span>
     },
     {
       key: "btd_value",
       label: "BTD Value",
       minWidth: "120px",
-      render: (row) => <span className="text-slate-700">{formatVal(row.btd_value)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-700"}>{formatVal(row.btd_value)}</span>
     },
     {
       key: "ddr_qty",
       label: "DDR Qty.",
       minWidth: "110px",
-      render: (row) => <span className="text-slate-700">{formatDdrQty(row.ddr_qty)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-700"}>{formatDdrQty(row.ddr_qty)}</span>
     },
     {
       key: "ddr_value",
       label: "DDR Value",
       minWidth: "120px",
-      render: (row) => <span className="text-slate-700">{formatVal(row.ddr_value)}</span>
+      render: (row) => <span className={row.id === "Total" ? "font-bold text-slate-900" : "text-slate-700"}>{formatVal(row.ddr_value)}</span>
     },
     {
       key: "growth_qty_percentage",
@@ -825,7 +911,7 @@ export default function TargetVsAchievement() {
       render: (row) => {
         const pct = row.growth_qty_percentage;
         const color = pct >= 0 ? "text-emerald-600 font-bold" : "text-rose-600 font-bold";
-        return <span className={color}>{pct >= 0 ? `+${formatPct(pct)}` : formatPct(pct)}</span>;
+        return <span className={`${color} ${row.id === "Total" ? "font-extrabold" : ""}`}>{pct >= 0 ? `+${formatPct(pct)}` : formatPct(pct)}</span>;
       }
     },
     {
@@ -835,7 +921,7 @@ export default function TargetVsAchievement() {
       render: (row) => {
         const pct = row.growth_value_percentage;
         const color = pct >= 0 ? "text-emerald-600 font-bold" : "text-rose-600 font-bold";
-        return <span className={color}>{pct >= 0 ? `+${formatPct(pct)}` : formatPct(pct)}</span>;
+        return <span className={`${color} ${row.id === "Total" ? "font-extrabold" : ""}`}>{pct >= 0 ? `+${formatPct(pct)}` : formatPct(pct)}</span>;
       }
     }
   ], []);
@@ -1208,30 +1294,38 @@ export default function TargetVsAchievement() {
           searchPlaceholder="Search ..."
           actionButton={
             <div className="contents">
-              {/* Date selector and Sync Achievements button */}
-              {canWriteOrUpdate && (
-                <>
-                  <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-lg px-2 h-10">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-                    </svg>
-                    <input
-                      type="date"
-                      value={syncDate}
-                      onChange={(e) => setSyncDate(e.target.value)}
-                      className="bg-transparent border-none text-xs text-slate-700 font-semibold focus:outline-none cursor-pointer w-[110px] p-0"
-                    />
-                  </div>
+              {/* Date selector - Available to all users with view access */}
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-lg px-2 h-10">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+                </svg>
+                <input
+                  type="date"
+                  value={syncDate}
+                  max={(() => {
+                    const d = new Date();
+                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                  })()}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setSyncDate(e.target.value);
+                    }
+                  }}
+                  className="bg-transparent border-none text-xs text-slate-700 font-semibold focus:outline-none cursor-pointer w-[110px] p-0"
+                  title="Select Date to View Target vs Achievement"
+                />
+              </div>
 
-                  <button
-                    onClick={handleSync}
-                    disabled={syncing || exporting || exportingReport || importing}
-                    className="flex items-center justify-center h-10 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none focus:outline-none"
-                    title="Sync Achievements from External API"
-                  >
-                    {syncing ? "Syncing..." : "Sync"}
-                  </button>
-                </>
+              {/* Sync Achievements button - Available to Write/Update users */}
+              {canWriteOrUpdate && (
+                <button
+                  onClick={handleSync}
+                  disabled={syncing || exporting || exportingReport || importing}
+                  className="flex items-center justify-center h-10 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none focus:outline-none"
+                  title="Sync Achievements from External API"
+                >
+                  {syncing ? "Syncing..." : "Sync"}
+                </button>
               )}
 
               {/* Actions Dropdown */}
