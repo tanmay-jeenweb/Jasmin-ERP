@@ -2,6 +2,7 @@ const { getVariationById } = require('../models/variationModel.js');
 const { getPriceListData, upsertPriceListData, getPriceListReportData, getHistoryTimestamps } = require('../models/priceListModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
 const { checkUserStateAccess } = require('../utils/userStateHelper.js');
+const { filterPriceListByLandingType } = require('../utils/landingTypeHelper.js');
 const db = require('../config/db.js');
 
 const getPriceListDataController = async (req, res) => {
@@ -44,11 +45,14 @@ const getPriceListDataController = async (req, res) => {
             console.warn(`Dynamic table for format ${variationId} fetch error:`, err.message);
         }
 
+        // Filter columns and strip unauthorized data fields based on user landing type permissions
+        const { columns: filteredColumns, data: filteredData } = filterPriceListByLandingType(columns, data, req.user);
+
         res.status(200).json({
             success: true,
-            columns,
+            columns: filteredColumns,
             formatName: variation.format_name || `${variation.state_name} format`,
-            data
+            data: filteredData
         });
     } catch (error) {
         console.error('Error fetching price list data:', error);
@@ -367,12 +371,15 @@ const getPriceListReportController = async (req, res) => {
             console.warn(`Dynamic table for format ${variationId} report error:`, err.message);
         }
 
+        // Filter columns and strip unauthorized data fields based on user landing type permissions
+        const { columns: filteredColumns, data: filteredData } = filterPriceListByLandingType(columns, data, req.user);
+
         res.status(200).json({
             success: true,
-            columns,
+            columns: filteredColumns,
             formatName: variation.format_name || `${variation.state_name} format`,
             selectedDate: date || null,
-            data
+            data: filteredData
         });
     } catch (error) {
         console.error('Error fetching price list report data:', error);

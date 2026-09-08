@@ -33,7 +33,7 @@ const verifyToken = async (req, res, next) => {
 
         // Get user details and check active status from database to enforce instant logout on deactivation
         const [rows] = await db.execute(
-            "SELECT name, username, role, active, user_type_id FROM users WHERE id = ?",
+            "SELECT name, username, role, active, user_type_id, landing_type FROM users WHERE id = ?",
             [req.user.id]
         );
 
@@ -49,7 +49,8 @@ const verifyToken = async (req, res, next) => {
             name: rows[0].name,
             username: rows[0].username,
             role: rows[0].role || req.user.role,
-            user_type_id: rows[0].user_type_id
+            user_type_id: rows[0].user_type_id,
+            landing_type: rows[0].landing_type !== undefined ? rows[0].landing_type : req.user.landing_type
         };
 
         next();
