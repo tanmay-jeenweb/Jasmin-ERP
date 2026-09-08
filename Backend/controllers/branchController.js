@@ -76,30 +76,34 @@ const getAllBranchesController = async (req, res) => {
             }
         }
 
-        const assignedOnly = req.query.assignedOnly === 'true';
-
-        if (assignedOnly && !isAdmin) {
+        if (!isAdmin) {
             // Fetch mapped branch IDs from user_branch_mappings
             const [mappingRows] = await db.execute(
                 `SELECT branch_id FROM user_branch_mappings WHERE user_id = ?`,
                 [req.user.id]
             );
             const mappedBranchIds = mappingRows.map(r => r.branch_id);
-            branches = branches.filter(b => mappedBranchIds.includes(b.id));
-        } else {
-            // Apply existing state restriction logic
-            let userStates = null;
-            if (userRows.length > 0 && userRows[0].state) {
-                try {
-                    userStates = typeof userRows[0].state === 'string' ? JSON.parse(userRows[0].state) : userRows[0].state;
-                } catch (e) {
-                    userStates = null;
-                }
-            }
 
-            if (userStates && Array.isArray(userStates) && userStates.length > 0 && !userStates.includes("All")) {
-                const upperUserStates = userStates.map(s => String(s).trim().toUpperCase());
-                branches = branches.filter(b => b.state_name && upperUserStates.includes(String(b.state_name).trim().toUpperCase()));
+            if (mappedBranchIds.length > 0) {
+                branches = branches.filter(b => mappedBranchIds.includes(b.id));
+
+                // Also apply state restriction if present on user
+                let userStates = null;
+                if (userRows.length > 0 && userRows[0].state) {
+                    try {
+                        userStates = typeof userRows[0].state === 'string' ? JSON.parse(userRows[0].state) : userRows[0].state;
+                    } catch (e) {
+                        userStates = null;
+                    }
+                }
+
+                if (userStates && Array.isArray(userStates) && userStates.length > 0 && !userStates.includes("All")) {
+                    const upperUserStates = userStates.map(s => String(s).trim().toUpperCase());
+                    branches = branches.filter(b => b.state_name && upperUserStates.includes(String(b.state_name).trim().toUpperCase()));
+                }
+            } else {
+                // If user is not mapped to any branch, do not show any branches
+                branches = [];
             }
         }
 
