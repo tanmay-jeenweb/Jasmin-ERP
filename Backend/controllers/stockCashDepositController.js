@@ -65,18 +65,7 @@ const getUserAllowedBranchNames = async (user) => {
         return mappingRows.map(r => String(r.branch_name).trim().toUpperCase());
     }
 
-    // If no branch mappings exist, check if the user has state restrictions
-    if (userRows.length > 0 && userRows[0].state) {
-        try {
-            const userStates = typeof userRows[0].state === 'string' ? JSON.parse(userRows[0].state) : userRows[0].state;
-            if (userStates && Array.isArray(userStates) && userStates.length > 0 && !userStates.includes("All")) {
-                return null;
-            }
-        } catch (e) {
-            console.error("Error parsing user state in getUserAllowedBranchNames:", e);
-        }
-    }
-
+    // If no branch mappings exist for a non-admin user, do not default to all branches in state
     return [];
 };
 
