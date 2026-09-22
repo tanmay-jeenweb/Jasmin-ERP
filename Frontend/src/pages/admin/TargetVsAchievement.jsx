@@ -43,6 +43,51 @@ export default function TargetVsAchievement() {
   const [zoneSearchText, setZoneSearchText] = useState("");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
+  // Accordion Expand/Collapse State
+  const [expandedRowKeys, setExpandedRowKeys] = useState(new Set());
+
+  const toggleRowExpand = (key) => {
+    setExpandedRowKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const expandableCount = useMemo(() => {
+    return data.filter(r => r.brands && r.brands.length > 0).length;
+  }, [data]);
+
+  const isAllExpanded = expandableCount > 0 && expandedRowKeys.size >= expandableCount;
+
+  const handleToggleExpandAll = () => {
+    if (isAllExpanded) {
+      setExpandedRowKeys(new Set());
+    } else {
+      const allKeys = new Set(
+        data
+          .filter(r => r.brands && r.brands.length > 0)
+          .map(r => r.id ?? r.branch_name)
+      );
+      setExpandedRowKeys(allKeys);
+    }
+  };
+
+  const getBrandDotColor = (brand) => {
+    const b = (brand || '').toLowerCase();
+    if (b.includes('vivo')) return 'bg-sky-500';
+    if (b.includes('oppo')) return 'bg-emerald-500';
+    if (b.includes('samsung')) return 'bg-blue-600';
+    if (b.includes('apple')) return 'bg-slate-700';
+    if (b.includes('oneplus')) return 'bg-red-500';
+    if (b.includes('realme')) return 'bg-amber-500';
+    if (b.includes('xiaomi') || b.includes('redmi')) return 'bg-orange-500';
+    if (b.includes('infinix')) return 'bg-teal-500';
+    if (b.includes('motorola')) return 'bg-indigo-600';
+    return 'bg-purple-500';
+  };
+
   const totalActiveFilters = useMemo(() => {
     let count = 0;
     if (selectedStates.length > 0) count += 1;
@@ -306,29 +351,61 @@ export default function TargetVsAchievement() {
         "Growth Value %"
       ];
 
-      const rows = filteredData.map((item, index) => [
-        index + 1,
-        item.branch_name || "",
-        item.abm_name || "",
-        item.qty_tgt !== null && item.qty_tgt !== undefined ? Number(item.qty_tgt) : null,
-        item.value_tgt !== null && item.value_tgt !== undefined ? Number(item.value_tgt) : null,
-        item.ftd_qty_ach !== null && item.ftd_qty_ach !== undefined ? Number(item.ftd_qty_ach) : null,
-        item.ftd_value_ach !== null && item.ftd_value_ach !== undefined ? Number(item.ftd_value_ach) : null,
-        item.lmftd_qty_ach !== null && item.lmftd_qty_ach !== undefined ? Number(item.lmftd_qty_ach) : null,
-        item.lmftd_value_ach !== null && item.lmftd_value_ach !== undefined ? Number(item.lmftd_value_ach) : null,
-        item.mtd_qty_ach !== null && item.mtd_qty_ach !== undefined ? Number(item.mtd_qty_ach) : null,
-        item.mtd_value_ach !== null && item.mtd_value_ach !== undefined ? Number(item.mtd_value_ach) : null,
-        item.mtd_qty_percentage_ach !== null && item.mtd_qty_percentage_ach !== undefined ? Number(item.mtd_qty_percentage_ach) / 100 : null,
-        item.mtd_value_percentage_ach !== null && item.mtd_value_percentage_ach !== undefined ? Number(item.mtd_value_percentage_ach) / 100 : null,
-        item.lmtd_qty_ach !== null && item.lmtd_qty_ach !== undefined ? Number(item.lmtd_qty_ach) : null,
-        item.lmtd_value_ach !== null && item.lmtd_value_ach !== undefined ? Number(item.lmtd_value_ach) : null,
-        item.btd_qty !== null && item.btd_qty !== undefined ? Number(item.btd_qty) : null,
-        item.btd_value !== null && item.btd_value !== undefined ? Number(item.btd_value) : null,
-        item.ddr_qty !== null && item.ddr_qty !== undefined ? Number(item.ddr_qty) : null,
-        item.ddr_value !== null && item.ddr_value !== undefined ? Number(item.ddr_value) : null,
-        item.growth_qty_percentage !== null && item.growth_qty_percentage !== undefined ? Number(item.growth_qty_percentage) / 100 : null,
-        item.growth_value_percentage !== null && item.growth_value_percentage !== undefined ? Number(item.growth_value_percentage) / 100 : null
-      ]);
+      const exportRows = [];
+      filteredData.forEach((item, index) => {
+        exportRows.push([
+          index + 1,
+          item.branch_name || "",
+          item.abm_name || "",
+          item.qty_tgt !== null && item.qty_tgt !== undefined ? Number(item.qty_tgt) : null,
+          item.value_tgt !== null && item.value_tgt !== undefined ? Number(item.value_tgt) : null,
+          item.ftd_qty_ach !== null && item.ftd_qty_ach !== undefined ? Number(item.ftd_qty_ach) : null,
+          item.ftd_value_ach !== null && item.ftd_value_ach !== undefined ? Number(item.ftd_value_ach) : null,
+          item.lmftd_qty_ach !== null && item.lmftd_qty_ach !== undefined ? Number(item.lmftd_qty_ach) : null,
+          item.lmftd_value_ach !== null && item.lmftd_value_ach !== undefined ? Number(item.lmftd_value_ach) : null,
+          item.mtd_qty_ach !== null && item.mtd_qty_ach !== undefined ? Number(item.mtd_qty_ach) : null,
+          item.mtd_value_ach !== null && item.mtd_value_ach !== undefined ? Number(item.mtd_value_ach) : null,
+          item.mtd_qty_percentage_ach !== null && item.mtd_qty_percentage_ach !== undefined ? Number(item.mtd_qty_percentage_ach) / 100 : null,
+          item.mtd_value_percentage_ach !== null && item.mtd_value_percentage_ach !== undefined ? Number(item.mtd_value_percentage_ach) / 100 : null,
+          item.lmtd_qty_ach !== null && item.lmtd_qty_ach !== undefined ? Number(item.lmtd_qty_ach) : null,
+          item.lmtd_value_ach !== null && item.lmtd_value_ach !== undefined ? Number(item.lmtd_value_ach) : null,
+          item.btd_qty !== null && item.btd_qty !== undefined ? Number(item.btd_qty) : null,
+          item.btd_value !== null && item.btd_value !== undefined ? Number(item.btd_value) : null,
+          item.ddr_qty !== null && item.ddr_qty !== undefined ? Number(item.ddr_qty) : null,
+          item.ddr_value !== null && item.ddr_value !== undefined ? Number(item.ddr_value) : null,
+          item.growth_qty_percentage !== null && item.growth_qty_percentage !== undefined ? Number(item.growth_qty_percentage) / 100 : null,
+          item.growth_value_percentage !== null && item.growth_value_percentage !== undefined ? Number(item.growth_value_percentage) / 100 : null
+        ]);
+
+        if (Array.isArray(item.brands) && item.brands.length > 0) {
+          item.brands.forEach(b => {
+            const shareLabel = b.share_percentage > 0 ? ` (${b.share_percentage}% Share)` : "";
+            exportRows.push([
+              "",
+              `   ↳ ${b.brand_name}${shareLabel}`,
+              "",
+              b.qty_tgt !== null && b.qty_tgt !== undefined ? Number(b.qty_tgt) : null,
+              b.value_tgt !== null && b.value_tgt !== undefined ? Number(b.value_tgt) : null,
+              b.ftd_qty_ach !== null && b.ftd_qty_ach !== undefined ? Number(b.ftd_qty_ach) : null,
+              b.ftd_value_ach !== null && b.ftd_value_ach !== undefined ? Number(b.ftd_value_ach) : null,
+              b.lmftd_qty_ach !== null && b.lmftd_qty_ach !== undefined ? Number(b.lmftd_qty_ach) : null,
+              b.lmftd_value_ach !== null && b.lmftd_value_ach !== undefined ? Number(b.lmftd_value_ach) : null,
+              b.mtd_qty_ach !== null && b.mtd_qty_ach !== undefined ? Number(b.mtd_qty_ach) : null,
+              b.mtd_value_ach !== null && b.mtd_value_ach !== undefined ? Number(b.mtd_value_ach) : null,
+              b.mtd_qty_percentage_ach !== null && b.mtd_qty_percentage_ach !== undefined ? Number(b.mtd_qty_percentage_ach) / 100 : null,
+              b.mtd_value_percentage_ach !== null && b.mtd_value_percentage_ach !== undefined ? Number(b.mtd_value_percentage_ach) / 100 : null,
+              b.lmtd_qty_ach !== null && b.lmtd_qty_ach !== undefined ? Number(b.lmtd_qty_ach) : null,
+              b.lmtd_value_ach !== null && b.lmtd_value_ach !== undefined ? Number(b.lmtd_value_ach) : null,
+              b.btd_qty !== null && b.btd_qty !== undefined ? Number(b.btd_qty) : null,
+              b.btd_value !== null && b.btd_value !== undefined ? Number(b.btd_value) : null,
+              b.ddr_qty !== null && b.ddr_qty !== undefined ? Number(b.ddr_qty) : null,
+              b.ddr_value !== null && b.ddr_value !== undefined ? Number(b.ddr_value) : null,
+              b.growth_qty_percentage !== null && b.growth_qty_percentage !== undefined ? Number(b.growth_qty_percentage) / 100 : null,
+              b.growth_value_percentage !== null && b.growth_value_percentage !== undefined ? Number(b.growth_value_percentage) / 100 : null
+            ]);
+          });
+        }
+      });
 
       // Calculate totals
       const totalQtyTgt = filteredData.reduce((sum, item) => sum + (Number(item.qty_tgt) || 0), 0);
@@ -368,7 +445,7 @@ export default function TargetVsAchievement() {
         totalGrowthValPct
       ];
 
-      const aoa = [headers, ...rows, totalRow];
+      const aoa = [headers, ...exportRows, totalRow];
       const worksheet = XLSX.utils.aoa_to_sheet(aoa);
 
       const range = XLSX.utils.decode_range(worksheet["!ref"]);
@@ -462,10 +539,10 @@ export default function TargetVsAchievement() {
       // Set row heights
       worksheet["!rows"] = [];
       worksheet["!rows"][0] = { hpt: 26 };
-      for (let r = 1; r <= filteredData.length; r++) {
+      for (let r = 1; r <= exportRows.length; r++) {
         worksheet["!rows"][r] = { hpt: 20 };
       }
-      worksheet["!rows"][filteredData.length + 1] = { hpt: 22 };
+      worksheet["!rows"][exportRows.length + 1] = { hpt: 22 };
 
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Report");
@@ -785,8 +862,62 @@ export default function TargetVsAchievement() {
     {
       key: "branch_name",
       label: "Branch Name",
-      minWidth: "150px",
-      render: (row) => <span className={`font-bold ${row.id === "Total" ? "text-slate-900 font-extrabold" : "text-slate-800"}`}>{row.branch_name || (row.id === "Total" ? "TOTAL" : "—")}</span>
+      minWidth: "170px",
+      render: (row) => {
+        if (row.id === "Total") {
+          return <span className="font-extrabold text-slate-900">TOTAL</span>;
+        }
+        const hasBrands = row.brands && row.brands.length > 0;
+        const rowKey = row.id ?? row.branch_name;
+        const isExpanded = expandedRowKeys.has(rowKey);
+
+        return (
+          <div className="flex items-center gap-1.5">
+            {hasBrands ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleRowExpand(rowKey);
+                }}
+                className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-all focus:outline-none cursor-pointer flex-shrink-0"
+                title={isExpanded ? "Collapse Brands" : "Expand Brands"}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2.5}
+                  stroke="currentColor"
+                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                    isExpanded ? "rotate-90 text-indigo-600" : ""
+                  }`}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                </svg>
+              </button>
+            ) : (
+              <span className="w-5.5 flex-shrink-0" />
+            )}
+            <span
+              className={`font-bold transition-colors ${
+                hasBrands ? "text-slate-800 hover:text-indigo-900 cursor-pointer" : "text-slate-700"
+              }`}
+              onClick={hasBrands ? () => toggleRowExpand(rowKey) : undefined}
+            >
+              {row.branch_name || "—"}
+            </span>
+            {hasBrands && (
+              <span
+                className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100/80 flex-shrink-0 ml-1"
+                title={`${row.brands.length} active brand${row.brands.length > 1 ? "s" : ""}`}
+              >
+                {row.brands.length}
+              </span>
+            )}
+          </div>
+        );
+      }
     },
     {
       key: "zone",
@@ -924,11 +1055,260 @@ export default function TargetVsAchievement() {
         return <span className={`${color} ${row.id === "Total" ? "font-extrabold" : ""}`}>{pct >= 0 ? `+${formatPct(pct)}` : formatPct(pct)}</span>;
       }
     }
-  ], []);
+  ], [expandedRowKeys]);
+
+  // Brand Sub-Row Renderer for Accordion
+  const renderSubRows = (row, visibleColumns) => {
+    if (!row.brands || row.brands.length === 0) return null;
+
+    return row.brands.map((brand, bIdx) => {
+      return (
+        <tr
+          key={`${row.id || row.branch_name}_brand_${brand.brand_name}_${bIdx}`}
+          className="bg-slate-50/70 hover:bg-indigo-50/30 transition-colors duration-100 text-xs text-slate-700"
+        >
+          {visibleColumns.map((col) => {
+            const key = col.key;
+            let content = null;
+
+            switch (key) {
+              case "sr_no":
+                content = (
+                  <div className="flex items-center justify-center text-slate-400 font-mono text-xs select-none">
+                    ↳
+                  </div>
+                );
+                break;
+
+              case "branch_name":
+                content = (
+                  <div className="flex items-center gap-2 pl-5">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-800 shadow-xs">
+                      <span className={`w-2 h-2 rounded-full ${getBrandDotColor(brand.brand_name)}`}></span>
+                      {brand.brand_name}
+                    </span>
+                    {brand.share_percentage > 0 && (
+                      <span
+                        className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200"
+                        title={`Configured Brand Share: ${brand.share_percentage}%`}
+                      >
+                        {brand.share_percentage}% Share
+                      </span>
+                    )}
+                  </div>
+                );
+                break;
+
+              case "zone":
+              case "abm_name":
+                content = <span className="text-slate-300 font-light">—</span>;
+                break;
+
+              case "qty_tgt":
+                content = (
+                  <span className="font-semibold text-slate-700">
+                    {brand.qty_tgt !== null && brand.qty_tgt !== undefined ? formatQty(brand.qty_tgt) : <span className="text-slate-300 font-light">—</span>}
+                  </span>
+                );
+                break;
+
+              case "value_tgt":
+                content = (
+                  <span className="font-semibold text-slate-700">
+                    {brand.value_tgt !== null && brand.value_tgt !== undefined ? formatVal(brand.value_tgt) : <span className="text-slate-300 font-light">—</span>}
+                  </span>
+                );
+                break;
+
+              case "mtd_qty_percentage_ach": {
+                const pct = brand.mtd_qty_percentage_ach;
+                if (pct === null || pct === undefined) {
+                  content = <span className="text-slate-300 font-light">—</span>;
+                } else {
+                  const color = pct >= 100 ? "text-emerald-700 font-bold" : pct >= 80 ? "text-amber-700 font-semibold" : "text-slate-700 font-medium";
+                  content = <span className={color}>{formatPct(pct)}</span>;
+                }
+                break;
+              }
+
+              case "mtd_value_percentage_ach": {
+                const pct = brand.mtd_value_percentage_ach;
+                if (pct === null || pct === undefined) {
+                  content = <span className="text-slate-300 font-light">—</span>;
+                } else {
+                  const color = pct >= 100 ? "text-emerald-700 font-bold" : pct >= 80 ? "text-amber-700 font-semibold" : "text-slate-700 font-medium";
+                  content = <span className={color}>{formatPct(pct)}</span>;
+                }
+                break;
+              }
+
+              case "btd_qty":
+                content = (
+                  <span className="text-slate-600">
+                    {brand.btd_qty !== null && brand.btd_qty !== undefined ? formatQty(brand.btd_qty) : <span className="text-slate-300 font-light">—</span>}
+                  </span>
+                );
+                break;
+
+              case "btd_value":
+                content = (
+                  <span className="text-slate-600">
+                    {brand.btd_value !== null && brand.btd_value !== undefined ? formatVal(brand.btd_value) : <span className="text-slate-300 font-light">—</span>}
+                  </span>
+                );
+                break;
+
+              case "ddr_qty":
+                content = (
+                  <span className="text-slate-600">
+                    {brand.ddr_qty !== null && brand.ddr_qty !== undefined ? formatQty(brand.ddr_qty) : <span className="text-slate-300 font-light">—</span>}
+                  </span>
+                );
+                break;
+
+              case "ddr_value":
+                content = (
+                  <span className="text-slate-600">
+                    {brand.ddr_value !== null && brand.ddr_value !== undefined ? formatVal(brand.ddr_value) : <span className="text-slate-300 font-light">—</span>}
+                  </span>
+                );
+                break;
+
+              case "ftd_qty_ach":
+                content = (
+                  <span className="font-semibold text-emerald-700">
+                    {formatQty(brand.ftd_qty_ach)}
+                  </span>
+                );
+                break;
+
+              case "ftd_value_ach":
+                content = (
+                  <span className="font-semibold text-emerald-700">
+                    {formatVal(brand.ftd_value_ach)}
+                  </span>
+                );
+                break;
+
+              case "lmftd_qty_ach":
+                content = (
+                  <span className="text-slate-600">
+                    {formatQty(brand.lmftd_qty_ach)}
+                  </span>
+                );
+                break;
+
+              case "lmftd_value_ach":
+                content = (
+                  <span className="text-slate-600">
+                    {formatVal(brand.lmftd_value_ach)}
+                  </span>
+                );
+                break;
+
+              case "mtd_qty_ach":
+                content = (
+                  <span className="font-bold text-blue-700">
+                    {formatQty(brand.mtd_qty_ach)}
+                  </span>
+                );
+                break;
+
+              case "mtd_value_ach":
+                content = (
+                  <span className="font-bold text-blue-700">
+                    {formatVal(brand.mtd_value_ach)}
+                  </span>
+                );
+                break;
+
+              case "lmtd_qty_ach":
+                content = (
+                  <span className="text-slate-600">
+                    {formatQty(brand.lmtd_qty_ach)}
+                  </span>
+                );
+                break;
+
+              case "lmtd_value_ach":
+                content = (
+                  <span className="text-slate-600">
+                    {formatVal(brand.lmtd_value_ach)}
+                  </span>
+                );
+                break;
+
+              case "growth_qty_percentage": {
+                const pct = brand.growth_qty_percentage;
+                const color = pct >= 0 ? "text-emerald-600 font-bold" : "text-rose-600 font-bold";
+                content = (
+                  <span className={color}>
+                    {pct >= 0 ? `+${formatPct(pct)}` : formatPct(pct)}
+                  </span>
+                );
+                break;
+              }
+
+              case "growth_value_percentage": {
+                const pct = brand.growth_value_percentage;
+                const color = pct >= 0 ? "text-emerald-600 font-bold" : "text-rose-600 font-bold";
+                content = (
+                  <span className={color}>
+                    {pct >= 0 ? `+${formatPct(pct)}` : formatPct(pct)}
+                  </span>
+                );
+                break;
+              }
+
+              default:
+                content = brand[key] !== undefined ? String(brand[key]) : "—";
+                break;
+            }
+
+            return (
+              <td
+                key={col.key}
+                className="border-b border-slate-200/80 bg-slate-50/50 px-3 py-1.5 text-sm text-slate-700"
+                style={{ minWidth: col.minWidth || "140px" }}
+              >
+                {content}
+              </td>
+            );
+          })}
+        </tr>
+      );
+    });
+  };
 
   // Filters Component
   const filtersElement = (
     <div className="flex flex-wrap items-center gap-3">
+      {/* Expand / Collapse All Brands button */}
+      <button
+        type="button"
+        onClick={handleToggleExpandAll}
+        disabled={loading || expandableCount === 0}
+        className="flex items-center gap-1.5 h-10 px-3.5 rounded-lg border border-slate-300 bg-white hover:border-slate-400 hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-xs transition-colors duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
+        title={isAllExpanded ? "Collapse All Brand Breakdowns" : "Expand All Brand Breakdowns"}
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={2.2}
+          stroke="currentColor"
+          className={`w-3.5 h-3.5 text-indigo-600 transition-transform duration-200 ${isAllExpanded ? "rotate-180" : ""}`}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+        </svg>
+        <span>{isAllExpanded ? "Collapse All" : "Expand All"}</span>
+        {expandableCount > 0 && (
+          <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold ml-0.5">
+            {expandableCount}
+          </span>
+        )}
+      </button>
+
       <div className="relative" ref={filtersRef}>
         <button
           type="button"
@@ -1291,6 +1671,9 @@ export default function TargetVsAchievement() {
           columns={columns}
           loading={loading}
           toggleActions={filtersElement}
+          renderSubRows={renderSubRows}
+          expandedRowKeys={expandedRowKeys}
+          onToggleExpand={toggleRowExpand}
           searchPlaceholder="Search ..."
           actionButton={
             <div className="contents">

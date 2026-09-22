@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef, Fragment } from 'react';
 
 // Save and retrieve table column preferences locally in localStorage
 const getTablePreference = async (tableId) => {
@@ -99,7 +99,29 @@ export default function DataTable({
   searchPlaceholder = "Search...",
   tableId = null,
   subHeader = null,
+  renderSubRows = null,
+  expandedRowKeys = null,
+  onToggleExpand = null,
 }) {
+  // Expansion state
+  const [internalExpandedKeys, setInternalExpandedKeys] = useState(new Set());
+  const isControlledExpand = expandedRowKeys !== null && expandedRowKeys !== undefined;
+  const currentExpandedKeys = isControlledExpand ? expandedRowKeys : internalExpandedKeys;
+
+  const handleToggleExpand = (key) => {
+    if (onToggleExpand) {
+      onToggleExpand(key);
+    }
+    if (!isControlledExpand) {
+      setInternalExpandedKeys(prev => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    }
+  };
+
   // Full ordered list (visible + hidden). Visible ones come first.
   const [columns, setColumns] = useState(initialColumns);
   // Set of hidden column keys
@@ -515,22 +537,34 @@ export default function DataTable({
                   </td>
                 </tr>
               ) : paginatedRows.length > 0 ? (
-                paginatedRows.map((row, rowIndex) => (
-                  <tr key={row.id || rowIndex} className="transition-all hover:bg-slate-50">
-                    {visibleColumns.map((column) => {
-                      const originalColumn = initialColumns.find(c => c.key === column.key) || column;
-                      return (
-                        <td
-                          key={column.key}
-                          className="border-b border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-                          style={{ minWidth: originalColumn.minWidth || '140px' }}
-                        >
-                          {originalColumn.render ? originalColumn.render(row) : row[column.key]}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))
+                paginatedRows.map((row, rowIndex) => {
+                  const rowKey = row.id ?? row.branch_name ?? rowIndex;
+                  const isExpanded = currentExpandedKeys instanceof Set
+                    ? currentExpandedKeys.has(rowKey)
+                    : Array.isArray(currentExpandedKeys)
+                    ? currentExpandedKeys.includes(rowKey)
+                    : false;
+
+                  return (
+                    <Fragment key={row.id || rowIndex}>
+                      <tr className={`transition-all hover:bg-slate-50 ${isExpanded ? 'bg-indigo-50/20' : ''}`}>
+                        {visibleColumns.map((column) => {
+                          const originalColumn = initialColumns.find(c => c.key === column.key) || column;
+                          return (
+                            <td
+                              key={column.key}
+                              className="border-b border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                              style={{ minWidth: originalColumn.minWidth || '140px' }}
+                            >
+                              {originalColumn.render ? originalColumn.render(row, { isExpanded, toggleExpand: () => handleToggleExpand(rowKey) }) : row[column.key]}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                      {isExpanded && renderSubRows && renderSubRows(row, visibleColumns, { isExpanded, toggleExpand: () => handleToggleExpand(rowKey) })}
+                    </Fragment>
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan={visibleColumns.length} className="px-6 py-8 text-center text-slate-500 text-sm">

@@ -8,6 +8,7 @@ const createMobileBrandsTable = async () => {
             added_by INT NOT NULL,
             device_id VARCHAR(255),
             for_code ENUM('Yes', 'No') DEFAULT 'No',
+            share_percentage DECIMAL(6, 2) DEFAULT 0.00,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE CASCADE
@@ -26,12 +27,29 @@ const createMobileBrandsTable = async () => {
         console.error("Error migrating mobile_brand_master for_code column:", err);
     }
 
+    // Migration to add share_percentage column if it doesn't exist on already created table
+    try {
+        const [columns] = await db.execute(`SHOW COLUMNS FROM mobile_brand_master LIKE 'share_percentage'`);
+        if (columns.length === 0) {
+            await db.execute(`ALTER TABLE mobile_brand_master ADD COLUMN share_percentage DECIMAL(6, 2) DEFAULT 0.00`);
+            console.log("Added 'share_percentage' column to 'mobile_brand_master' table");
+        }
+    } catch (err) {
+        console.error("Error migrating mobile_brand_master share_percentage column:", err);
+    }
+
     console.log("Mobile brand master table ready");
 };
 
-const createMobileBrand = async (mobileBrand, addedBy, deviceId, forCode) => {
-    const query = `INSERT INTO mobile_brand_master (mobile_brand, added_by, device_id, for_code) VALUES (?, ?, ?, ?)`;
-    const [result] = await db.execute(query, [mobileBrand, addedBy, deviceId, forCode || 'No']);
+const createMobileBrand = async (mobileBrand, addedBy, deviceId, forCode, sharePercentage) => {
+    const query = `INSERT INTO mobile_brand_master (mobile_brand, added_by, device_id, for_code, share_percentage) VALUES (?, ?, ?, ?, ?)`;
+    const [result] = await db.execute(query, [
+        mobileBrand,
+        addedBy,
+        deviceId,
+        forCode || 'No',
+        sharePercentage !== undefined && sharePercentage !== null && sharePercentage !== '' ? parseFloat(sharePercentage) : 0.00
+    ]);
     return result;
 };
 
@@ -41,6 +59,7 @@ const getAllMobileBrands = async () => {
             mbm.id,
             mbm.mobile_brand,
             mbm.for_code,
+            mbm.share_percentage,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             mbm.device_id,
             mbm.timestamp
@@ -52,9 +71,14 @@ const getAllMobileBrands = async () => {
     return results;
 };
 
-const updateMobileBrand = async (id, mobileBrand, forCode) => {
-    const query = `UPDATE mobile_brand_master SET mobile_brand = ?, for_code = ? WHERE id = ?`;
-    const [result] = await db.execute(query, [mobileBrand, forCode || 'No', id]);
+const updateMobileBrand = async (id, mobileBrand, forCode, sharePercentage) => {
+    const query = `UPDATE mobile_brand_master SET mobile_brand = ?, for_code = ?, share_percentage = ? WHERE id = ?`;
+    const [result] = await db.execute(query, [
+        mobileBrand,
+        forCode || 'No',
+        sharePercentage !== undefined && sharePercentage !== null && sharePercentage !== '' ? parseFloat(sharePercentage) : 0.00,
+        id
+    ]);
     return result;
 };
 
@@ -66,7 +90,7 @@ const deleteMobileBrand = async (id) => {
 
 const getMobileBrandById = async (id) => {
     const query = `
-        SELECT id, mobile_brand, for_code, added_by, device_id, timestamp 
+        SELECT id, mobile_brand, for_code, share_percentage, added_by, device_id, timestamp 
         FROM mobile_brand_master 
         WHERE id = ?
     `;
