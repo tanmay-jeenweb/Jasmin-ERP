@@ -144,7 +144,7 @@ export default function Navbar() {
             if (isPriceListOpen && !e.target.closest("#price-list-dropdown")) {
                 setIsPriceListOpen(false);
             }
-            if (isTicketsOpen && !e.target.closest("#tickets-dropdown")) {
+            if (isTicketsOpen && !e.target.closest("#support-dropdown") && !e.target.closest("#tickets-dropdown")) {
                 setIsTicketsOpen(false);
             }
         };
@@ -793,8 +793,8 @@ export default function Navbar() {
                             </div>
                         )}
 
-                        {/* Tickets Dropdown */}
-                        <div className="relative flex-1 min-w-0" id="tickets-dropdown">
+                        {/* Support Dropdown */}
+                        <div className="relative flex-1 min-w-0" id="support-dropdown">
                             <button
                                 onClick={toggleTicketsMenu}
                                 className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${
@@ -804,7 +804,7 @@ export default function Navbar() {
                                 }`}
                             >
                                 <span className="flex items-center justify-center gap-1.5 sm:gap-2 truncate w-full px-1">
-                                    <span className="font-semibold text-white truncate">Tickets</span>
+                                    <span className="font-semibold text-white truncate">Support</span>
                                     <svg
                                         xmlns="http://www.w3.org/2000/svg"
                                         fill="none"
@@ -829,14 +829,27 @@ export default function Navbar() {
                                             className={`relative group flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all cursor-pointer text-left border border-transparent ${
                                                 location.pathname === "/tickets/create"
                                                     ? "bg-indigo-50/70 text-indigo-700 font-semibold border-indigo-100/50"
-                                                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                                                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
                                             }`}
                                         >
-                                            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 shadow-sm shrink-0">
+                                            {/* Side Highlight Bar */}
+                                            <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${
+                                                location.pathname === "/tickets/create" ? "bg-indigo-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"
+                                            }`} />
+
+                                            <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${
+                                                location.pathname === "/tickets/create"
+                                                    ? "bg-indigo-100/80 text-indigo-700"
+                                                    : "bg-slate-100/80 text-slate-500 group-hover:scale-105"
+                                            }`}>
                                                 <i className="fa-solid fa-plus text-xs"></i>
                                             </div>
                                             <div className="flex-1">
-                                                <p className="text-sm font-semibold text-slate-800">Raise Ticket</p>
+                                                <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${
+                                                    location.pathname === "/tickets/create" ? "text-indigo-900 font-bold" : "text-slate-800 group-hover:text-slate-950"
+                                                }`}>
+                                                    Raise Ticket
+                                                </p>
                                                 <p className="text-[11px] text-slate-400">Create a new support request</p>
                                             </div>
                                         </button>
@@ -849,14 +862,27 @@ export default function Navbar() {
                                             className={`relative group flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all cursor-pointer text-left border border-transparent ${
                                                 location.pathname === "/tickets"
                                                     ? "bg-indigo-50/70 text-indigo-700 font-semibold border-indigo-100/50"
-                                                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                                                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
                                             }`}
                                         >
-                                            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-purple-100 text-purple-700 shadow-sm shrink-0">
+                                            {/* Side Highlight Bar */}
+                                            <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${
+                                                location.pathname === "/tickets" ? "bg-indigo-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"
+                                            }`} />
+
+                                            <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${
+                                                location.pathname === "/tickets"
+                                                    ? "bg-indigo-100/80 text-indigo-700"
+                                                    : "bg-slate-100/80 text-slate-500 group-hover:scale-105"
+                                            }`}>
                                                 <i className="fa-solid fa-ticket-simple text-xs"></i>
                                             </div>
                                             <div className="flex-1">
-                                                <p className="text-sm font-semibold text-slate-800">All Tickets</p>
+                                                <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${
+                                                    location.pathname === "/tickets" ? "text-indigo-900 font-bold" : "text-slate-800 group-hover:text-slate-950"
+                                                }`}>
+                                                    All Tickets
+                                                </p>
                                                 <p className="text-[11px] text-slate-400">Active & history tickets list</p>
                                             </div>
                                         </button>

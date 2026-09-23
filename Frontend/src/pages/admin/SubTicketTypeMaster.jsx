@@ -90,7 +90,7 @@ function SearchableUserMultiSelect({ assignees, values, onChange, disabled }) {
       {/* Selected Box / Toggle Button */}
       <div
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
-        className={`w-full border-[1.5px] rounded-[9px] px-3.5 py-[9px] min-h-[46px] flex items-center justify-between text-left transition-all bg-white cursor-pointer ${
+        className={`w-full border-[1.5px] rounded-lg px-3 py-1.5 min-h-[38px] flex items-center justify-between text-left transition-all bg-white cursor-pointer ${
           isOpen
             ? "border-indigo-600 ring-2 ring-indigo-100"
             : "border-slate-300 hover:border-slate-400"
@@ -98,11 +98,11 @@ function SearchableUserMultiSelect({ assignees, values, onChange, disabled }) {
       >
         <div className="flex-1 pr-2">
           {selectedUsers.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5 items-center max-h-24 overflow-y-auto">
+            <div className="flex flex-wrap gap-1.5 items-center max-h-20 overflow-y-auto">
               {selectedUsers.map((u) => (
                 <span
                   key={u.id}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/80"
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/80"
                 >
                   <span>{u.name}</span>
                   <span className="text-[10px] text-indigo-500 font-normal">
@@ -122,7 +122,7 @@ function SearchableUserMultiSelect({ assignees, values, onChange, disabled }) {
               ))}
             </div>
           ) : (
-            <span className="text-slate-400 text-[15px]">-- Select One or More Assignees --</span>
+            <span className="text-slate-400 text-sm">-- Select One or More Assignees --</span>
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -267,11 +267,13 @@ function SubTicketTypeModal({ isOpen, row, ticketTypes, assignees, onClose, onSa
   const [ticketTypeId, setTicketTypeId] = useState("");
   const [name, setName] = useState("");
   const [assignedTo, setAssignedTo] = useState([]);
+  const [remark, setRemark] = useState("");
 
   useEffect(() => {
     if (row) {
       setTicketTypeId(row.ticket_type_id ? String(row.ticket_type_id) : "");
       setName(row.name || "");
+      setRemark(row.remark || "");
       const currentAssigned = Array.isArray(row.assigned_to)
         ? row.assigned_to
         : row.assigned_to
@@ -281,6 +283,7 @@ function SubTicketTypeModal({ isOpen, row, ticketTypes, assignees, onClose, onSa
     } else {
       setTicketTypeId("");
       setName("");
+      setRemark("");
       setAssignedTo([]);
     }
   }, [row, isOpen]);
@@ -308,46 +311,47 @@ function SubTicketTypeModal({ isOpen, row, ticketTypes, assignees, onClose, onSa
       isEdit ? row.id : null,
       parseInt(ticketTypeId, 10),
       name.trim(),
-      assignedTo
+      assignedTo,
+      remark.trim()
     );
   };
 
   return (
-    <div className="fixed inset-0 z-[1000] bg-slate-900/55 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-[18px] w-full max-w-[540px] mx-auto shadow-2xl animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 z-[1000] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl w-full max-w-[500px] mx-auto shadow-2xl flex flex-col max-h-[90vh] my-auto overflow-hidden animate-in fade-in zoom-in duration-150">
         {/* Modal Header */}
-        <div className="px-7 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-t-[18px]">
+        <div className="px-6 py-3.5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-t-2xl shrink-0">
           <div>
-            <h2 className="m-0 text-lg font-bold text-white">
+            <h2 className="m-0 text-base font-bold text-white">
               {isEdit ? "Edit Sub Ticket Type" : "Create Sub Ticket Type"}
             </h2>
-            <p className="mt-1 text-[13px] text-indigo-100">
+            <p className="mt-0.5 text-xs text-indigo-100">
               {isEdit ? "Update subticket configuration and assigned team members" : "Configure a new sub ticket type and assignees"}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="bg-white/15 border-none rounded-lg w-[34px] h-[34px] cursor-pointer flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+            className="bg-white/15 border-none rounded-lg w-[30px] h-[30px] cursor-pointer flex items-center justify-center text-white hover:bg-white/20 transition-colors"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-[18px] h-[18px]">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         {/* Modal Body */}
-        <form onSubmit={handleSubmit}>
-          <div className="px-7 py-6 space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="px-6 py-3.5 space-y-3 overflow-y-auto flex-1">
             {/* 1. Ticket Type Dropdown */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Ticket Type <span className="text-rose-600">*</span>
               </label>
               <select
                 value={ticketTypeId}
                 onChange={(e) => setTicketTypeId(e.target.value)}
                 required
-                className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-[11px] text-[15px] outline-none text-slate-800 focus:border-indigo-600 transition-colors bg-white cursor-pointer"
+                className="w-full border-[1.5px] border-slate-300 rounded-lg px-3 py-2 text-sm outline-none text-slate-800 focus:border-indigo-600 transition-colors bg-white cursor-pointer"
               >
                 <option value="">-- Select Ticket Type --</option>
                 {ticketTypes.map((tt) => (
@@ -360,7 +364,7 @@ function SubTicketTypeModal({ isOpen, row, ticketTypes, assignees, onClose, onSa
 
             {/* 2. Subticket Name */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Subticket Name <span className="text-rose-600">*</span>
               </label>
               <input
@@ -369,13 +373,13 @@ function SubTicketTypeModal({ isOpen, row, ticketTypes, assignees, onClose, onSa
                 onChange={(e) => setName(e.target.value)}
                 required
                 placeholder="e.g. Screen Replacement, Server Down, EMI Failure"
-                className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-[11px] text-[15px] outline-none text-slate-800 focus:border-indigo-600 transition-colors"
+                className="w-full border-[1.5px] border-slate-300 rounded-lg px-3 py-2 text-sm outline-none text-slate-800 focus:border-indigo-600 transition-colors"
               />
             </div>
 
             {/* 3. Persons to Assign Multi-Select Dropdown */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Persons To Assign (Multiple) <span className="text-rose-600">*</span>
               </label>
               <SearchableUserMultiSelect
@@ -384,26 +388,43 @@ function SubTicketTypeModal({ isOpen, row, ticketTypes, assignees, onClose, onSa
                 onChange={setAssignedTo}
                 disabled={saving}
               />
-              <p className="mt-1.5 text-xs text-slate-400">
+              <p className="mt-1 text-[11px] text-slate-400">
                 Select one or more team members who will handle tickets under this subticket type.
+              </p>
+            </div>
+
+            {/* 4. Subticket Remark (Optional) */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                Remark / Instructions <span className="text-slate-400 font-normal">(Optional)</span>
+              </label>
+              <textarea
+                value={remark}
+                onChange={(e) => setRemark(e.target.value)}
+                rows={2}
+                placeholder="e.g. Please attach photo of physical inspection report or provide machine serial number..."
+                className="w-full border-[1.5px] border-slate-300 rounded-lg px-3 py-2 text-sm outline-none text-slate-800 focus:border-indigo-600 transition-colors placeholder:text-slate-400 leading-relaxed resize-y"
+              />
+              <p className="mt-1 text-[11px] text-slate-400">
+                This remark will automatically appear as an instruction when creating a ticket with this subtype selected.
               </p>
             </div>
           </div>
 
           {/* Modal Footer */}
-          <div className="px-7 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50 rounded-b-[18px]">
+          <div className="px-6 py-3 border-t border-slate-100 flex justify-end gap-2.5 bg-slate-50 rounded-b-2xl shrink-0">
             <button
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="px-5 py-2 rounded-lg border-[1.5px] border-slate-300 text-slate-600 bg-white font-semibold text-[13px] cursor-pointer hover:bg-slate-100 transition-colors disabled:opacity-50"
+              className="px-4 py-2 rounded-lg border-[1.5px] border-slate-300 text-slate-600 bg-white font-semibold text-xs cursor-pointer hover:bg-slate-100 transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving || !ticketTypeId || !name.trim() || !assignedTo || assignedTo.length === 0}
-              className="px-6 py-2 rounded-lg border-none text-white font-bold text-[13px] transition-all bg-gradient-to-br from-indigo-600 to-indigo-700 shadow-[0_2px_8px_rgba(79,70,229,0.35)] cursor-pointer disabled:bg-slate-400 disabled:cursor-not-allowed disabled:shadow-none hover:opacity-95"
+              className="px-5 py-2 rounded-lg border-none text-white font-bold text-xs transition-all bg-gradient-to-br from-indigo-600 to-indigo-700 shadow-[0_2px_8px_rgba(79,70,229,0.35)] cursor-pointer disabled:bg-slate-400 disabled:cursor-not-allowed disabled:shadow-none hover:opacity-95"
             >
               {saving ? "Saving…" : isEdit ? "Save Changes" : "Create Sub Ticket Type"}
             </button>
@@ -452,21 +473,23 @@ export default function SubTicketTypeMaster() {
     loadData();
   }, []);
 
-  const handleSave = async (id, ticketTypeId, name, assignedTo) => {
+  const handleSave = async (id, ticketTypeId, name, assignedTo, remark) => {
     setSaving(true);
     try {
       if (id) {
         await updateSubTicketType(id, {
           ticket_type_id: ticketTypeId,
           name,
-          assigned_to: assignedTo
+          assigned_to: assignedTo,
+          remark
         });
         toast.success("Sub ticket type updated successfully");
       } else {
         await createSubTicketType({
           ticket_type_id: ticketTypeId,
           name,
-          assigned_to: assignedTo
+          assigned_to: assignedTo,
+          remark
         });
         toast.success("Sub ticket type created successfully");
       }
@@ -538,6 +561,19 @@ export default function SubTicketTypeMaster() {
             </div>
           );
         }
+      },
+      {
+        key: "remark",
+        label: "Remark",
+        minWidth: "220px",
+        render: (row) =>
+          row.remark ? (
+            <div className="max-w-[260px] truncate text-slate-700 text-xs font-normal" title={row.remark}>
+              {row.remark}
+            </div>
+          ) : (
+            <span className="text-slate-400 text-xs italic">—</span>
+          )
       }
     ];
 

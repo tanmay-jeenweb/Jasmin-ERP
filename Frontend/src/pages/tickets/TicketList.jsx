@@ -455,12 +455,12 @@ export default function TicketList() {
         {
             key: "actions",
             label: "Actions",
-            minWidth: "170px",
+            minWidth: "120px",
             sortable: false,
             render: (row) => {
                 const isCompleted = row.status === "COMPLETED";
-                const isCreator = String(row.created_by) === String(userMeta.currentUserId);
-                const canShiftRow = !isCompleted && (userMeta.hasTicketManagement || userMeta.isAdmin) && (!isCreator || userMeta.hasTicketManagement || userMeta.isAdmin);
+                const isResolver = Array.isArray(row.assigned_to) && row.assigned_to.some(aid => String(aid) === String(userMeta.currentUserId));
+                const canShiftRow = !isCompleted && (userMeta.isAdmin || userMeta.hasTicketManagement || isResolver);
 
                 return (
                     <div className="flex items-center gap-1.5">
@@ -468,18 +468,25 @@ export default function TicketList() {
                             <button
                                 type="button"
                                 onClick={() => handleOpenShiftModalDirect(row)}
-                                className="px-2.5 py-1 text-xs font-semibold rounded border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors cursor-pointer"
+                                className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors cursor-pointer"
                                 title="Change ticket ownership by shifting category"
                             >
-                                Change Ownership
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-3.5 h-3.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+                                </svg>
+                                <span>Shift</span>
                             </button>
                         )}
                         <button
                             type="button"
                             onClick={() => handleOpenTicket(row.id)}
-                            className="px-2.5 py-1 text-xs font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors cursor-pointer"
+                            className="flex w-8 h-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-purple-50 hover:text-[#6804a1] hover:border-purple-300 transition-colors cursor-pointer"
+                            title="View Ticket Details"
                         >
-                            View Ticket
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                            </svg>
                         </button>
                     </div>
                 );
@@ -491,10 +498,9 @@ export default function TicketList() {
         <div className="flex flex-col flex-1 bg-slate-50 font-sans min-h-screen text-slate-800">
             <Navbar />
 
-            <main className="flex-1 flex flex-col w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                {/* Tabs & Filters Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-                    {/* Tabs: Active / History */}
+            <main className="flex-1 flex flex-col w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {/* Tabs Bar: Active / History */}
+                <div className="flex items-center justify-between gap-3 mb-4">
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
@@ -517,7 +523,7 @@ export default function TicketList() {
                             onClick={() => setActiveTab("history")}
                             className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
                                 activeTab === "history"
-                                    ? "bg-emerald-700 text-white shadow-sm"
+                                    ? "bg-[#6804a1] text-white shadow-sm"
                                     : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
                             }`}
                         >
@@ -527,62 +533,6 @@ export default function TicketList() {
                             }`}>
                                 {stats.history_count || 0}
                             </span>
-                        </button>
-                    </div>
-
-                    {/* Filters: Category & Ownership Segment & Refresh */}
-                    <div className="flex flex-wrap items-center gap-2">
-                        <select
-                            value={selectedTicketTypeFilter}
-                            onChange={(e) => setSelectedTicketTypeFilter(e.target.value)}
-                            className="h-9 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 outline-none focus:border-indigo-600 cursor-pointer shadow-xs"
-                        >
-                            <option value="">All Ticket Types</option>
-                            {formOptions.ticket_types.map((tt) => (
-                                <option key={tt.id} value={tt.id}>
-                                    {tt.name}
-                                </option>
-                            ))}
-                        </select>
-
-                        <div className="flex items-center bg-white border border-slate-200 p-1 rounded-xl text-xs font-semibold shadow-xs">
-                            <button
-                                type="button"
-                                onClick={() => setOwnershipFilter("ALL")}
-                                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                                    ownershipFilter === "ALL" ? "bg-slate-100 text-slate-900 font-bold" : "text-slate-500 hover:text-slate-900"
-                                }`}
-                            >
-                                All Visible
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setOwnershipFilter("MINE")}
-                                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                                    ownershipFilter === "MINE" ? "bg-slate-100 text-slate-900 font-bold" : "text-slate-500 hover:text-slate-900"
-                                }`}
-                            >
-                                Raised by Me
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setOwnershipFilter("ASSIGNED")}
-                                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                                    ownershipFilter === "ASSIGNED" ? "bg-slate-100 text-slate-900 font-bold" : "text-slate-500 hover:text-slate-900"
-                                }`}
-                            >
-                                Assigned to Me
-                            </button>
-                        </div>
-
-                        <button
-                            type="button"
-                            onClick={loadTickets}
-                            disabled={loadingTickets}
-                            title="Refresh tickets"
-                            className="h-9 px-3.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 shadow-xs"
-                        >
-                            {loadingTickets ? "Loading..." : "Refresh"}
                         </button>
                     </div>
                 </div>
@@ -595,6 +545,67 @@ export default function TicketList() {
                     columns={columns}
                     loading={loadingTickets}
                     searchPlaceholder="Search tickets..."
+                    toggleActions={
+                        <>
+                            {/* Ticket Type Filter */}
+                            <select
+                                value={selectedTicketTypeFilter}
+                                onChange={(e) => setSelectedTicketTypeFilter(e.target.value)}
+                                className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 outline-none focus:border-[#6804a1] cursor-pointer"
+                            >
+                                <option value="">All Ticket Types</option>
+                                {formOptions.ticket_types.map((tt) => (
+                                    <option key={tt.id} value={tt.id}>
+                                        {tt.name}
+                                    </option>
+                                ))}
+                            </select>
+
+                            {/* Ownership Segment Filter */}
+                            <div className="flex items-center h-10 bg-slate-100 border border-slate-200 p-0.5 rounded-lg text-xs font-semibold">
+                                <button
+                                    type="button"
+                                    onClick={() => setOwnershipFilter("ALL")}
+                                    className={`h-full px-2.5 sm:px-3 rounded-md transition-all cursor-pointer flex items-center ${
+                                        ownershipFilter === "ALL" ? "bg-white text-slate-900 font-bold shadow-xs border border-slate-200/80" : "text-slate-500 hover:text-slate-900"
+                                    }`}
+                                >
+                                    All Visible
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setOwnershipFilter("MINE")}
+                                    className={`h-full px-2.5 sm:px-3 rounded-md transition-all cursor-pointer flex items-center ${
+                                        ownershipFilter === "MINE" ? "bg-white text-slate-900 font-bold shadow-xs border border-slate-200/80" : "text-slate-500 hover:text-slate-900"
+                                    }`}
+                                >
+                                    Raised by Me
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setOwnershipFilter("ASSIGNED")}
+                                    className={`h-full px-2.5 sm:px-3 rounded-md transition-all cursor-pointer flex items-center ${
+                                        ownershipFilter === "ASSIGNED" ? "bg-white text-slate-900 font-bold shadow-xs border border-slate-200/80" : "text-slate-500 hover:text-slate-900"
+                                    }`}
+                                >
+                                    Assigned to Me
+                                </button>
+                            </div>
+
+                            {/* Refresh Button */}
+                            <button
+                                type="button"
+                                onClick={loadTickets}
+                                disabled={loadingTickets}
+                                title="Refresh tickets"
+                                className="h-10 w-10 inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-600 transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className={`w-4 h-4 ${loadingTickets ? "animate-spin" : ""}`}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                </svg>
+                            </button>
+                        </>
+                    }
                     actionButton={
                         <button
                             type="button"
@@ -785,68 +796,104 @@ export default function TicketList() {
                                             {/* Remarks Timeline */}
                                             <div className="space-y-3">
                                                 {ticketDetails.remarks_thread && ticketDetails.remarks_thread.length > 0 ? (
-                                                    ticketDetails.remarks_thread.map((rm) => (
-                                                        <div
-                                                            key={rm.id}
-                                                            className={`p-3.5 rounded-xl border text-xs leading-relaxed ${
-                                                                rm.action_type === "COMPLETED"
-                                                                    ? "bg-emerald-50/70 border-emerald-200"
-                                                                    : rm.action_type === "SHIFT"
-                                                                    ? "bg-purple-50/70 border-purple-200"
-                                                                    : "bg-slate-50 border-slate-200"
-                                                            }`}
-                                                        >
-                                                            <div className="flex items-center justify-between mb-1.5">
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <strong className="text-slate-900 font-semibold">{rm.user_name}</strong>
-                                                                    <span className="text-[10px] text-slate-400">({rm.user_role})</span>
-                                                                    {rm.action_type === "SHIFT" && (
-                                                                        <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-100 text-purple-700">
-                                                                            Shifted
-                                                                        </span>
-                                                                    )}
-                                                                    {rm.action_type === "COMPLETED" && (
-                                                                        <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                                                                            Completed
-                                                                        </span>
-                                                                    )}
+                                                    ticketDetails.remarks_thread.map((rm) => {
+                                                        const isSenderCreator = String(rm.user_id) === String(ticketDetails.created_by);
+                                                        const isSenderResolver = ticketDetails.assigned_to && ticketDetails.assigned_to.some(aid => String(aid) === String(rm.user_id));
+                                                        const isMe = userMeta.currentUserId && String(rm.user_id) === String(userMeta.currentUserId);
+
+                                                        return (
+                                                            <div
+                                                                key={rm.id}
+                                                                className={`p-3.5 rounded-xl border text-xs leading-relaxed transition-all ${
+                                                                    rm.action_type === "COMPLETED"
+                                                                        ? "bg-emerald-50/70 border-emerald-200"
+                                                                        : rm.action_type === "SHIFT"
+                                                                        ? "bg-purple-50/70 border-purple-200"
+                                                                        : isSenderCreator
+                                                                        ? "bg-indigo-50/50 border-indigo-200/80"
+                                                                        : isSenderResolver
+                                                                        ? "bg-teal-50/50 border-teal-200/80"
+                                                                        : "bg-slate-50 border-slate-200"
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center justify-between mb-1.5">
+                                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                                        <strong className="text-slate-900 font-semibold">{rm.user_name}</strong>
+                                                                        {isMe && (
+                                                                            <span className="text-[10px] text-indigo-600 font-bold bg-indigo-100/80 px-1.5 py-0.2 rounded-full">
+                                                                                You
+                                                                            </span>
+                                                                        )}
+                                                                        <span className="text-[10px] text-slate-400">({rm.user_role})</span>
+
+                                                                        {/* Role & Action Badges */}
+                                                                        {rm.action_type === "SHIFT" ? (
+                                                                            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-100 text-purple-700">
+                                                                                Shifted
+                                                                            </span>
+                                                                        ) : rm.action_type === "COMPLETED" ? (
+                                                                            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                                                                                Completed
+                                                                            </span>
+                                                                        ) : isSenderCreator ? (
+                                                                            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700">
+                                                                                Requester
+                                                                            </span>
+                                                                        ) : isSenderResolver ? (
+                                                                            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-teal-100 text-teal-700">
+                                                                                Resolver
+                                                                            </span>
+                                                                        ) : null}
+                                                                    </div>
+                                                                    <span className="text-[11px] text-slate-400 shrink-0">
+                                                                        {formatDateTime(rm.created_at)}
+                                                                    </span>
                                                                 </div>
-                                                                <span className="text-[11px] text-slate-400">
-                                                                    {formatDateTime(rm.created_at)}
-                                                                </span>
+                                                                <p className="text-slate-800 whitespace-pre-wrap leading-relaxed">{rm.remark}</p>
                                                             </div>
-                                                            <p className="text-slate-800 whitespace-pre-wrap">{rm.remark}</p>
-                                                        </div>
-                                                    ))
+                                                        );
+                                                    })
                                                 ) : (
                                                     <p className="text-xs text-slate-400 italic py-2">No remarks logged yet.</p>
                                                 )}
                                             </div>
 
-                                            {/* Add Remark Form (Only if ticket is NOT completed AND caller is resolver or admin) */}
-                                            {ticketDetails.permissions?.canAddRemark && (
+                                            {/* Add Remark Form (Available for Creator, Resolver, and Admin when ticket is not completed) */}
+                                            {ticketDetails.permissions?.canAddRemark ? (
                                                 <form onSubmit={handleAddRemark} className="mt-4 pt-3 border-t border-slate-100">
-                                                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                                                        Add Resolver Remark
-                                                    </label>
+                                                    <div className="flex items-center justify-between mb-1.5">
+                                                        <label className="block text-xs font-bold text-slate-700">
+                                                            Reply / Add Message
+                                                        </label>
+                                                        <span className="text-[11px] text-slate-400">
+                                                            Visible to requester and resolving team
+                                                        </span>
+                                                    </div>
                                                     <div className="flex flex-col sm:flex-row gap-2">
                                                         <textarea
                                                             value={newRemarkText}
                                                             onChange={(e) => setNewRemarkText(e.target.value)}
                                                             rows={2}
-                                                            placeholder="Type remarks or status update here..."
-                                                            className="flex-1 p-2.5 border border-slate-300 rounded-xl text-xs outline-none text-slate-800 bg-white focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                                                            placeholder="Type your message, query, or update here..."
+                                                            className="flex-1 p-2.5 border border-slate-300 rounded-xl text-xs outline-none text-slate-800 bg-white focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 leading-relaxed"
                                                         />
                                                         <button
                                                             type="submit"
                                                             disabled={submittingRemark || !newRemarkText.trim()}
                                                             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer disabled:bg-slate-300 disabled:cursor-not-allowed shrink-0 h-fit"
                                                         >
-                                                            {submittingRemark ? "Posting..." : "Post Remark"}
+                                                            {submittingRemark ? "Sending..." : "Send Message"}
                                                         </button>
                                                     </div>
                                                 </form>
-                                            )}
+                                            ) : ticketDetails.status === "COMPLETED" ? (
+                                                <div className="mt-4 p-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 text-xs text-center font-medium flex items-center justify-center gap-2">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-slate-400">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                                                    </svg>
+                                                    <span>This ticket has been completed. The conversation is closed.</span>
+                                                </div>
+                                            ) : null}
                                         </div>
                                     </>
                                 ) : null}
@@ -874,7 +921,7 @@ export default function TicketList() {
                                             <button
                                                 type="button"
                                                 onClick={() => setIsCompleteModalOpen(true)}
-                                                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/25 transition-all cursor-pointer"
+                                                className="px-5 py-2 rounded-xl bg-[#6804a1] hover:bg-[#52037e] text-white font-bold text-xs shadow-md shadow-purple-900/20 transition-all cursor-pointer"
                                             >
                                                 Mark as Completed
                                             </button>
@@ -902,7 +949,7 @@ export default function TicketList() {
                             className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <div className="px-5 py-4 bg-purple-900 text-white flex items-center justify-between">
+                            <div className="px-5 py-4 bg-[#6804a1] text-white flex items-center justify-between">
                                 <h3 className="text-base font-bold">
                                     Change Ticket Ownership {shiftTicketTarget?.ticket_no ? `(${shiftTicketTarget.ticket_no})` : ""}
                                 </h3>
@@ -961,6 +1008,21 @@ export default function TicketList() {
                                             </option>
                                         ))}
                                     </select>
+                                    {(() => {
+                                        const subMeta = shiftSubTickets.find((st) => String(st.id) === String(shiftSubTicketTypeId));
+                                        if (!subMeta?.remark) return null;
+                                        return (
+                                            <div className="mt-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-amber-600 shrink-0 mt-0.5">
+                                                    <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.25.25 0 0 1 .244.304l-.459 2.066A1.75 1.75 0 0 0 10.747 15H11a.75.75 0 0 0 0-1.5h-.253a.25.25 0 0 1-.244-.304l.459-2.066A1.75 1.75 0 0 0 9.253 9H9Z" clipRule="evenodd" />
+                                                </svg>
+                                                <div className="flex-1">
+                                                    <span className="font-bold text-amber-900 block text-[11px]">Subticket Instructions:</span>
+                                                    <p className="text-amber-800 text-[11px] font-medium whitespace-pre-wrap mt-0.5">{subMeta.remark}</p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* Shift Reason / Note */}
@@ -988,7 +1050,7 @@ export default function TicketList() {
                                     <button
                                         type="submit"
                                         disabled={shifting || !shiftTicketTypeId || !shiftSubTicketTypeId}
-                                        className="px-5 py-2 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
+                                        className="px-5 py-2 bg-[#6804a1] hover:bg-[#52037e] text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
                                     >
                                         {shifting ? "Updating Ownership..." : "Confirm & Change Ownership"}
                                     </button>
@@ -1007,7 +1069,7 @@ export default function TicketList() {
                             className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <div className="px-5 py-4 bg-emerald-700 text-white flex items-center justify-between">
+                            <div className="px-5 py-4 bg-[#6804a1] text-white flex items-center justify-between">
                                 <h3 className="text-base font-bold">
                                     Complete Support Ticket
                                 </h3>
@@ -1035,7 +1097,7 @@ export default function TicketList() {
                                         onChange={(e) => setResolutionRemark(e.target.value)}
                                         rows={3}
                                         placeholder="Summary of how the issue was resolved..."
-                                        className="w-full p-2.5 border border-slate-300 rounded-xl text-xs outline-none text-slate-800 bg-white focus:border-emerald-600"
+                                        className="w-full p-2.5 border border-slate-300 rounded-xl text-xs outline-none text-slate-800 bg-white focus:border-[#6804a1]"
                                     />
                                 </div>
 
@@ -1051,7 +1113,7 @@ export default function TicketList() {
                                         type="button"
                                         onClick={handleConfirmComplete}
                                         disabled={completing}
-                                        className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
+                                        className="px-5 py-2 bg-[#6804a1] hover:bg-[#52037e] text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
                                     >
                                         {completing ? "Completing..." : "Yes, Complete Ticket"}
                                     </button>

@@ -197,8 +197,8 @@ const getTicketDetailsController = async (req, res) => {
                 image_urls: (ticket.images || []).map(img => getFileUrl(img)),
                 remarks_thread: remarksThread,
                 permissions: {
-                    canAddRemark: (isResolver || isAdmin) && ticket.status !== 'COMPLETED',
-                    canShift: (hasTicketManagement || isAdmin || isResolver) && hasTicketManagement && ticket.status !== 'COMPLETED' && (!isCreator || hasTicketManagement || isAdmin),
+                    canAddRemark: (isCreator || isResolver || isAdmin) && ticket.status !== 'COMPLETED',
+                    canShift: (isAdmin || hasTicketManagement || isResolver) && ticket.status !== 'COMPLETED',
                     canComplete: (isResolver || isAdmin) && ticket.status !== 'COMPLETED',
                     isLocked: ticket.status === 'COMPLETED'
                 }
@@ -213,7 +213,7 @@ const getTicketDetailsController = async (req, res) => {
     }
 };
 
-// 4. Add remark to ticket (Resolver or Admin)
+// 4. Add remark to ticket (Creator, Resolver, or Admin for 2-way communication)
 const addRemarkController = async (req, res) => {
     try {
         const { id } = req.params;
@@ -238,12 +238,13 @@ const addRemarkController = async (req, res) => {
             });
         }
 
-        // Only assigned resolvers or admin can add remarks
+        // Only ticket creator, assigned resolvers, or admin can add remarks
+        const isCreator = ticket.created_by === userId;
         const isResolver = ticket.assigned_to.some(aid => String(aid) === String(userId));
-        if (!isResolver && !isAdmin) {
+        if (!isCreator && !isResolver && !isAdmin) {
             return res.status(403).json({
                 success: false,
-                message: 'Access denied. Only assigned ticket resolvers or admins can add remarks.'
+                message: 'Access denied. Only the ticket creator, assigned resolvers, or admins can add remarks.'
             });
         }
 
@@ -298,32 +299,15 @@ const shiftTicketController = async (req, res) => {
             });
         }
 
-        // Ticket Management permission check:
-        // Must have ticket management permission (or admin)
-        const hasTicketManagement = await checkHasTicketManagementPermission(req.user);
-        if (!hasTicketManagement) {
-            return res.status(403).json({
-                success: false,
-                message: 'Access denied. You do not have permission for ticket management to shift this ticket.'
-            });
-        }
-
-        // Creator restriction:
-        // If caller is the ticket creator and does NOT have ticket management permission, they cannot shift it
+        // Permission check: Admin, users with ticket management permission, or assigned resolvers can shift
         const isCreator = ticket.created_by === userId;
         const isResolver = ticket.assigned_to.some(aid => String(aid) === String(userId));
+        const hasTicketManagement = await checkHasTicketManagementPermission(req.user);
 
-        if (isCreator && !hasTicketManagement && !isAdmin) {
+        if (!isAdmin && !hasTicketManagement && !isResolver) {
             return res.status(403).json({
                 success: false,
-                message: 'Ticket creators without ticket management permission cannot shift tickets.'
-            });
-        }
-
-        if (!isAdmin && !hasTicketManagement) {
-            return res.status(403).json({
-                success: false,
-                message: 'Access denied. Only users with ticket management permission can change ownership or shift tickets.'
+                message: 'Access denied. Only administrators, ticket management staff, or assigned resolvers can shift this ticket.'
             });
         }
 
@@ -432,7 +416,7 @@ const getTicketFormOptionsController = async (req, res) => {
 
         // Fetch active sub ticket types
         const [subTicketTypes] = await db.execute(`
-            SELECT id, ticket_type_id, name, assigned_to
+            SELECT id, ticket_type_id, name, assigned_to, remark
             FROM sub_ticket_type_master
             ORDER BY name ASC
         `);
@@ -457,7 +441,8 @@ const getTicketFormOptionsController = async (req, res) => {
                 ticket_type_id: st.ticket_type_id,
                 name: st.name,
                 assigned_to: assignedIds,
-                assigned_names: assigneeNames.join(', ')
+                assigned_names: assigneeNames.join(', '),
+                remark: st.remark || ''
             };
         });
 

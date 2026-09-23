@@ -204,17 +204,23 @@ export default function CreateTicket() {
                 {/* Header & Back Button */}
                 <div className="flex items-center justify-between gap-4 mb-6">
                     <div>
-                        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-                            Raise a Support Ticket
+                        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-7 h-7 text-[#6804a1]">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 0 1 0 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 0 1 0-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375Z" />
+                            </svg>
+                            <span>Raise a Support Ticket</span>
                         </h1>
                     </div>
 
                     <button
                         type="button"
                         onClick={() => navigate("/tickets")}
-                        className="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-all shadow-sm cursor-pointer"
+                        className="text-slate-500 hover:text-slate-700 font-medium text-sm flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
-                        Tickets List
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                        </svg>
+                        Back to Ticket List
                     </button>
                 </div>
 
@@ -274,13 +280,41 @@ export default function CreateTicket() {
                                         </option>
                                     ))}
                                 </select>
-                                {selectedSubTicketMeta && (
-                                    <p className="text-[12px] text-indigo-600 font-medium mt-1.5">
-                                        Assigned Team: {selectedSubTicketMeta.assigned_names || "Assigned Resolvers"}
-                                    </p>
-                                )}
                             </div>
                         </div>
+
+                        {/* Full Width Subticket Remark Notice Box */}
+                        {selectedSubTicketMeta?.remark && (
+                            <div className="p-4 rounded-xl bg-amber-50/95 border border-amber-200/90 shadow-xs flex items-start gap-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                                <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center shrink-0 mt-0.5 text-amber-700">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-amber-700">
+                                        <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.25.25 0 0 1 .244.304l-.459 2.066A1.75 1.75 0 0 0 10.747 15H11a.75.75 0 0 0 0-1.5h-.253a.25.25 0 0 1-.244-.304l.459-2.066A1.75 1.75 0 0 0 9.253 9H9Z" clipRule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-xs font-bold uppercase tracking-wider text-amber-900">
+                                            Important Remark / Instructions:
+                                        </span>
+                                        {!remarks && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setRemarks(selectedSubTicketMeta.remark);
+                                                    toast.success("Remark copied to ticket remarks");
+                                                }}
+                                                className="text-xs font-semibold text-amber-800 hover:text-amber-950 underline cursor-pointer"
+                                            >
+                                                Copy to Remarks
+                                            </button>
+                                        )}
+                                    </div>
+                                    <p className="mt-1 text-xs sm:text-sm text-amber-950 font-medium whitespace-pre-wrap leading-relaxed">
+                                        {selectedSubTicketMeta.remark}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Row 2: Title */}
                         <div>

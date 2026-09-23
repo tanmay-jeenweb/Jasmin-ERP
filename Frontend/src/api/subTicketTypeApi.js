@@ -9,12 +9,12 @@ export const getTicketAssignees = async () => {
 };
 
 export const createSubTicketType = async (data) => {
-    // data: { ticket_type_id, name, assigned_to }
+    // data: { ticket_type_id, name, assigned_to, remark }
     return apiClient.post("/sub-ticket-types/add", data);
 };
 
 export const updateSubTicketType = async (id, data) => {
-    // data: { ticket_type_id, name, assigned_to }
+    // data: { ticket_type_id, name, assigned_to, remark }
     return apiClient.put(`/sub-ticket-types/update/${id}`, data);
 };
 
