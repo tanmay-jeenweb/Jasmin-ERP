@@ -459,8 +459,8 @@ export default function TicketList() {
             sortable: false,
             render: (row) => {
                 const isCompleted = row.status === "COMPLETED";
-                const isCreator = String(row.created_by) === String(userMeta.currentUserId);
-                const canShiftRow = !isCompleted && (userMeta.hasTicketManagement || userMeta.isAdmin) && (!isCreator || userMeta.hasTicketManagement || userMeta.isAdmin);
+                const isResolver = Array.isArray(row.assigned_to) && row.assigned_to.some(aid => String(aid) === String(userMeta.currentUserId));
+                const canShiftRow = !isCompleted && (userMeta.isAdmin || userMeta.hasTicketManagement || isResolver);
 
                 return (
                     <div className="flex items-center gap-1.5">
@@ -498,7 +498,7 @@ export default function TicketList() {
         <div className="flex flex-col flex-1 bg-slate-50 font-sans min-h-screen text-slate-800">
             <Navbar />
 
-            <main className="flex-1 flex flex-col w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <main className="flex-1 flex flex-col w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 {/* Tabs Bar: Active / History */}
                 <div className="flex items-center justify-between gap-3 mb-4">
                     <div className="flex items-center gap-2">
@@ -796,68 +796,104 @@ export default function TicketList() {
                                             {/* Remarks Timeline */}
                                             <div className="space-y-3">
                                                 {ticketDetails.remarks_thread && ticketDetails.remarks_thread.length > 0 ? (
-                                                    ticketDetails.remarks_thread.map((rm) => (
-                                                        <div
-                                                            key={rm.id}
-                                                            className={`p-3.5 rounded-xl border text-xs leading-relaxed ${
-                                                                rm.action_type === "COMPLETED"
-                                                                    ? "bg-emerald-50/70 border-emerald-200"
-                                                                    : rm.action_type === "SHIFT"
-                                                                    ? "bg-purple-50/70 border-purple-200"
-                                                                    : "bg-slate-50 border-slate-200"
-                                                            }`}
-                                                        >
-                                                            <div className="flex items-center justify-between mb-1.5">
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <strong className="text-slate-900 font-semibold">{rm.user_name}</strong>
-                                                                    <span className="text-[10px] text-slate-400">({rm.user_role})</span>
-                                                                    {rm.action_type === "SHIFT" && (
-                                                                        <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-100 text-purple-700">
-                                                                            Shifted
-                                                                        </span>
-                                                                    )}
-                                                                    {rm.action_type === "COMPLETED" && (
-                                                                        <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                                                                            Completed
-                                                                        </span>
-                                                                    )}
+                                                    ticketDetails.remarks_thread.map((rm) => {
+                                                        const isSenderCreator = String(rm.user_id) === String(ticketDetails.created_by);
+                                                        const isSenderResolver = ticketDetails.assigned_to && ticketDetails.assigned_to.some(aid => String(aid) === String(rm.user_id));
+                                                        const isMe = userMeta.currentUserId && String(rm.user_id) === String(userMeta.currentUserId);
+
+                                                        return (
+                                                            <div
+                                                                key={rm.id}
+                                                                className={`p-3.5 rounded-xl border text-xs leading-relaxed transition-all ${
+                                                                    rm.action_type === "COMPLETED"
+                                                                        ? "bg-emerald-50/70 border-emerald-200"
+                                                                        : rm.action_type === "SHIFT"
+                                                                        ? "bg-purple-50/70 border-purple-200"
+                                                                        : isSenderCreator
+                                                                        ? "bg-indigo-50/50 border-indigo-200/80"
+                                                                        : isSenderResolver
+                                                                        ? "bg-teal-50/50 border-teal-200/80"
+                                                                        : "bg-slate-50 border-slate-200"
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center justify-between mb-1.5">
+                                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                                        <strong className="text-slate-900 font-semibold">{rm.user_name}</strong>
+                                                                        {isMe && (
+                                                                            <span className="text-[10px] text-indigo-600 font-bold bg-indigo-100/80 px-1.5 py-0.2 rounded-full">
+                                                                                You
+                                                                            </span>
+                                                                        )}
+                                                                        <span className="text-[10px] text-slate-400">({rm.user_role})</span>
+
+                                                                        {/* Role & Action Badges */}
+                                                                        {rm.action_type === "SHIFT" ? (
+                                                                            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-100 text-purple-700">
+                                                                                Shifted
+                                                                            </span>
+                                                                        ) : rm.action_type === "COMPLETED" ? (
+                                                                            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                                                                                Completed
+                                                                            </span>
+                                                                        ) : isSenderCreator ? (
+                                                                            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700">
+                                                                                Requester
+                                                                            </span>
+                                                                        ) : isSenderResolver ? (
+                                                                            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-teal-100 text-teal-700">
+                                                                                Resolver
+                                                                            </span>
+                                                                        ) : null}
+                                                                    </div>
+                                                                    <span className="text-[11px] text-slate-400 shrink-0">
+                                                                        {formatDateTime(rm.created_at)}
+                                                                    </span>
                                                                 </div>
-                                                                <span className="text-[11px] text-slate-400">
-                                                                    {formatDateTime(rm.created_at)}
-                                                                </span>
+                                                                <p className="text-slate-800 whitespace-pre-wrap leading-relaxed">{rm.remark}</p>
                                                             </div>
-                                                            <p className="text-slate-800 whitespace-pre-wrap">{rm.remark}</p>
-                                                        </div>
-                                                    ))
+                                                        );
+                                                    })
                                                 ) : (
                                                     <p className="text-xs text-slate-400 italic py-2">No remarks logged yet.</p>
                                                 )}
                                             </div>
 
-                                            {/* Add Remark Form (Only if ticket is NOT completed AND caller is resolver or admin) */}
-                                            {ticketDetails.permissions?.canAddRemark && (
+                                            {/* Add Remark Form (Available for Creator, Resolver, and Admin when ticket is not completed) */}
+                                            {ticketDetails.permissions?.canAddRemark ? (
                                                 <form onSubmit={handleAddRemark} className="mt-4 pt-3 border-t border-slate-100">
-                                                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                                                        Add Resolver Remark
-                                                    </label>
+                                                    <div className="flex items-center justify-between mb-1.5">
+                                                        <label className="block text-xs font-bold text-slate-700">
+                                                            Reply / Add Message
+                                                        </label>
+                                                        <span className="text-[11px] text-slate-400">
+                                                            Visible to requester and resolving team
+                                                        </span>
+                                                    </div>
                                                     <div className="flex flex-col sm:flex-row gap-2">
                                                         <textarea
                                                             value={newRemarkText}
                                                             onChange={(e) => setNewRemarkText(e.target.value)}
                                                             rows={2}
-                                                            placeholder="Type remarks or status update here..."
-                                                            className="flex-1 p-2.5 border border-slate-300 rounded-xl text-xs outline-none text-slate-800 bg-white focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                                                            placeholder="Type your message, query, or update here..."
+                                                            className="flex-1 p-2.5 border border-slate-300 rounded-xl text-xs outline-none text-slate-800 bg-white focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 leading-relaxed"
                                                         />
                                                         <button
                                                             type="submit"
                                                             disabled={submittingRemark || !newRemarkText.trim()}
                                                             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer disabled:bg-slate-300 disabled:cursor-not-allowed shrink-0 h-fit"
                                                         >
-                                                            {submittingRemark ? "Posting..." : "Post Remark"}
+                                                            {submittingRemark ? "Sending..." : "Send Message"}
                                                         </button>
                                                     </div>
                                                 </form>
-                                            )}
+                                            ) : ticketDetails.status === "COMPLETED" ? (
+                                                <div className="mt-4 p-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 text-xs text-center font-medium flex items-center justify-center gap-2">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-slate-400">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                                                    </svg>
+                                                    <span>This ticket has been completed. The conversation is closed.</span>
+                                                </div>
+                                            ) : null}
                                         </div>
                                     </>
                                 ) : null}
@@ -972,6 +1008,21 @@ export default function TicketList() {
                                             </option>
                                         ))}
                                     </select>
+                                    {(() => {
+                                        const subMeta = shiftSubTickets.find((st) => String(st.id) === String(shiftSubTicketTypeId));
+                                        if (!subMeta?.remark) return null;
+                                        return (
+                                            <div className="mt-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-amber-600 shrink-0 mt-0.5">
+                                                    <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.25.25 0 0 1 .244.304l-.459 2.066A1.75 1.75 0 0 0 10.747 15H11a.75.75 0 0 0 0-1.5h-.253a.25.25 0 0 1-.244-.304l.459-2.066A1.75 1.75 0 0 0 9.253 9H9Z" clipRule="evenodd" />
+                                                </svg>
+                                                <div className="flex-1">
+                                                    <span className="font-bold text-amber-900 block text-[11px]">Subticket Instructions:</span>
+                                                    <p className="text-amber-800 text-[11px] font-medium whitespace-pre-wrap mt-0.5">{subMeta.remark}</p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* Shift Reason / Note */}

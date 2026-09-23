@@ -144,7 +144,7 @@ export default function Navbar() {
             if (isPriceListOpen && !e.target.closest("#price-list-dropdown")) {
                 setIsPriceListOpen(false);
             }
-            if (isTicketsOpen && !e.target.closest("#tickets-dropdown")) {
+            if (isTicketsOpen && !e.target.closest("#support-dropdown") && !e.target.closest("#tickets-dropdown")) {
                 setIsTicketsOpen(false);
             }
         };
@@ -793,8 +793,8 @@ export default function Navbar() {
                             </div>
                         )}
 
-                        {/* Tickets Dropdown */}
-                        <div className="relative flex-1 min-w-0" id="tickets-dropdown">
+                        {/* Support Dropdown */}
+                        <div className="relative flex-1 min-w-0" id="support-dropdown">
                             <button
                                 onClick={toggleTicketsMenu}
                                 className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${
@@ -804,7 +804,7 @@ export default function Navbar() {
                                 }`}
                             >
                                 <span className="flex items-center justify-center gap-1.5 sm:gap-2 truncate w-full px-1">
-                                    <span className="font-semibold text-white truncate">Tickets</span>
+                                    <span className="font-semibold text-white truncate">Support</span>
                                     <svg
                                         xmlns="http://www.w3.org/2000/svg"
                                         fill="none"

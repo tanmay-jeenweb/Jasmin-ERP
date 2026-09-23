@@ -12,7 +12,7 @@ const { createAuditLog } = require('../models/auditLogModel.js');
 
 const addSubTicketTypeController = async (req, res) => {
     try {
-        const { ticket_type_id, name, assigned_to } = req.body;
+        const { ticket_type_id, name, assigned_to, remark } = req.body;
         const addedBy = req.user.id;
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
 
@@ -37,6 +37,7 @@ const addSubTicketTypeController = async (req, res) => {
         }
 
         const trimmedName = name.trim();
+        const cleanRemark = remark && typeof remark === 'string' ? remark.trim() : null;
 
         // Verify parent ticket type exists
         const ticketType = await getTicketTypeById(ticket_type_id);
@@ -53,7 +54,7 @@ const addSubTicketTypeController = async (req, res) => {
             });
         }
 
-        const result = await createSubTicketType(ticket_type_id, trimmedName, assignedIds, addedBy, deviceId);
+        const result = await createSubTicketType(ticket_type_id, trimmedName, assignedIds, addedBy, deviceId, cleanRemark);
 
         await createAuditLog(
             addedBy,
@@ -68,6 +69,7 @@ const addSubTicketTypeController = async (req, res) => {
                 ticket_type_name: ticketType.name,
                 name: trimmedName,
                 assigned_to: assignedIds,
+                remark: cleanRemark,
                 added_by: addedBy,
                 device_id: deviceId
             }
@@ -80,7 +82,8 @@ const addSubTicketTypeController = async (req, res) => {
                 id: result.insertId,
                 ticket_type_id,
                 name: trimmedName,
-                assigned_to: assignedIds
+                assigned_to: assignedIds,
+                remark: cleanRemark
             }
         });
     } catch (error) {
@@ -129,7 +132,7 @@ const getAssigneesController = async (req, res) => {
 const updateSubTicketTypeController = async (req, res) => {
     try {
         const { id } = req.params;
-        const { ticket_type_id, name, assigned_to } = req.body;
+        const { ticket_type_id, name, assigned_to, remark } = req.body;
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
 
         if (!ticket_type_id) {
@@ -153,6 +156,7 @@ const updateSubTicketTypeController = async (req, res) => {
         }
 
         const trimmedName = name.trim();
+        const cleanRemark = remark && typeof remark === 'string' ? remark.trim() : null;
 
         const existing = await getSubTicketTypeById(id);
         if (!existing) {
@@ -172,7 +176,7 @@ const updateSubTicketTypeController = async (req, res) => {
             });
         }
 
-        await updateSubTicketType(id, ticket_type_id, trimmedName, assignedIds);
+        await updateSubTicketType(id, ticket_type_id, trimmedName, assignedIds, cleanRemark);
 
         await createAuditLog(
             req.user.id,
@@ -184,13 +188,15 @@ const updateSubTicketTypeController = async (req, res) => {
                 id: existing.id,
                 ticket_type_id: existing.ticket_type_id,
                 name: existing.name,
-                assigned_to: existing.assigned_to
+                assigned_to: existing.assigned_to,
+                remark: existing.remark
             },
             {
                 id: existing.id,
                 ticket_type_id,
                 name: trimmedName,
-                assigned_to: assignedIds
+                assigned_to: assignedIds,
+                remark: cleanRemark
             }
         );
 
@@ -201,7 +207,8 @@ const updateSubTicketTypeController = async (req, res) => {
                 id: parseInt(id, 10),
                 ticket_type_id,
                 name: trimmedName,
-                assigned_to: assignedIds
+                assigned_to: assignedIds,
+                remark: cleanRemark
             }
         });
     } catch (error) {

@@ -379,10 +379,9 @@ export default function TargetVsAchievement() {
 
         if (Array.isArray(item.brands) && item.brands.length > 0) {
           item.brands.forEach(b => {
-            const shareLabel = b.share_percentage > 0 ? ` (${b.share_percentage}% Share)` : "";
             exportRows.push([
               "",
-              `   ↳ ${b.brand_name}${shareLabel}`,
+              `   ↳ ${b.brand_name}`,
               "",
               b.qty_tgt !== null && b.qty_tgt !== undefined ? Number(b.qty_tgt) : null,
               b.value_tgt !== null && b.value_tgt !== undefined ? Number(b.value_tgt) : null,
@@ -1087,14 +1086,6 @@ export default function TargetVsAchievement() {
                       <span className={`w-2 h-2 rounded-full ${getBrandDotColor(brand.brand_name)}`}></span>
                       {brand.brand_name}
                     </span>
-                    {brand.share_percentage > 0 && (
-                      <span
-                        className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200"
-                        title={`Configured Brand Share: ${brand.share_percentage}%`}
-                      >
-                        {brand.share_percentage}% Share
-                      </span>
-                    )}
                   </div>
                 );
                 break;
