@@ -76,6 +76,7 @@ const MASTER_GROUPS = [
     masters: [
       { key: "ticket_type_master", label: "Ticket Type Master" },
       { key: "sub_ticket_type_master", label: "Sub Ticket Type Master" },
+      { key: "ticket_management", label: "Ticket Management (Shift & Manage)" },
     ]
   }
 ];

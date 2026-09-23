@@ -64,6 +64,8 @@ const { createTicketTypeTable } = require("./models/ticketTypeModel.js");
 const ticketTypeRoutes = require("./routes/ticketTypeRoutes.js");
 const { createSubTicketTypeTable } = require("./models/subTicketTypeModel.js");
 const subTicketTypeRoutes = require("./routes/subTicketTypeRoutes.js");
+const { createTicketTables } = require("./models/ticketModel.js");
+const ticketRoutes = require("./routes/ticketRoutes.js");
 const externalRoutes = require("./routes/externalRoutes.js");
 const { createStockCacheTable } = require("./models/stockCacheModel.js");
 const { createRefreshTokensTable } = require("./models/refreshTokenModel.js");
@@ -115,10 +117,14 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(cookieParser());
 
-// Serve uploaded files statically if set to express
-if (uploadConfig.serveMethod === "express") {
+// Serve uploaded files statically if set to express or during development
+if (uploadConfig.serveMethod === "express" || process.env.NODE_ENV !== "production") {
     console.log(`Serving uploaded files statically from: ${uploadConfig.uploadDir}`);
     app.use("/uploads", express.static(uploadConfig.uploadDir));
+    const localUploadsDir = path.resolve(__dirname, "uploads");
+    if (uploadConfig.uploadDir !== localUploadsDir) {
+        app.use("/uploads", express.static(localUploadsDir));
+    }
 }
 
 // HTTP Method Override middleware for environments that block PUT and DELETE requests
@@ -157,6 +163,7 @@ app.use("/v1/api/settings", settingRoutes);
 app.use("/v1/api/landingtypes", landingTypeRoutes);
 app.use("/v1/api/ticket-types", ticketTypeRoutes);
 app.use("/v1/api/sub-ticket-types", subTicketTypeRoutes);
+app.use("/v1/api/tickets", ticketRoutes);
 app.use("/v1/api/external", externalRoutes);
 
 
@@ -206,6 +213,7 @@ const startServer = async () => {
         await createSettingsTable();
         await createTicketTypeTable();
         await createSubTicketTypeTable();
+        await createTicketTables();
 
 
 
