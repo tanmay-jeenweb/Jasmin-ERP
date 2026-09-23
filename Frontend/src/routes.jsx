@@ -43,6 +43,8 @@ import PriceListData from "./pages/admin/PriceListData";
 import PriceListReport from "./pages/admin/PriceListReport";
 import PriceListView from "./pages/admin/PriceListView";
 import IcatSettingsForm from "./pages/admin/IcatSettingsForm";
+import CreateTicket from "./pages/tickets/CreateTicket";
+import TicketList from "./pages/tickets/TicketList";
 
 
 export default function AppRoutes() {
@@ -73,6 +75,14 @@ export default function AppRoutes() {
                 <Route
                     path="/profile"
                     element={<Profile />}
+                />
+                <Route
+                    path="/tickets"
+                    element={<TicketList />}
+                />
+                <Route
+                    path="/tickets/create"
+                    element={<CreateTicket />}
                 />
             </Route>
 

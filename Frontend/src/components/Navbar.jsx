@@ -29,6 +29,7 @@ export default function Navbar() {
     const [isReportsOpen, setIsReportsOpen] = useState(false);
     const [isOffersOpen, setIsOffersOpen] = useState(false);
     const [isPriceListOpen, setIsPriceListOpen] = useState(false);
+    const [isTicketsOpen, setIsTicketsOpen] = useState(false);
     const [priceFormats, setPriceFormats] = useState([]);
     const { hasPermission } = usePermission();
     const [runningOffers, setRunningOffers] = useState([]);
@@ -39,6 +40,7 @@ export default function Navbar() {
         setIsOffersOpen(false);
         setIsReportsOpen(false);
         setIsProfileOpen(false);
+        setIsTicketsOpen(false);
     };
 
     const togglePriceListMenu = () => {
@@ -47,6 +49,7 @@ export default function Navbar() {
         setIsOffersOpen(false);
         setIsReportsOpen(false);
         setIsProfileOpen(false);
+        setIsTicketsOpen(false);
     };
 
     const toggleOffersMenu = () => {
@@ -55,6 +58,7 @@ export default function Navbar() {
         setIsPriceListOpen(false);
         setIsReportsOpen(false);
         setIsProfileOpen(false);
+        setIsTicketsOpen(false);
     };
 
     const toggleReportsMenu = () => {
@@ -63,6 +67,7 @@ export default function Navbar() {
         setIsPriceListOpen(false);
         setIsOffersOpen(false);
         setIsProfileOpen(false);
+        setIsTicketsOpen(false);
     };
 
     const toggleProfileMenu = () => {
@@ -71,6 +76,16 @@ export default function Navbar() {
         setIsPriceListOpen(false);
         setIsOffersOpen(false);
         setIsReportsOpen(false);
+        setIsTicketsOpen(false);
+    };
+
+    const toggleTicketsMenu = () => {
+        setIsTicketsOpen(prev => !prev);
+        setIsOpen(false);
+        setIsPriceListOpen(false);
+        setIsOffersOpen(false);
+        setIsReportsOpen(false);
+        setIsProfileOpen(false);
     };
 
     useEffect(() => {
@@ -129,10 +144,13 @@ export default function Navbar() {
             if (isPriceListOpen && !e.target.closest("#price-list-dropdown")) {
                 setIsPriceListOpen(false);
             }
+            if (isTicketsOpen && !e.target.closest("#tickets-dropdown")) {
+                setIsTicketsOpen(false);
+            }
         };
         document.addEventListener("click", handleOutsideClick);
         return () => document.removeEventListener("click", handleOutsideClick);
-    }, [isOpen, isProfileOpen, isReportsOpen, isOffersOpen, isPriceListOpen]);
+    }, [isOpen, isProfileOpen, isReportsOpen, isOffersOpen, isPriceListOpen, isTicketsOpen]);
 
     useEffect(() => {
         setIsOpen(false);
@@ -140,6 +158,7 @@ export default function Navbar() {
         setIsReportsOpen(false);
         setIsOffersOpen(false);
         setIsPriceListOpen(false);
+        setIsTicketsOpen(false);
     }, [location.pathname]);
 
     const canSeePriceListView = isAdmin || hasPermission("price_list_view", "read");
@@ -402,7 +421,7 @@ export default function Navbar() {
     });
 
     let marqueeText = runningOffers.length > 0
-        ? runningOffers.map(o => `🔥 [${o.brand_name}] ${o.offer_type} (Valid: ${formatNavbarDate(o.from_date)} to ${formatNavbarDate(o.to_date)})`).join("   |   ")
+        ? runningOffers.map(o => `[${o.brand_name}] ${o.offer_type} (Valid: ${formatNavbarDate(o.from_date)} to ${formatNavbarDate(o.to_date)})`).join("   |   ")
         : "";
 
     // Repeat the text to ensure it's wide enough for a seamless circular loop
@@ -536,18 +555,18 @@ export default function Navbar() {
 
             {/* Second Row: Custom Navigation & Master Dropdown */}
             {user.role && (
-                <div className="bg-[#6804a1] border-t border-slate-200 px-4 sm:px-6 lg:px-8 py-0 flex flex-wrap items-center gap-4">
-                    <div className="flex items-center relative z-30" id="custom-nav-dropdown">
+                <div className="bg-[#6804a1] border-t border-slate-200 px-4 sm:px-6 lg:px-8 py-0 flex items-center">
+                    <div className="w-full flex items-center relative z-30" id="custom-nav-dropdown">
                         {/* User Dashboard Tab */}
-                        <div className="relative">
+                        <div className="relative flex-1 min-w-0">
                             <button
                                 onClick={() => {
                                     navigate("/user/home");
                                 }}
-                                className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-l border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname === "/user/home" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-l border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname === "/user/home" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
                                     }`}
                             >
-                                <span className="flex items-center gap-2.5 truncate mx-auto">
+                                <span className="flex items-center justify-center gap-1.5 sm:gap-2 truncate w-full px-1">
                                     <span className="font-semibold text-white truncate">User Dashboard</span>
                                 </span>
                             </button>
@@ -555,15 +574,15 @@ export default function Navbar() {
 
                         {/* Admin Home Tab */}
                         {isAdmin && (
-                            <div className="relative">
+                            <div className="relative flex-1 min-w-0">
                                 <button
                                     onClick={() => {
                                         navigate("/admin/home");
                                     }}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname === "/admin/home" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                    className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname === "/admin/home" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
                                 >
-                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                    <span className="flex items-center justify-center gap-1.5 sm:gap-2 truncate w-full px-1">
                                         <span className="font-semibold text-white truncate">Home</span>
                                     </span>
                                 </button>
@@ -572,13 +591,13 @@ export default function Navbar() {
 
                         {/* Masters Dropdown */}
                         {availableMasters.length > 0 && (
-                            <div className="relative">
+                            <div className="relative flex-1 min-w-0">
                                 <button
                                     onClick={toggleMastersMenu}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isOpen ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                    className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isOpen ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
                                 >
-                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                    <span className="flex items-center justify-center gap-1.5 sm:gap-2 truncate w-full px-1">
                                         <span className="font-semibold text-white truncate">Masters</span>
                                         <svg
                                             xmlns="http://www.w3.org/2000/svg"
@@ -586,7 +605,7 @@ export default function Navbar() {
                                             viewBox="0 0 24 24"
                                             strokeWidth={2.5}
                                             stroke="currentColor"
-                                            className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-200 ${isOpen ? "rotate-180 text-white" : ""}`}
+                                            className={`w-3.5 h-3.5 text-slate-300 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180 text-white" : ""}`}
                                         >
                                             <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                                         </svg>
@@ -636,15 +655,15 @@ export default function Navbar() {
 
                         {/* Price List Dropdown */}
                         {canSeePriceListTab && (
-                            <div className="relative" id="price-list-dropdown">
+                            <div className="relative flex-1 min-w-0" id="price-list-dropdown">
                                 <button
                                     onClick={togglePriceListMenu}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isPriceListOpen || location.pathname.startsWith("/admin/price-list")
+                                    className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isPriceListOpen || location.pathname.startsWith("/admin/price-list")
                                         ? "bg-white/15"
                                         : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
                                 >
-                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                    <span className="flex items-center justify-center gap-1.5 sm:gap-2 truncate w-full px-1">
                                         <span className="font-semibold text-white truncate">Price List</span>
                                         <svg
                                             xmlns="http://www.w3.org/2000/svg"
@@ -652,7 +671,7 @@ export default function Navbar() {
                                             viewBox="0 0 24 24"
                                             strokeWidth={2.5}
                                             stroke="currentColor"
-                                            className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-200 ${isPriceListOpen ? "rotate-180 text-white" : ""}`}
+                                            className={`w-3.5 h-3.5 text-slate-300 shrink-0 transition-transform duration-200 ${isPriceListOpen ? "rotate-180 text-white" : ""}`}
                                         >
                                             <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                                         </svg>
@@ -759,32 +778,104 @@ export default function Navbar() {
 
                         {/* Alert Master Tab */}
                         {(isAdmin || hasPermission("alert_master", "read")) && (
-                            <div className="relative">
+                            <div className="relative flex-1 min-w-0">
                                 <button
                                     onClick={() => {
                                         navigate("/admin/alerts");
                                     }}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname === "/admin/alerts" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                    className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname === "/admin/alerts" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
                                 >
-                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                    <span className="flex items-center justify-center gap-1.5 sm:gap-2 truncate w-full px-1">
                                         <span className="font-semibold text-white truncate">Alert Master</span>
                                     </span>
                                 </button>
                             </div>
                         )}
 
+                        {/* Tickets Dropdown */}
+                        <div className="relative flex-1 min-w-0" id="tickets-dropdown">
+                            <button
+                                onClick={toggleTicketsMenu}
+                                className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${
+                                    isTicketsOpen || location.pathname.startsWith("/tickets")
+                                        ? "bg-white/15"
+                                        : "bg-[#6804a1] hover:bg-white/5"
+                                }`}
+                            >
+                                <span className="flex items-center justify-center gap-1.5 sm:gap-2 truncate w-full px-1">
+                                    <span className="font-semibold text-white truncate">Tickets</span>
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        strokeWidth={2.5}
+                                        stroke="currentColor"
+                                        className={`w-3.5 h-3.5 text-slate-300 shrink-0 transition-transform duration-200 ${isTicketsOpen ? "rotate-180 text-white" : ""}`}
+                                    >
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                                    </svg>
+                                </span>
+                            </button>
+
+                            {isTicketsOpen && (
+                                <div className="absolute left-0 top-full mt-1.5 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="flex flex-col gap-1">
+                                        <button
+                                            onClick={() => {
+                                                navigate("/tickets/create");
+                                                setIsTicketsOpen(false);
+                                            }}
+                                            className={`relative group flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all cursor-pointer text-left border border-transparent ${
+                                                location.pathname === "/tickets/create"
+                                                    ? "bg-indigo-50/70 text-indigo-700 font-semibold border-indigo-100/50"
+                                                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 shadow-sm shrink-0">
+                                                <i className="fa-solid fa-plus text-xs"></i>
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-sm font-semibold text-slate-800">Raise Ticket</p>
+                                                <p className="text-[11px] text-slate-400">Create a new support request</p>
+                                            </div>
+                                        </button>
+
+                                        <button
+                                            onClick={() => {
+                                                navigate("/tickets");
+                                                setIsTicketsOpen(false);
+                                            }}
+                                            className={`relative group flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all cursor-pointer text-left border border-transparent ${
+                                                location.pathname === "/tickets"
+                                                    ? "bg-indigo-50/70 text-indigo-700 font-semibold border-indigo-100/50"
+                                                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-purple-100 text-purple-700 shadow-sm shrink-0">
+                                                <i className="fa-solid fa-ticket-simple text-xs"></i>
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-sm font-semibold text-slate-800">All Tickets</p>
+                                                <p className="text-[11px] text-slate-400">Active & history tickets list</p>
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         {/* Offers Dropdown */}
                         {(isAdmin || hasPermission("offer_master", "read")) && (
-                            <div className="relative" id="offers-dropdown">
+                            <div className="relative flex-1 min-w-0" id="offers-dropdown">
                                 <button
                                     onClick={toggleOffersMenu}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isOffersOpen || location.pathname.startsWith("/admin/offers")
+                                    className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isOffersOpen || location.pathname.startsWith("/admin/offers")
                                         ? "bg-white/15"
                                         : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
                                 >
-                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                    <span className="flex items-center justify-center gap-1.5 sm:gap-2 truncate w-full px-1">
                                         <span className="font-semibold text-white truncate">Offers</span>
                                         <svg
                                             xmlns="http://www.w3.org/2000/svg"
@@ -792,7 +883,7 @@ export default function Navbar() {
                                             viewBox="0 0 24 24"
                                             strokeWidth={2.5}
                                             stroke="currentColor"
-                                            className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-200 ${isOffersOpen ? "rotate-180 text-white" : ""}`}
+                                            className={`w-3.5 h-3.5 text-slate-300 shrink-0 transition-transform duration-200 ${isOffersOpen ? "rotate-180 text-white" : ""}`}
                                         >
                                             <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                                         </svg>
@@ -852,15 +943,15 @@ export default function Navbar() {
                         )}
                         {/* Reports Dropdown */}
                         {(availableReports.length > 0 || (canSeePriceListReports && priceFormats.length > 0)) && (
-                            <div className="relative" id="reports-dropdown">
+                            <div className="relative flex-1 min-w-0" id="reports-dropdown">
                                 <button
                                     onClick={toggleReportsMenu}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/abm-wise-tva") || location.pathname.startsWith("/admin/stock-vs-cash-deposit") || location.pathname.startsWith("/admin/finance-brand-mapping") || location.pathname.startsWith("/admin/finance-brand-report") || location.pathname.startsWith("/admin/price-list-report")
+                                    className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/abm-wise-tva") || location.pathname.startsWith("/admin/stock-vs-cash-deposit") || location.pathname.startsWith("/admin/finance-brand-mapping") || location.pathname.startsWith("/admin/finance-brand-report") || location.pathname.startsWith("/admin/price-list-report")
                                         ? "bg-white/15"
                                         : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
                                 >
-                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                    <span className="flex items-center justify-center gap-1.5 sm:gap-2 truncate w-full px-1">
                                         <span className="font-semibold text-white truncate">Reports</span>
                                         <svg
                                             xmlns="http://www.w3.org/2000/svg"
@@ -868,7 +959,7 @@ export default function Navbar() {
                                             viewBox="0 0 24 24"
                                             strokeWidth={2.5}
                                             stroke="currentColor"
-                                            className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-200 ${isReportsOpen ? "rotate-180 text-white" : ""}`}
+                                            className={`w-3.5 h-3.5 text-slate-300 shrink-0 transition-transform duration-200 ${isReportsOpen ? "rotate-180 text-white" : ""}`}
                                         >
                                             <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                                         </svg>

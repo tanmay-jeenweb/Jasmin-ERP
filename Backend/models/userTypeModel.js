@@ -32,6 +32,7 @@ const MASTERS = [
     { key: 'abm_wise_cash_deposit', label: 'ABM Wise Cash Deposit (Dashboard)' },
     { key: 'ticket_type_master', label: 'Ticket Type Master' },
     { key: 'sub_ticket_type_master', label: 'Sub Ticket Type Master' },
+    { key: 'ticket_management', label: 'Ticket Management' },
 ];
 
 // ─── Table creation ──────────────────────────────────────────────────────────
@@ -139,6 +140,13 @@ const createUserTypePermissionsTable = async () => {
             SELECT user_type_id, 'abm_wise_tva', can_read, can_write, can_update, can_delete
             FROM user_type_permissions
             WHERE master_name = 'target_vs_achievement'
+        `);
+
+        // Seed initial ticket_management permission rows for existing user types
+        await db.execute(`
+            INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete)
+            SELECT id, 'ticket_management', 0, 0, 0, 0
+            FROM user_types
         `);
 
         console.log("✅ Permission keys migrated/seeded successfully.");
