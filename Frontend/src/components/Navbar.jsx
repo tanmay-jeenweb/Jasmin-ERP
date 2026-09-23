@@ -256,6 +256,24 @@ export default function Navbar() {
             desc: "Manage support staff details"
         },
         {
+            name: "Ticket Type Master",
+            path: "/admin/ticket-types",
+            masterKey: "ticket_type_master",
+            icon: "fa-solid fa-ticket",
+            color: "bg-indigo-50 text-indigo-600 border border-indigo-100/50",
+            activeColor: "bg-indigo-100 text-indigo-700",
+            desc: "Manage ticket classification types"
+        },
+        {
+            name: "Sub Ticket Type Master",
+            path: "/admin/sub-ticket-types",
+            masterKey: "sub_ticket_type_master",
+            icon: "fa-solid fa-tags",
+            color: "bg-purple-50 text-purple-600 border border-purple-100/50",
+            activeColor: "bg-purple-100 text-purple-700",
+            desc: "Manage subticket types & assignees"
+        },
+        {
             name: "Product Type Master",
             path: "/admin/product-types",
             masterKey: "product_type_master",

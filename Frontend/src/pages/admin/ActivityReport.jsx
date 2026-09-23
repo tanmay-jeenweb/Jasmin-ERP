@@ -56,7 +56,9 @@ function DetailModal({ isOpen, row, onClose }) {
         offer_master: "Offers Master",
         finance_brand_mapping: "Finance Brand Mapping",
         finance_brand_report: "Finance Brand Report",
-        activity_report: "Activity Log Report"
+        activity_report: "Activity Log Report",
+        ticket_type_master: "Ticket Type Master",
+        sub_ticket_type_master: "Sub Ticket Type Master"
       };
 
       const PERM_LABELS = { canRead: "Read", canWrite: "Write / Approval", canUpdate: "Update", canDelete: "Delete" };

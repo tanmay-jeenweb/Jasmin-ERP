@@ -58,6 +58,10 @@ const settingRoutes = require("./routes/settingRoutes.js");
 const { createSettingsTable } = require("./models/settingModel.js");
 const { createLandingTypeTable } = require("./models/landingTypeModel.js");
 const landingTypeRoutes = require("./routes/landingTypeRoutes.js");
+const { createTicketTypeTable } = require("./models/ticketTypeModel.js");
+const ticketTypeRoutes = require("./routes/ticketTypeRoutes.js");
+const { createSubTicketTypeTable } = require("./models/subTicketTypeModel.js");
+const subTicketTypeRoutes = require("./routes/subTicketTypeRoutes.js");
 const externalRoutes = require("./routes/externalRoutes.js");
 const { createStockCacheTable } = require("./models/stockCacheModel.js");
 const { createRefreshTokensTable } = require("./models/refreshTokenModel.js");
@@ -135,6 +139,8 @@ app.use("/v1/api/variations", variationRoutes);
 app.use("/v1/api/price-lists", priceListRoutes);
 app.use("/v1/api/settings", settingRoutes);
 app.use("/v1/api/landingtypes", landingTypeRoutes);
+app.use("/v1/api/ticket-types", ticketTypeRoutes);
+app.use("/v1/api/sub-ticket-types", subTicketTypeRoutes);
 app.use("/v1/api/external", externalRoutes);
 
 
@@ -182,6 +188,8 @@ const startServer = async () => {
         await createStockCacheTable();
         await createRefreshTokensTable();
         await createSettingsTable();
+        await createTicketTypeTable();
+        await createSubTicketTypeTable();
 
 
 

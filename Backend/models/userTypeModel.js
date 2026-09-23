@@ -30,6 +30,8 @@ const MASTERS = [
     { key: 'activity_report', label: 'Activity Log Report' },
     { key: 'brand_wise_sales', label: 'Brand Wise Sales' },
     { key: 'abm_wise_cash_deposit', label: 'ABM Wise Cash Deposit (Dashboard)' },
+    { key: 'ticket_type_master', label: 'Ticket Type Master' },
+    { key: 'sub_ticket_type_master', label: 'Sub Ticket Type Master' },
 ];
 
 // ─── Table creation ──────────────────────────────────────────────────────────

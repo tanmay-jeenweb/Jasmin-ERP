@@ -67,6 +67,13 @@ const MASTER_GROUPS = [
       { key: "alert_master", label: "Alert Master" },
       { key: "offer_master", label: "Offers Master" },
     ]
+  },
+  {
+    category: "🎫 Ticket Management",
+    masters: [
+      { key: "ticket_type_master", label: "Ticket Type Master" },
+      { key: "sub_ticket_type_master", label: "Sub Ticket Type Master" },
+    ]
   }
 ];
 
