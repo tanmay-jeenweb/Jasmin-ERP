@@ -9,7 +9,7 @@ const { createAuditLog } = require('../models/auditLogModel.js');
 
 const addMobileBrandController = async (req, res) => {
     try {
-        const { mobileBrand, forCode } = req.body;
+        const { mobileBrand, forCode, sharePercentage } = req.body;
         const addedBy = req.user.id;
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
 
@@ -17,7 +17,14 @@ const addMobileBrandController = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Brand name is required' });
         }
 
-        const result = await createMobileBrand(mobileBrand.trim(), addedBy, deviceId, forCode);
+        const parsedShare = sharePercentage !== undefined && sharePercentage !== null && sharePercentage !== ''
+            ? parseFloat(sharePercentage)
+            : 0.00;
+        if (isNaN(parsedShare) || parsedShare < 0 || parsedShare > 100) {
+            return res.status(400).json({ success: false, message: 'Share percentage must be between 0 and 100' });
+        }
+
+        const result = await createMobileBrand(mobileBrand.trim(), addedBy, deviceId, forCode, parsedShare);
         
         await createAuditLog(
             addedBy,
@@ -30,6 +37,7 @@ const addMobileBrandController = async (req, res) => {
                 id: result.insertId,
                 mobile_brand: mobileBrand.trim(),
                 for_code: forCode || 'No',
+                share_percentage: parsedShare,
                 added_by: addedBy,
                 device_id: deviceId
             }
@@ -38,7 +46,7 @@ const addMobileBrandController = async (req, res) => {
         res.status(201).json({
             success: true,
             message: 'Brand added successfully',
-            data: { id: result.insertId, mobile_brand: mobileBrand.trim(), for_code: forCode || 'No' }
+            data: { id: result.insertId, mobile_brand: mobileBrand.trim(), for_code: forCode || 'No', share_percentage: parsedShare }
         });
     } catch (error) {
         console.error('Error adding brand:', error);
@@ -72,10 +80,17 @@ const getAllMobileBrandsController = async (req, res) => {
 const updateMobileBrandController = async (req, res) => {
     try {
         const { id } = req.params;
-        const { mobileBrand, forCode } = req.body;
+        const { mobileBrand, forCode, sharePercentage } = req.body;
 
         if (!mobileBrand || !mobileBrand.trim()) {
             return res.status(400).json({ success: false, message: 'Brand name is required' });
+        }
+
+        const parsedShare = sharePercentage !== undefined && sharePercentage !== null && sharePercentage !== ''
+            ? parseFloat(sharePercentage)
+            : 0.00;
+        if (isNaN(parsedShare) || parsedShare < 0 || parsedShare > 100) {
+            return res.status(400).json({ success: false, message: 'Share percentage must be between 0 and 100' });
         }
 
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
@@ -84,7 +99,7 @@ const updateMobileBrandController = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Brand not found' });
         }
 
-        await updateMobileBrand(id, mobileBrand.trim(), forCode);
+        await updateMobileBrand(id, mobileBrand.trim(), forCode, parsedShare);
         
         await createAuditLog(
             req.user?.id,
@@ -96,7 +111,8 @@ const updateMobileBrandController = async (req, res) => {
             {
                 ...beforeData,
                 mobile_brand: mobileBrand.trim(),
-                for_code: forCode || 'No'
+                for_code: forCode || 'No',
+                share_percentage: parsedShare
             }
         );
 

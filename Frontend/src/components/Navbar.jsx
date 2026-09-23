@@ -7,6 +7,17 @@ import { getVariations } from "../api/variationApi";
 
 const logo = "/Jasmin-Logo.png";
 
+const formatNavbarDate = (dateStr) => {
+    if (!dateStr) return "";
+    const clean = String(dateStr).substring(0, 10);
+    const parts = clean.split("-");
+    if (parts.length === 3) {
+        const [y, m, d] = parts;
+        return `${d}/${m}/${y}`;
+    }
+    return dateStr;
+};
+
 export default function Navbar() {
     const navigate = useNavigate();
     const location = useLocation();
@@ -245,6 +256,24 @@ export default function Navbar() {
             desc: "Manage support staff details"
         },
         {
+            name: "Ticket Type Master",
+            path: "/admin/ticket-types",
+            masterKey: "ticket_type_master",
+            icon: "fa-solid fa-ticket",
+            color: "bg-indigo-50 text-indigo-600 border border-indigo-100/50",
+            activeColor: "bg-indigo-100 text-indigo-700",
+            desc: "Manage ticket classification types"
+        },
+        {
+            name: "Sub Ticket Type Master",
+            path: "/admin/sub-ticket-types",
+            masterKey: "sub_ticket_type_master",
+            icon: "fa-solid fa-tags",
+            color: "bg-purple-50 text-purple-600 border border-purple-100/50",
+            activeColor: "bg-purple-100 text-purple-700",
+            desc: "Manage subticket types & assignees"
+        },
+        {
             name: "Product Type Master",
             path: "/admin/product-types",
             masterKey: "product_type_master",
@@ -308,6 +337,9 @@ export default function Navbar() {
         return true;
     });
 
+    const mastersDropdownWidth = availableMasters.length <= 3 ? "w-80" : "w-140";
+    const mastersGridCols = availableMasters.length <= 3 ? "grid-cols-1" : "grid-cols-2";
+
     const isPrecedingTabsHidden = !isAdmin && availableMasters.length === 0;
     const priceListDropdownPositionClass = isPrecedingTabsHidden
         ? "left-0 origin-top-left"
@@ -370,7 +402,7 @@ export default function Navbar() {
     });
 
     let marqueeText = runningOffers.length > 0
-        ? runningOffers.map(o => `🔥 [${o.brand_name}] ${o.offer_type} (Valid: ${new Date(o.from_date).toLocaleDateString()} to ${new Date(o.to_date).toLocaleDateString()})`).join("   |   ")
+        ? runningOffers.map(o => `🔥 [${o.brand_name}] ${o.offer_type} (Valid: ${formatNavbarDate(o.from_date)} to ${formatNavbarDate(o.to_date)})`).join("   |   ")
         : "";
 
     // Repeat the text to ensure it's wide enough for a seamless circular loop
@@ -381,7 +413,10 @@ export default function Navbar() {
         }
     }
 
-
+    const singleUnit = marqueeText ? ` :: :: :: OFFERS 📢──★    ${marqueeText}` : "";
+    // Calculate animation duration so movement speed has a comfortable max limit (~8 chars/sec / ~60px/sec)
+    // and never increases beyond this threshold even with 200+ offers.
+    const scrollDuration = singleUnit ? Math.max(35, Math.round(singleUnit.length / 8)) : 35;
 
     return (
         <nav className="bg-white shadow-sm border-b border-slate-200 flex flex-col relative z-50">
@@ -403,7 +438,7 @@ export default function Navbar() {
                                 display: flex;
                                 white-space: nowrap;
                                 width: max-content;
-                                animation: marquee-scroll 35s linear infinite;
+                                animation: marquee-scroll ${scrollDuration}s linear infinite;
                                 will-change: transform;
                             }
                             .marquee-container:hover {
@@ -413,15 +448,13 @@ export default function Navbar() {
                                 padding-right: 4rem;
                             }
                         `}</style>
-                        {(() => {
-                            const singleUnit = ` :: :: :: OFFERS 📢──★    ${marqueeText}`;
-                            return (
-                                <div className="marquee-container text-[12px] font-bold text-indigo-800">
-                                    <span className="marquee-item">{singleUnit}</span>
-                                    <span className="marquee-item">{singleUnit}</span>
-                                </div>
-                            );
-                        })()}
+                        <div
+                            className="marquee-container text-[12px] font-bold text-indigo-800"
+                            style={{ animationDuration: `${scrollDuration}s` }}
+                        >
+                            <span className="marquee-item">{singleUnit}</span>
+                            <span className="marquee-item">{singleUnit}</span>
+                        </div>
                     </div>
                 )}
 

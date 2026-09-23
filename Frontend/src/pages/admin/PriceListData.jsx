@@ -5,6 +5,7 @@ import DataTable from "../../components/DataTable";
 import { getPriceListData, importPriceListData } from "../../api/priceListApi";
 import { getPricingFormulas as getVariations } from "../../api/pricingFormulaApi";
 import { getItemModels } from "../../api/itemModelApi";
+import { getIcatSettings } from "../../api/settingApi";
 import { usePermission } from "../../context/PermissionContext";
 import ExcelJS from "exceljs";
 import toast from "react-hot-toast";
@@ -33,6 +34,15 @@ const mapFormulaForRow = (formula, targetRow) => {
     return mappedFormula;
   }
   return `IFERROR(${mappedFormula},"")`;
+};
+
+const formatPriceValue = (val) => {
+  if (val === undefined || val === null || val === '' || val === '-' || val === '—') return "0";
+  const num = Number(val);
+  if (!isNaN(num) && typeof val !== 'boolean') {
+    return Number.isInteger(num) ? String(num) : num.toFixed(2);
+  }
+  return val;
 };
 
 const canUserViewColumn = (col, user) => {
@@ -181,8 +191,7 @@ export default function PriceListData() {
         label: c.column_name,
         render: (row) => {
           const val = row[c.column_name];
-          if (val === undefined || val === null || val === '' || val === '-' || val === '—') return "—";
-          return <span className="font-medium text-slate-800">{val}</span>;
+          return <span className="font-medium text-slate-800">{formatPriceValue(val)}</span>;
         }
       });
     });
@@ -250,10 +259,28 @@ export default function PriceListData() {
       const modelsRes = await getItemModels();
       const allModels = modelsRes.data?.data || [];
 
-      // Filter active models (include all active product models)
-      const activeModels = allModels.filter(m =>
-        !m.item_status || String(m.item_status).toLowerCase() === "active"
-      );
+      // Fetch ICAT settings to filter out deselected classifications
+      let icatSettings = {};
+      try {
+        const settingsRes = await getIcatSettings();
+        if (settingsRes.data?.success) {
+          icatSettings = settingsRes.data.settings || {};
+        }
+      } catch (err) {
+        console.warn("Failed to fetch ICAT settings, displaying all:", err);
+      }
+
+      // Filter active models (include active models and check ICAT settings)
+      const activeModels = allModels.filter(m => {
+        const isActive = !m.item_status || String(m.item_status).toLowerCase() === "active";
+        if (!isActive) return false;
+
+        const icatName = m.icat_name;
+        if (icatName && icatSettings[icatName] === false) {
+          return false;
+        }
+        return true;
+      });
 
       if (activeModels.length === 0) {
         toast.error("No active product models found in database.", { id: loadToastId });
@@ -322,9 +349,16 @@ export default function PriceListData() {
           if (isFormulaType) {
             let formulaToUse = "";
 
-            // Check brand configurations for specific formula override
+            // Check brand configurations for specific formula override (with flexible alias matching e.g. Apple / Apple India / iPhone, Vivo / Vivo India)
             const matchingConfig = configs.find(cfg =>
-              m.brand_name && cfg.brands && cfg.brands.map(b => String(b).trim().toUpperCase()).includes(String(m.brand_name).trim().toUpperCase())
+              m.brand_name && cfg.brands && cfg.brands.some(b => {
+                const brandStr = String(b).trim().toUpperCase();
+                const mBrand = String(m.brand_name).trim().toUpperCase();
+                if (brandStr === mBrand) return true;
+                if (mBrand.includes(brandStr) || brandStr.includes(mBrand)) return true;
+                if ((brandStr === 'APPLE' || brandStr === 'IPHONE') && (mBrand === 'APPLE' || mBrand === 'IPHONE')) return true;
+                return false;
+              })
             );
             if (matchingConfig) {
               const matchingColFormula = matchingConfig.columns?.find(c => c.column_id === col.column_id);
@@ -348,7 +382,7 @@ export default function PriceListData() {
                 const num = Number(existingVal);
                 rowData[col.column_name] = !isNaN(num) && String(existingVal).trim() !== "" ? num : existingVal;
               } else {
-                rowData[col.column_name] = "-";
+                rowData[col.column_name] = 0;
               }
             }
           } else {
@@ -358,7 +392,7 @@ export default function PriceListData() {
               const num = Number(existingVal);
               rowData[col.column_name] = !isNaN(num) && String(existingVal).trim() !== "" ? num : existingVal;
             } else {
-              rowData[col.column_name] = "-";
+              rowData[col.column_name] = 0;
             }
           }
         });
@@ -367,8 +401,8 @@ export default function PriceListData() {
       });
 
       // Add borders and formatting
-      worksheet.eachRow({ includeHeader: false }, (row) => {
-        row.eachCell({ includeEmpty: true }, (cell) => {
+      worksheet.eachRow({ includeHeader: false }, (row, rowNumber) => {
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
           cell.font = { name: "Segoe UI", size: 10 };
           cell.border = {
             top: { style: "thin", color: { argb: "FFE2E8F0" } },
@@ -376,6 +410,12 @@ export default function PriceListData() {
             left: { style: "thin", color: { argb: "FFE2E8F0" } },
             right: { style: "thin", color: { argb: "FFE2E8F0" } },
           };
+          if (colNumber > fixedHeaders.length) {
+            cell.numFmt = "0.00";
+            cell.alignment = { horizontal: "right", vertical: "middle" };
+          } else {
+            cell.alignment = { horizontal: "left", vertical: "middle" };
+          }
         });
       });
 
@@ -475,6 +515,9 @@ export default function PriceListData() {
                   if ('error' in res) return "";
                   return "";
                 }
+                if (typeof res === 'number') {
+                  return Math.round(res * 100) / 100;
+                }
                 return res;
               }
               // 2. Formula object without evaluated result
@@ -490,6 +533,9 @@ export default function PriceListData() {
                 return "";
               }
               return "";
+            }
+            if (typeof val === 'number') {
+              return Math.round(val * 100) / 100;
             }
             return val;
           };
@@ -520,7 +566,8 @@ export default function PriceListData() {
               if (strVal === "-" || strVal === "") {
                 record[col.column_name] = "";
               } else {
-                record[col.column_name] = strVal;
+                const num = Number(strVal);
+                record[col.column_name] = !isNaN(num) ? Math.round(num * 100) / 100 : strVal;
               }
             });
 

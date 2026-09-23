@@ -9,14 +9,17 @@ import { usePermission } from "../../context/PermissionContext";
 function BrandModal({ isOpen, row, onClose, onSave, saving }) {
   const [mobileBrand, setMobileBrand] = useState("");
   const [forCode, setForCode] = useState("No");
+  const [sharePercentage, setSharePercentage] = useState("");
 
   useEffect(() => {
     if (row) {
       setMobileBrand(row.mobile_brand || "");
       setForCode(row.for_code || "No");
+      setSharePercentage(row.share_percentage !== undefined && row.share_percentage !== null ? row.share_percentage : "");
     } else {
       setMobileBrand("");
       setForCode("No");
+      setSharePercentage("");
     }
   }, [row, isOpen]);
 
@@ -27,7 +30,12 @@ function BrandModal({ isOpen, row, onClose, onSave, saving }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!mobileBrand.trim()) return;
-    onSave(isEdit ? row.id : null, mobileBrand.trim(), forCode);
+    const shareVal = sharePercentage !== "" ? parseFloat(sharePercentage) : 0;
+    if (isNaN(shareVal) || shareVal < 0 || shareVal > 100) {
+      toast.error("Share percentage must be between 0 and 100");
+      return;
+    }
+    onSave(isEdit ? row.id : null, mobileBrand.trim(), forCode, shareVal);
   };
 
   return (
@@ -61,6 +69,30 @@ function BrandModal({ isOpen, row, onClose, onSave, saving }) {
                 placeholder="e.g. Apple, Samsung, OnePlus"
                 className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-[11px] text-[15px] outline-none text-slate-800 focus:border-indigo-650 transition-colors"
               />
+            </div>
+
+            <div className="mb-5">
+              <label className="block text-xs font-bold text-slate-650 uppercase tracking-wider mb-2">
+                Share Percentage (%)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={sharePercentage}
+                  onChange={(e) => setSharePercentage(e.target.value)}
+                  placeholder="e.g. 40.00"
+                  className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-[11px] text-[15px] outline-none text-slate-800 focus:border-indigo-650 transition-colors pr-10"
+                />
+                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-semibold text-sm select-none">
+                  %
+                </span>
+              </div>
+              <p className="mt-1.5 text-xs text-slate-500">
+                Used in TVA to automatically calculate branch-wise target value & quantity for this brand.
+              </p>
             </div>
 
             <div className="mb-2">
@@ -140,16 +172,16 @@ export default function MobileBrandMaster() {
     loadBrands();
   }, []);
 
-  const handleSave = async (id, mobileBrand, forCode) => {
+  const handleSave = async (id, mobileBrand, forCode, sharePercentage) => {
     setSaving(true);
     try {
       if (id) {
         // Edit Mode
-        await updateMobileBrand(id, { mobileBrand, forCode });
+        await updateMobileBrand(id, { mobileBrand, forCode, sharePercentage });
         toast.success("Brand updated successfully");
       } else {
         // Create Mode
-        await createMobileBrand({ mobileBrand, forCode });
+        await createMobileBrand({ mobileBrand, forCode, sharePercentage });
         toast.success("Brand created successfully");
       }
       setIsModalOpen(false);
@@ -184,6 +216,21 @@ export default function MobileBrandMaster() {
       {
         key: "mobile_brand", label: "Brand Name",
         render: (row) => <span className="font-bold text-slate-900">{row.mobile_brand}</span>
+      },
+      {
+        key: "share_percentage", label: "Share %", minWidth: "110px",
+        render: (row) => {
+          const val = parseFloat(row.share_percentage) || 0;
+          return (
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+              val > 0 
+                ? "bg-indigo-50 text-indigo-700 border border-indigo-200" 
+                : "bg-slate-100 text-slate-500"
+            }`}>
+              {val.toFixed(2)}%
+            </span>
+          );
+        }
       },
       {
         key: "for_code", label: "For Code",

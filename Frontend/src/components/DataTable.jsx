@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef, Fragment } from 'react';
 
 // Save and retrieve table column preferences locally in localStorage
 const getTablePreference = async (tableId) => {
@@ -64,6 +64,29 @@ const buildHiddenSet = (initialCols, savedVisibleKeys) => {
   return new Set(initialCols.filter(c => !savedSet.has(c.key)).map(c => c.key));
 };
 
+/**
+ * Helper to parse a value into a number if possible, stripping formatting.
+ */
+const parseNumeric = (val) => {
+  if (val === null || val === undefined) return null;
+  if (typeof val === 'number') return val;
+  const str = String(val).trim();
+  if (str === '') return null;
+  // Remove commas, currency symbols, and percentage signs
+  const cleaned = str.replace(/[,%$₹£€]/g, '');
+  const num = Number(cleaned);
+  return isNaN(num) ? null : num;
+};
+
+/**
+ * Helper to check if a value is empty or a placeholder.
+ */
+const isEmptyValue = (val) => {
+  if (val === null || val === undefined) return true;
+  const str = String(val).trim();
+  return str === '' || str === '-' || str === '—';
+};
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function DataTable({
@@ -76,7 +99,29 @@ export default function DataTable({
   searchPlaceholder = "Search...",
   tableId = null,
   subHeader = null,
+  renderSubRows = null,
+  expandedRowKeys = null,
+  onToggleExpand = null,
 }) {
+  // Expansion state
+  const [internalExpandedKeys, setInternalExpandedKeys] = useState(new Set());
+  const isControlledExpand = expandedRowKeys !== null && expandedRowKeys !== undefined;
+  const currentExpandedKeys = isControlledExpand ? expandedRowKeys : internalExpandedKeys;
+
+  const handleToggleExpand = (key) => {
+    if (onToggleExpand) {
+      onToggleExpand(key);
+    }
+    if (!isControlledExpand) {
+      setInternalExpandedKeys(prev => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    }
+  };
+
   // Full ordered list (visible + hidden). Visible ones come first.
   const [columns, setColumns] = useState(initialColumns);
   // Set of hidden column keys
@@ -196,10 +241,29 @@ export default function DataTable({
       filtered.sort((a, b) => {
         const aVal = a[sortConfig.key];
         const bVal = b[sortConfig.key];
-        const aValue = aVal != null ? String(aVal).toLowerCase() : '';
-        const bValue = bVal != null ? String(bVal).toLowerCase() : '';
-        if (sortConfig.direction === 'asc') return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
-        return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
+
+        const aEmpty = isEmptyValue(aVal);
+        const bEmpty = isEmptyValue(bVal);
+
+        if (aEmpty && bEmpty) return 0;
+        if (aEmpty) return 1; // Empty/placeholder values go to the bottom
+        if (bEmpty) return -1;
+
+        const numA = parseNumeric(aVal);
+        const numB = parseNumeric(bVal);
+
+        if (numA !== null && numB !== null) {
+          if (sortConfig.direction === 'asc') return numA - numB;
+          return numB - numA;
+        }
+
+        const aValue = String(aVal).toLowerCase().trim();
+        const bValue = String(bVal).toLowerCase().trim();
+
+        if (sortConfig.direction === 'asc') {
+          return aValue.localeCompare(bValue, undefined, { numeric: true });
+        }
+        return bValue.localeCompare(aValue, undefined, { numeric: true });
       });
     }
 
@@ -473,22 +537,34 @@ export default function DataTable({
                   </td>
                 </tr>
               ) : paginatedRows.length > 0 ? (
-                paginatedRows.map((row, rowIndex) => (
-                  <tr key={row.id || rowIndex} className="transition-all hover:bg-slate-50">
-                    {visibleColumns.map((column) => {
-                      const originalColumn = initialColumns.find(c => c.key === column.key) || column;
-                      return (
-                        <td
-                          key={column.key}
-                          className="border-b border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-                          style={{ minWidth: originalColumn.minWidth || '140px' }}
-                        >
-                          {originalColumn.render ? originalColumn.render(row) : row[column.key]}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))
+                paginatedRows.map((row, rowIndex) => {
+                  const rowKey = row.id ?? row.branch_name ?? rowIndex;
+                  const isExpanded = currentExpandedKeys instanceof Set
+                    ? currentExpandedKeys.has(rowKey)
+                    : Array.isArray(currentExpandedKeys)
+                    ? currentExpandedKeys.includes(rowKey)
+                    : false;
+
+                  return (
+                    <Fragment key={row.id || rowIndex}>
+                      <tr className={`transition-all hover:bg-slate-50 ${isExpanded ? 'bg-indigo-50/20' : ''}`}>
+                        {visibleColumns.map((column) => {
+                          const originalColumn = initialColumns.find(c => c.key === column.key) || column;
+                          return (
+                            <td
+                              key={column.key}
+                              className="border-b border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                              style={{ minWidth: originalColumn.minWidth || '140px' }}
+                            >
+                              {originalColumn.render ? originalColumn.render(row, { isExpanded, toggleExpand: () => handleToggleExpand(rowKey) }) : row[column.key]}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                      {isExpanded && renderSubRows && renderSubRows(row, visibleColumns, { isExpanded, toggleExpand: () => handleToggleExpand(rowKey) })}
+                    </Fragment>
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan={visibleColumns.length} className="px-6 py-8 text-center text-slate-500 text-sm">
@@ -497,6 +573,24 @@ export default function DataTable({
                 </tr>
               )}
             </tbody>
+            {totalRow && (
+              <tfoot>
+                <tr className="border-t-2 border-slate-350 bg-slate-100 font-bold">
+                  {visibleColumns.map((column) => {
+                    const originalColumn = initialColumns.find(c => c.key === column.key) || column;
+                    return (
+                      <td
+                        key={column.key}
+                        className="px-3 py-2.5 text-sm text-slate-900 border-t border-slate-300 bg-slate-100 font-bold"
+                        style={{ minWidth: originalColumn.minWidth || '140px' }}
+                      >
+                        {originalColumn.render ? originalColumn.render(totalRow) : totalRow[column.key]}
+                      </td>
+                    );
+                  })}
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 

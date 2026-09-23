@@ -4,6 +4,7 @@ import Navbar from "../../components/Navbar";
 import { getPricingFormulas, deletePricingFormula, restorePricingFormula } from "../../api/pricingFormulaApi";
 import { getBranches } from "../../api/branchApi";
 import { getDistinctBrands, getItemModels } from "../../api/itemModelApi";
+import { getIcatSettings } from "../../api/settingApi";
 import DataTable from "../../components/DataTable";
 import toast from "react-hot-toast";
 import { usePermission } from "../../context/PermissionContext";
@@ -115,9 +116,27 @@ export default function PricingFormulaMasterList() {
                 }
             }
 
-            const activeModels = currentItemModels.filter(
-                (m) => !m.item_status || String(m.item_status).toLowerCase() === "active"
-            );
+            // Fetch ICAT settings to filter out deselected classifications
+            let icatSettings = {};
+            try {
+                const settingsRes = await getIcatSettings();
+                if (settingsRes.data?.success) {
+                    icatSettings = settingsRes.data.settings || {};
+                }
+            } catch (err) {
+                console.warn("Failed to fetch ICAT settings, displaying all:", err);
+            }
+
+            const activeModels = currentItemModels.filter((m) => {
+                const isActive = !m.item_status || String(m.item_status).toLowerCase() === "active";
+                if (!isActive) return false;
+
+                const icatName = m.icat_name;
+                if (icatName && icatSettings[icatName] === false) {
+                    return false;
+                }
+                return true;
+            });
 
             if (activeModels.length === 0) {
                 toast.dismiss(toastId);

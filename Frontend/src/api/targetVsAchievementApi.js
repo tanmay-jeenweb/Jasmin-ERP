@@ -1,11 +1,13 @@
 import apiClient from "./authApi";
 
-export const getTargetVsAchievements = async () => {
-    return apiClient.get("/target-vs-achievement/all");
+export const getTargetVsAchievements = async (date) => {
+    const params = date ? { date } : {};
+    return apiClient.get("/target-vs-achievement/all", { params });
 };
 
-export const getABMWiseTargetVsAchievements = async () => {
-    return apiClient.get("/target-vs-achievement/abm-wise");
+export const getABMWiseTargetVsAchievements = async (date) => {
+    const params = date ? { date } : {};
+    return apiClient.get("/target-vs-achievement/abm-wise", { params });
 };
 
 export const importTargetVsAchievements = async (data) => {

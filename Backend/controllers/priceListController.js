@@ -2,6 +2,7 @@ const { getVariationById } = require('../models/variationModel.js');
 const { getPriceListData, upsertPriceListData, getPriceListReportData, getHistoryTimestamps } = require('../models/priceListModel.js');
 const { createAuditLog } = require('../models/auditLogModel.js');
 const { checkUserStateAccess } = require('../utils/userStateHelper.js');
+const { filterPriceListByLandingType } = require('../utils/landingTypeHelper.js');
 const db = require('../config/db.js');
 
 const getPriceListDataController = async (req, res) => {
@@ -44,11 +45,14 @@ const getPriceListDataController = async (req, res) => {
             console.warn(`Dynamic table for format ${variationId} fetch error:`, err.message);
         }
 
+        // Filter columns and strip unauthorized data fields based on user landing type permissions
+        const { columns: filteredColumns, data: filteredData } = filterPriceListByLandingType(columns, data, req.user);
+
         res.status(200).json({
             success: true,
-            columns,
+            columns: filteredColumns,
             formatName: variation.format_name || `${variation.state_name} format`,
-            data
+            data: filteredData
         });
     } catch (error) {
         console.error('Error fetching price list data:', error);
@@ -57,6 +61,36 @@ const getPriceListDataController = async (req, res) => {
 };
 
 const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs, records) => {
+    if (!records || !Array.isArray(records) || records.length === 0) return records;
+
+    // Fetch product_name mapping from item_model_master for imported codes to use as category
+    const prodCodes = records.map(r => r.product_code).filter(Boolean);
+    let prodNameToCatMap = new Map();
+    if (prodCodes.length > 0) {
+        try {
+            const placeholders = prodCodes.map(() => '?').join(', ');
+            const [modelRows] = await db.execute(
+                `SELECT item_code, product_name FROM item_model_master WHERE item_code IN (${placeholders})`,
+                prodCodes
+            );
+            modelRows.forEach(row => {
+                if (row.item_code && row.product_name) {
+                    prodNameToCatMap.set(String(row.item_code).trim(), row.product_name);
+                }
+            });
+        } catch (err) {
+            console.warn("Failed to fetch product names for category mapping:", err.message);
+        }
+    }
+
+    // Process each record to map category to product_name
+    for (const rec of records) {
+        const prodCode = rec.product_code ? String(rec.product_code).trim() : "";
+        if (prodCode && prodNameToCatMap.has(prodCode)) {
+            rec.icat_name = prodNameToCatMap.get(prodCode);
+        }
+    }
+
     if (!columnsList || !Array.isArray(columnsList) || columnsList.length === 0) return records;
 
     const formulaCols = columnsList.filter(c => c.type === 'default formulation' || c.type === 'formulation');
@@ -89,6 +123,19 @@ const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs
             expr = ifErrorMatch[1].trim();
         }
 
+        // Convert Excel percentage syntax like O% or 5% or ((G-N)*O%) into (/ 100)
+        expr = expr.replace(/(\([^)]+\)|\b[A-Za-z0-9_.]+\b)\s*%/g, '($1 / 100)');
+
+        // Replace Excel IF(cond, val1, val2) with JS ternary ((cond) ? (val1) : (val2))
+        expr = expr.replace(/IF\s*\(([^,]+),([^,]+),([^)]+)\)/gi, '(($1) ? ($2) : ($3))');
+
+        // Replace ROUND(val, decimals) with Math.round
+        expr = expr.replace(/ROUND\s*\(([^,]+),([^)]+)\)/gi, '(Math.round(($1) * Math.pow(10, $2)) / Math.pow(10, $2))');
+        expr = expr.replace(/ROUND\s*\(([^)]+)\)/gi, '(Math.round($1))');
+
+        // Replace SUM(a, b, ...) or SUM(a + b + ...) using a function callback to properly handle commas
+        expr = expr.replace(/SUM\s*\(([^)]+)\)/gi, (match, inner) => `(${inner.replace(/,/g, '+')})`);
+
         // Sort columns by column_id length descending (e.g. AA before A)
         const sortedCols = [...columnsList].sort((a, b) => (b.column_id || '').length - (a.column_id || '').length);
 
@@ -99,16 +146,16 @@ const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs
 
             let val = rec[colName];
             if (val === undefined || val === null || val === "") {
-                val = NaN;
+                val = 0;
             } else if (typeof val === 'string') {
                 const cleanedVal = val.replace(/,/g, '').trim();
                 if (cleanedVal === '-' || cleanedVal === '' || cleanedVal === '—') {
-                    val = NaN;
+                    val = 0;
                 } else {
-                    val = !isNaN(Number(cleanedVal)) ? Number(cleanedVal) : NaN;
+                    val = !isNaN(Number(cleanedVal)) ? Number(cleanedVal) : 0;
                 }
             } else if (typeof val !== 'number') {
-                val = NaN;
+                val = 0;
             }
 
             // Replace cell references like F2, F12, F (case-insensitive word boundaries)
@@ -123,15 +170,12 @@ const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs
             }
         }
 
-        // Replace Excel IF(cond, val1, val2) with JS ternary ((cond) ? (val1) : (val2))
-        expr = expr.replace(/IF\s*\(([^,]+),([^,]+),([^)]+)\)/gi, '(($1) ? ($2) : ($3))');
+        // Clean any remaining percentage notations after column values are substituted
+        expr = expr.replace(/(\([^)]+\)|\b\d+(?:\.\d+)?\b)\s*%/g, '($1 / 100)');
 
-        // Replace ROUND(val, decimals) with Math.round
-        expr = expr.replace(/ROUND\s*\(([^,]+),([^)]+)\)/gi, '(Math.round(($1) * Math.pow(10, $2)) / Math.pow(10, $2))');
-        expr = expr.replace(/ROUND\s*\(([^)]+)\)/gi, '(Math.round($1))');
-
-        // Replace SUM(a, b, ...)
-        expr = expr.replace(/SUM\s*\(([^)]+)\)/gi, '($1)'.replace(/,/g, '+'));
+        // Replace any remaining unmapped uppercase column letters (e.g. unconfigured or deleted columns) with (0)
+        // to prevent ReferenceError from crashing the evaluator
+        expr = expr.replace(/\b[A-Z]{1,3}\d*\b/g, '(0)');
 
         // Replace single = with === in conditions
         expr = expr.replace(/([^=><!])=([^=])/g, '$1===$2');
@@ -139,7 +183,7 @@ const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs
         try {
             const safeResult = new Function(`"use strict"; return (${expr});`)();
             if (typeof safeResult === 'number' && !isNaN(safeResult) && isFinite(safeResult)) {
-                return Math.round(safeResult * 10000) / 10000;
+                return Math.round(safeResult * 100) / 100;
             }
             if (typeof safeResult === 'number' && (isNaN(safeResult) || !isFinite(safeResult))) {
                 return "";
@@ -165,12 +209,18 @@ const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs
             });
         }
 
-        // Determine brand override formulas if applicable
+        // Determine brand override formulas if applicable (with flexible alias matching e.g. Apple / Apple India / iPhone, Vivo / Vivo India)
         const recBrand = rec.brand ? String(rec.brand).trim().toUpperCase() : "";
         let brandOverrideMap = new Map();
         if (recBrand && Array.isArray(brandConfigs)) {
             const matchingConfig = brandConfigs.find(cfg =>
-                cfg.brands && Array.isArray(cfg.brands) && cfg.brands.some(b => String(b).trim().toUpperCase() === recBrand)
+                cfg.brands && Array.isArray(cfg.brands) && cfg.brands.some(b => {
+                    const brandStr = String(b).trim().toUpperCase();
+                    if (brandStr === recBrand) return true;
+                    if (recBrand.includes(brandStr) || brandStr.includes(recBrand)) return true;
+                    if ((brandStr === 'APPLE' || brandStr === 'IPHONE') && (recBrand === 'APPLE' || recBrand === 'IPHONE')) return true;
+                    return false;
+                })
             );
             if (matchingConfig && Array.isArray(matchingConfig.columns)) {
                 matchingConfig.columns.forEach(c => {
@@ -188,7 +238,12 @@ const evaluateFormulasForRecords = async (variationId, columnsList, brandConfigs
                 const formulaToUse = brandOverrideMap.get(col.column_id) || col.formula;
                 if (formulaToUse) {
                     const computedVal = evaluateSingleFormula(formulaToUse, rec);
-                    rec[col.column_name] = computedVal !== undefined && computedVal !== null ? computedVal : "";
+                    // Update calculated value, or preserve existing non-empty value if calculation was empty
+                    if (computedVal !== undefined && computedVal !== null && computedVal !== "") {
+                        rec[col.column_name] = computedVal;
+                    } else if (rec[col.column_name] === undefined || rec[col.column_name] === null) {
+                        rec[col.column_name] = "";
+                    }
                 }
             }
         }
@@ -238,6 +293,20 @@ const importPriceListController = async (req, res) => {
 
         // 2. Automatically evaluate formulation columns for all imported records
         const processedRecords = await evaluateFormulasForRecords(variationId, columnsList, brandConfigs, records);
+
+        // Ensure all numeric and formula column values are strictly capped at 2 decimal places
+        for (const rec of processedRecords) {
+            for (const col of columnsList) {
+                const colName = col.column_name;
+                const val = rec[colName];
+                if (val !== undefined && val !== null && val !== "" && val !== "-" && val !== "—") {
+                    const num = Number(val);
+                    if (!isNaN(num) && typeof val !== 'boolean') {
+                        rec[colName] = Math.round(num * 100) / 100;
+                    }
+                }
+            }
+        }
 
         // 3. Upsert data records
         await upsertPriceListData(variationId, columnsList, processedRecords, addedBy, deviceId);
@@ -302,12 +371,15 @@ const getPriceListReportController = async (req, res) => {
             console.warn(`Dynamic table for format ${variationId} report error:`, err.message);
         }
 
+        // Filter columns and strip unauthorized data fields based on user landing type permissions
+        const { columns: filteredColumns, data: filteredData } = filterPriceListByLandingType(columns, data, req.user);
+
         res.status(200).json({
             success: true,
-            columns,
+            columns: filteredColumns,
             formatName: variation.format_name || `${variation.state_name} format`,
             selectedDate: date || null,
-            data
+            data: filteredData
         });
     } catch (error) {
         console.error('Error fetching price list report data:', error);
@@ -326,20 +398,44 @@ const getModelGroupStockInfoController = async (req, res) => {
         }
 
         const isForceSync = sync === 'true' || sync === '1';
+        const userBranchCodes = await getUserBranchCodes(req.user?.id);
+
+        // Helper to serve filtered stock data from the database cache
+        const serveFromCache = async (warningMessage = null) => {
+            const cached = await getStockCacheByModelGroup(modelGroup);
+            if (cached) {
+                let userFilteredItems = cached.data;
+                if (userBranchCodes && userBranchCodes.length > 0) {
+                    const branchSet = new Set(userBranchCodes.map(c => String(c).trim().toLowerCase()));
+                    userFilteredItems = cached.data.filter(item =>
+                        item.BRANCH_CODE && branchSet.has(String(item.BRANCH_CODE).trim().toLowerCase())
+                    );
+                }
+                const validItems = userFilteredItems.filter(i => Number(i.SALEABLE_STOCK || 0) >= 1);
+                const uniqueBranches = new Set(validItems.map(i => (i.BRANCH_NAME || i.BRANCH_CODE || "").trim()));
+                const totalStockSum = validItems.reduce((acc, i) => acc + Number(i.SALEABLE_STOCK || 0), 0);
+
+                const responseData = {
+                    success: true,
+                    data: userFilteredItems,
+                    isCached: true,
+                    updatedAt: cached.updatedAt,
+                    totalLocations: uniqueBranches.size,
+                    totalStock: totalStockSum
+                };
+                if (warningMessage) {
+                    responseData.warning = warningMessage;
+                }
+                res.status(200).json(responseData);
+                return true;
+            }
+            return false;
+        };
 
         // 1. If not forcing sync, check database cache first
         if (!isForceSync) {
-            const cached = await getStockCacheByModelGroup(modelGroup);
-            if (cached) {
-                return res.status(200).json({
-                    success: true,
-                    data: cached.data,
-                    isCached: true,
-                    updatedAt: cached.updatedAt,
-                    totalLocations: cached.totalLocations,
-                    totalStock: cached.totalStock
-                });
-            }
+            const handled = await serveFromCache();
+            if (handled) return;
         }
 
         // 2. Query item_model_master for model group codes/names
@@ -358,82 +454,38 @@ const getModelGroupStockInfoController = async (req, res) => {
             console.warn("Could not query item_model_master for model group stock filtering:", e.message);
         }
 
-        // 3. Fetch external stock data from APX API for permitted branches
+        // 3. Fetch external stock data from APX API for all branches in a single query
         const encodedMg = encodeURIComponent(modelGroup);
-        const userBranchCodes = await getUserBranchCodes(req.user?.id);
         const headers = {
             'userid': process.env.MODEL_API_USERID || 'WebSite',
             'Securitycode': process.env.MODEL_API_SECURITYCODE || '1151-8111-6444-4166',
             'Accept': 'application/json'
         };
 
-        let rawItems = [];
+        const apiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetStockInfo?CompanyCode=JITPL&ItemClassificationValue=${encodedMg}`;
+        const response = await fetch(apiUrl, { method: 'GET', headers });
 
-        if (userBranchCodes && userBranchCodes.length > 0) {
-            // Execute parallel requests for each permitted BranchCode
-            const branchPromises = userBranchCodes.map(async (branchCode) => {
-                const apiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetStockInfo?CompanyCode=JITPL&ItemClassificationValue=${encodedMg}&BranchCode=${encodeURIComponent(branchCode)}`;
-                try {
-                    const response = await fetch(apiUrl, { method: 'GET', headers });
-                    if (!response.ok) return [];
-                    const result = await response.json();
-                    if (result && result.StatusCode === 0 && Array.isArray(result.Data)) {
-                        return result.Data;
-                    }
-                } catch (e) {
-                    console.warn(`Failed to fetch APX stock for branch ${branchCode}:`, e.message);
-                }
-                return [];
+        if (!response.ok) {
+            const handled = await serveFromCache(`APX API failed (${response.statusText}). Displaying saved DB stock data.`);
+            if (handled) return;
+            return res.status(response.status).json({
+                success: false,
+                message: `Failed to fetch from external API: Server returned ${response.statusText}`
             });
-
-            const branchResults = await Promise.all(branchPromises);
-            rawItems = branchResults.flat();
         }
 
-        // Fallback: If rawItems is empty, perform a single general query
-        if (rawItems.length === 0) {
-            const apiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetStockInfo?CompanyCode=JITPL&ItemClassificationValue=${encodedMg}`;
-            const response = await fetch(apiUrl, { method: 'GET', headers });
+        const result = await response.json();
 
-            if (!response.ok) {
-                const cached = await getStockCacheByModelGroup(modelGroup);
-                if (cached) {
-                    return res.status(200).json({
-                        success: true,
-                        data: cached.data,
-                        isCached: true,
-                        updatedAt: cached.updatedAt,
-                        warning: `APX API failed (${response.statusText}). Displaying saved DB stock data.`
-                    });
-                }
-                return res.status(response.status).json({
-                    success: false,
-                    message: `Failed to fetch from external API: Server returned ${response.statusText}`
-                });
-            }
-
-            const result = await response.json();
-
-            if (result.StatusCode !== 0) {
-                const cached = await getStockCacheByModelGroup(modelGroup);
-                if (cached) {
-                    return res.status(200).json({
-                        success: true,
-                        data: cached.data,
-                        isCached: true,
-                        updatedAt: cached.updatedAt,
-                        warning: `APX API Error: ${result.StatusMessage || 'Unknown error'}. Displaying saved DB stock data.`
-                    });
-                }
-                return res.status(400).json({
-                    success: false,
-                    message: `External API Error: ${result.StatusMessage || 'Unknown error'}`
-                });
-            }
-
-            rawItems = result.Data || [];
+        if (result.StatusCode !== 0) {
+            const handled = await serveFromCache(`APX API Error: ${result.StatusMessage || 'Unknown error'}. Displaying saved DB stock data.`);
+            if (handled) return;
+            return res.status(400).json({
+                success: false,
+                message: `External API Error: ${result.StatusMessage || 'Unknown error'}`
+            });
         }
 
+        const rawItems = result.Data || [];
 
         // 4. Filter stock data strictly to devices belonging to this model group
         let filteredItems = rawItems;
@@ -455,46 +507,55 @@ const getModelGroupStockInfoController = async (req, res) => {
             });
         }
 
-        // Calculate metrics
-        const validItems = filteredItems.filter(i => Number(i.SALEABLE_STOCK || 0) >= 1);
-        const uniqueBranches = new Set(validItems.map(i => (i.BRANCH_NAME || i.BRANCH_CODE || "").trim()));
-        const totalStockSum = validItems.reduce((acc, i) => acc + Number(i.SALEABLE_STOCK || 0), 0);
+        // Calculate metrics for the full dataset to save in database cache
+        const allValidItems = filteredItems.filter(i => Number(i.SALEABLE_STOCK || 0) >= 1);
+        const allUniqueBranches = new Set(allValidItems.map(i => (i.BRANCH_NAME || i.BRANCH_CODE || "").trim()));
+        const allTotalStockSum = allValidItems.reduce((acc, i) => acc + Number(i.SALEABLE_STOCK || 0), 0);
 
-        // 5. Save to database cache
+        // 5. Save the complete stock data to database cache
         try {
-            await saveStockCache(modelGroup, filteredItems, uniqueBranches.size, totalStockSum);
+            await saveStockCache(modelGroup, filteredItems, allUniqueBranches.size, allTotalStockSum);
         } catch (e) {
             console.error("Failed to save stock cache to database:", e.message);
         }
 
+        // 6. Filter final response items to user's permitted branches in memory
+        let userFilteredItems = filteredItems;
+        if (userBranchCodes && userBranchCodes.length > 0) {
+            const branchSet = new Set(userBranchCodes.map(c => String(c).trim().toLowerCase()));
+            userFilteredItems = filteredItems.filter(item =>
+                item.BRANCH_CODE && branchSet.has(String(item.BRANCH_CODE).trim().toLowerCase())
+            );
+        }
+
+        // Calculate metrics for the user's filtered dataset
+        const userValidItems = userFilteredItems.filter(i => Number(i.SALEABLE_STOCK || 0) >= 1);
+        const userUniqueBranches = new Set(userValidItems.map(i => (i.BRANCH_NAME || i.BRANCH_CODE || "").trim()));
+        const userTotalStockSum = userValidItems.reduce((acc, i) => acc + Number(i.SALEABLE_STOCK || 0), 0);
+
         return res.status(200).json({
             success: true,
-            data: filteredItems,
+            data: userFilteredItems,
             isCached: false,
             updatedAt: new Date(),
-            totalLocations: uniqueBranches.size,
-            totalStock: totalStockSum
+            totalLocations: userUniqueBranches.size,
+            totalStock: userTotalStockSum
         });
     } catch (error) {
         console.error('Error in getModelGroupStockInfoController:', error);
         try {
             const { modelGroup } = req.query;
             if (modelGroup) {
-                const cached = await getStockCacheByModelGroup(modelGroup);
-                if (cached) {
-                    return res.status(200).json({
-                        success: true,
-                        data: cached.data,
-                        isCached: true,
-                        updatedAt: cached.updatedAt,
-                        warning: `Connection issue: ${error.message}. Displaying saved DB stock data.`
-                    });
-                }
+                const handled = await serveFromCache(`Connection issue: ${error.message}. Displaying saved DB stock data.`);
+                if (handled) return;
             }
         } catch (e) {
             // Ignore fallback error
         }
-        return res.status(500).json({ success: false, message: error.message || 'Internal server error' });
+        return res.status(500).json({
+            success: false,
+            message: error.message || 'Internal server error occurred fetching stock'
+        });
     }
 };
 

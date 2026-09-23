@@ -18,11 +18,36 @@ const filterByIcatSettings = async (records) => {
     }
 };
 
+const roundRowDecimals = (row) => {
+    if (!row || typeof row !== 'object') return row;
+    const nonNumericKeys = new Set([
+        'id', 'product_code', 'brand', 'icat_name', 'model_group_name', 'model_name',
+        'added_by', 'device_id', 'timestamp', 'updated_at', 'active_offers',
+        'state_id', 'state_ids', 'product_name', 'imm_product_name'
+    ]);
+    for (const [key, val] of Object.entries(row)) {
+        if (nonNumericKeys.has(key)) continue;
+        if (val !== undefined && val !== null && val !== '' && val !== '-' && val !== '—') {
+            const num = Number(val);
+            if (!isNaN(num) && typeof val !== 'boolean') {
+                row[key] = Math.round(num * 100) / 100;
+            }
+        }
+    }
+    return row;
+};
+
 const getPriceListData = async (variationId) => {
     const tableName = `price_list_format_${variationId}`;
-    const query = `SELECT * FROM \`${tableName}\` ORDER BY brand ASC, model_name ASC`;
+    const query = `
+        SELECT p.*, COALESCE(imm.product_name, p.icat_name) AS icat_name
+        FROM \`${tableName}\` p
+        LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
+        WHERE imm.item_status IS NULL OR LOWER(imm.item_status) != 'inactive'
+        ORDER BY p.brand ASC, p.model_name ASC
+    `;
     const [results] = await db.execute(query);
-    return filterByIcatSettings(results);
+    return filterByIcatSettings(results.map(roundRowDecimals));
 };
 
 const sanitize = (name) => {
@@ -164,17 +189,22 @@ const upsertPriceListData = async (variationId, columnsList = [], records = [], 
 const getPriceListHistoryData = async (variationId, productCode = null) => {
     const historyTableName = `price_list_format_history_${variationId}`;
     try {
-        let query = `SELECT * FROM \`${historyTableName}\``;
+        let query = `
+            SELECT p.*, COALESCE(imm.product_name, p.icat_name) AS icat_name
+            FROM \`${historyTableName}\` p
+            LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
+            WHERE imm.item_status IS NULL OR LOWER(imm.item_status) != 'inactive'
+        `;
         const params = [];
 
         if (productCode) {
-            query += ` WHERE product_code = ?`;
+            query += ` AND p.product_code = ?`;
             params.push(productCode);
         }
 
-        query += ` ORDER BY timestamp DESC, id DESC`;
+        query += ` ORDER BY p.timestamp DESC, p.id DESC`;
         const [results] = await db.execute(query, params);
-        return results;
+        return results.map(roundRowDecimals);
     } catch (e) {
         return [];
     }
@@ -215,19 +245,21 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
             if (trimmedDate.includes(':')) {
                 const formattedTs = trimmedDate.replace('T', ' ');
                 query = `
-                    SELECT p.*, imm.product_name AS imm_product_name
+                    SELECT p.*, COALESCE(imm.product_name, p.icat_name) AS icat_name, imm.product_name AS imm_product_name
                     FROM \`${historyTableName}\` p
                     LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
                     WHERE DATE_FORMAT(p.timestamp, '%Y-%m-%d %H:%i:%s') = ?
+                      AND (imm.item_status IS NULL OR LOWER(imm.item_status) != 'inactive')
                     ORDER BY p.timestamp DESC, p.brand ASC, imm.product_name ASC, p.model_group_name ASC
                 `;
                 queryParams = [formattedTs];
             } else {
                 query = `
-                    SELECT p.*, imm.product_name AS imm_product_name
+                    SELECT p.*, COALESCE(imm.product_name, p.icat_name) AS icat_name, imm.product_name AS imm_product_name
                     FROM \`${historyTableName}\` p
                     LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
                     WHERE DATE_FORMAT(p.timestamp, '%Y-%m-%d') = ?
+                      AND (imm.item_status IS NULL OR LOWER(imm.item_status) != 'inactive')
                     ORDER BY p.timestamp DESC, p.brand ASC, imm.product_name ASC, p.model_group_name ASC
                 `;
                 queryParams = [trimmedDate];
@@ -242,10 +274,11 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
                     ? trimmedDate.replace('T', ' ') 
                     : `${trimmedDate} 23:59:59`;
                 const fallbackQuery = `
-                    SELECT p.*, imm.product_name AS imm_product_name
+                    SELECT p.*, COALESCE(imm.product_name, p.icat_name) AS icat_name, imm.product_name AS imm_product_name
                     FROM \`${historyTableName}\` p
                     LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
                     WHERE p.timestamp <= ?
+                      AND (imm.item_status IS NULL OR LOWER(imm.item_status) != 'inactive')
                     ORDER BY p.timestamp DESC, p.brand ASC, imm.product_name ASC, p.model_group_name ASC
                 `;
                 const [fallbackResults] = await db.execute(fallbackQuery, [cutoffTimestamp]);
@@ -261,9 +294,10 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
             const tableName = `price_list_format_${variationId}`;
             try {
                 const query = `
-                    SELECT p.*, imm.product_name AS imm_product_name
+                    SELECT p.*, COALESCE(imm.product_name, p.icat_name) AS icat_name, imm.product_name AS imm_product_name
                     FROM \`${tableName}\` p
                     LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
+                    WHERE imm.item_status IS NULL OR LOWER(imm.item_status) != 'inactive'
                     ORDER BY p.brand ASC, imm.product_name ASC, p.model_group_name ASC
                 `;
                 const [results] = await db.execute(query);
@@ -276,9 +310,10 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
         const tableName = `price_list_format_${variationId}`;
         try {
             const query = `
-                SELECT p.*, imm.product_name AS imm_product_name
+                SELECT p.*, COALESCE(imm.product_name, p.icat_name) AS icat_name, imm.product_name AS imm_product_name
                 FROM \`${tableName}\` p
                 LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
+                WHERE imm.item_status IS NULL OR LOWER(imm.item_status) != 'inactive'
                 ORDER BY p.brand ASC, imm.product_name ASC, p.model_group_name ASC
             `;
             const [results] = await db.execute(query);
@@ -318,18 +353,11 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
                 o.id,
                 o.brand_name,
                 o.offer_type,
-                o.from_date,
-                o.to_date,
-                omg.model_group_name,
-                ot.transaction_type,
-                ot.value_type,
-                ot.offer_type_value,
-                ot.upto_value,
-                ot.offer_text,
-                ot.relative_offer
+                DATE_FORMAT(o.from_date, '%Y-%m-%d') AS from_date,
+                DATE_FORMAT(o.to_date, '%Y-%m-%d') AS to_date,
+                omg.model_group_name
             FROM offers o
             JOIN offer_model_groups omg ON o.id = omg.offer_id
-            LEFT JOIN offer_transactions ot ON o.id = ot.offer_id
         `;
         const offerParams = [];
         if (targetDate && typeof targetDate === 'string' && targetDate.trim() !== '') {
@@ -342,40 +370,65 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
 
         const [offerRows] = await db.execute(activeOffersQuery, offerParams);
 
-        const offerMap = new Map();
-        const groupOfferMap = new Map();
+        if (offerRows.length > 0) {
+            const offerMap = new Map();
+            const groupOfferMap = new Map();
 
-        for (const r of offerRows) {
-            if (!offerMap.has(r.id)) {
-                offerMap.set(r.id, {
-                    id: r.id,
-                    brand_name: r.brand_name,
-                    offer_type: r.offer_type,
-                    from_date: r.from_date,
-                    to_date: r.to_date,
-                    transactions: []
-                });
-            }
-            const offerObj = offerMap.get(r.id);
-            if (r.transaction_type) {
-                offerObj.transactions.push({
-                    transaction_type: r.transaction_type,
-                    value_type: r.value_type,
-                    offer_type_value: r.offer_type_value,
-                    upto_value: r.upto_value,
-                    offer_text: r.offer_text,
-                    relative_offer: r.relative_offer
-                });
+            for (const r of offerRows) {
+                if (!offerMap.has(r.id)) {
+                    offerMap.set(r.id, {
+                        id: r.id,
+                        brand_name: r.brand_name,
+                        offer_type: r.offer_type,
+                        from_date: r.from_date,
+                        to_date: r.to_date,
+                        transactions: []
+                    });
+                }
+                if (!groupOfferMap.has(r.model_group_name)) {
+                    groupOfferMap.set(r.model_group_name, new Set());
+                }
+                groupOfferMap.get(r.model_group_name).add(r.id);
             }
 
-            if (!groupOfferMap.has(r.model_group_name)) {
-                groupOfferMap.set(r.model_group_name, new Set());
-            }
-            groupOfferMap.get(r.model_group_name).add(r.id);
-        }
+            // Fetch transactions for unique offers in a single efficient query (no Cartesian product duplication)
+            const uniqueOfferIds = Array.from(offerMap.keys());
+            if (uniqueOfferIds.length > 0) {
+                const placeholders = uniqueOfferIds.map(() => '?').join(',');
+                const [txRows] = await db.execute(`
+                    SELECT 
+                        id,
+                        offer_id,
+                        transaction_type,
+                        value_type,
+                        offer_type_value,
+                        upto_value,
+                        offer_text,
+                        relative_offer
+                    FROM offer_transactions
+                    WHERE offer_id IN (${placeholders})
+                    ORDER BY id ASC
+                `, uniqueOfferIds);
 
-        for (const [groupName, offerIdSet] of groupOfferMap.entries()) {
-            offersByGroup[groupName] = Array.from(offerIdSet).map(id => offerMap.get(id));
+                for (const tx of txRows) {
+                    const offerObj = offerMap.get(tx.offer_id);
+                    if (offerObj) {
+                        offerObj.transactions.push({
+                            id: tx.id,
+                            transaction_type: tx.transaction_type,
+                            value_type: tx.value_type,
+                            offer_type_value: tx.offer_type_value,
+                            upto_value: tx.upto_value,
+                            offer_text: tx.offer_text,
+                            relative_offer: tx.relative_offer
+                        });
+                    }
+                }
+            }
+
+            for (const [groupName, offerIdSet] of groupOfferMap.entries()) {
+                offersByGroup[groupName] = Array.from(offerIdSet).map(id => offerMap.get(id));
+            }
         }
     } catch (e) {
         console.warn("Failed to fetch active offers for price list report:", e.message);
@@ -387,7 +440,7 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
         active_offers: offersByGroup[rec.model_group_name] || []
     }));
 
-    return filterByIcatSettings(reportData);
+    return filterByIcatSettings(reportData.map(roundRowDecimals));
 };
 
 module.exports = {

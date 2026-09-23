@@ -14,6 +14,8 @@ import BankMaster from "./pages/admin/BankMaster";
 import FinanceMachineMaster from "./pages/admin/FinanceMachineMaster";
 import StateMaster from "./pages/admin/StateMaster";
 import LandingTypeMaster from "./pages/admin/LandingTypeMaster";
+import TicketTypeMaster from "./pages/admin/TicketTypeMaster";
+import SubTicketTypeMaster from "./pages/admin/SubTicketTypeMaster";
 import SupportMaster from "./pages/admin/SupportMaster";
 import ProductTypeMaster from "./pages/admin/ProductTypeMaster";
 import ItemModelMaster from "./pages/admin/ItemModelMaster";
@@ -216,6 +218,20 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/landing-types"
                     element={<LandingTypeMaster />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredMaster="ticket_type_master" requiredAction="read" />}>
+                <Route
+                    path="/admin/ticket-types"
+                    element={<TicketTypeMaster />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredMaster="sub_ticket_type_master" requiredAction="read" />}>
+                <Route
+                    path="/admin/sub-ticket-types"
+                    element={<SubTicketTypeMaster />}
                 />
             </Route>
 

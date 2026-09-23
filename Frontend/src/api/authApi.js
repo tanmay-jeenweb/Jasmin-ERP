@@ -46,8 +46,8 @@ apiClient.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
-        // Check if error is 401 or 403 and request has not been retried yet
-        if ((error.response?.status === 401 || error.response?.status === 403) && !originalRequest._retry) {
+        // Check if error is 401 and request has not been retried yet
+        if (error.response?.status === 401 && !originalRequest._retry) {
             // Avoid infinite loop for auth endpoints
             const isAuthRoute = originalRequest.url.includes("/auth/login") || 
                                 originalRequest.url.includes("/auth/refresh") || 
@@ -57,7 +57,7 @@ apiClient.interceptors.response.use(
                 return Promise.reject(error);
             }
 
-            // Since refresh token logic is removed from the web app, we instantly log out the user on session expiration (401/403)
+            // Since refresh token logic is removed from the web app, we instantly log out the user on session expiration (401)
             localStorage.removeItem("token");
             localStorage.removeItem("user");
             sessionStorage.removeItem("loginTime");

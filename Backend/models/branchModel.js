@@ -186,9 +186,9 @@ const getBranchById = async (id) => {
             WHERE ut.user_role = 'ABM' OR ut.type_name = 'ABM'
         )
         LEFT JOIN users abm_u ON abm_m.user_id = abm_u.id
-        WHERE bm.id = ?
+        WHERE bm.id = ? OR bm.code = ?
     `;
-    const [rows] = await db.execute(query, [id]);
+    const [rows] = await db.execute(query, [id, id]);
     return rows[0] || null;
 };
 
