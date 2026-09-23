@@ -94,35 +94,32 @@ export default function Login() {
                 </div>
             </div>
 
-            {/* Right Column: Login Form (50% width on md and above) - Added overflow-y-auto */}
-            <div className="w-full md:w-1/2 h-full flex flex-col justify-between p-5 sm:p-8 relative bg-transparent overflow-y-auto z-10">
+            {/* Right Column: Login Form (50% width on md and above) - overflow-hidden to prevent scroll */}
+            <div className="w-full md:w-1/2 h-full flex flex-col justify-between px-4 sm:px-8 py-3 sm:py-5 relative bg-transparent overflow-hidden z-10">
 
-                {/* Top spacer */}
-                <div className="h-2 sm:h-4"></div>
-
-                {/* Form Card Container (centered) */}
-                <div className="w-full max-w-md mx-auto z-10 flex flex-col justify-center flex-grow py-3">
+                {/* Form Card Container (vertically centered in available space) */}
+                <div className="w-full max-w-md mx-auto z-10 flex flex-col justify-center my-auto py-1">
                     {/* Logo & Heading */}
-                    <div className="flex flex-col items-center mb-4">
+                    <div className="flex flex-col items-center mb-3">
                         <img
                             src={logo}
                             alt="Jasmin Logo"
-                            className="h-16 sm:h-20 w-auto mb-2 drop-shadow-[0_4px_16px_rgba(168,85,247,0.25)] hover:scale-105 transition-transform duration-300"
+                            className="h-13 sm:h-16 w-auto mb-1.5 drop-shadow-[0_4px_16px_rgba(168,85,247,0.25)] hover:scale-105 transition-transform duration-300"
                         />
-                        <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight text-center">
+                        <h2 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight text-center">
                             Welcome Back
                         </h2>
-                        <p className="text-slate-400 text-xs mt-1 text-center">
+                        <p className="text-slate-400 text-xs mt-0.5 text-center">
                             Sign in to your ERP dashboard
                         </p>
                     </div>
 
                     {/* Premium Dark Glassmorphic Form Card */}
-                    <div className="bg-slate-900/40 backdrop-blur-2xl border border-slate-800/80 rounded-3xl p-5 sm:p-6 shadow-[0_20px_50px_rgba(0,0,0,0.35)] hover:shadow-[0_25px_60px_rgba(0,0,0,0.55)] hover:border-purple-500/20 transition-all duration-300">
-                        <form onSubmit={handleLogin} className="space-y-4">
+                    <div className="bg-slate-900/40 backdrop-blur-2xl border border-slate-800/80 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-[0_20px_50px_rgba(0,0,0,0.35)] hover:shadow-[0_25px_60px_rgba(0,0,0,0.55)] hover:border-purple-500/20 transition-all duration-300">
+                        <form onSubmit={handleLogin} className="space-y-3.5">
                             
                             {/* Username Field */}
-                            <div className="space-y-1.5">
+                            <div className="space-y-1">
                                 <label htmlFor="username" className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                                     Username
                                 </label>
@@ -140,13 +137,13 @@ export default function Login() {
                                         placeholder="Enter your username"
                                         value={form.username}
                                         onChange={(e) => setForm({ ...form, username: e.target.value })}
-                                        className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-800 bg-slate-950/60 text-white text-xs sm:text-sm outline-none transition-all duration-200 placeholder:text-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 focus:bg-slate-900/60"
+                                        className="w-full pl-11 pr-4 py-2 rounded-xl border border-slate-800 bg-slate-950/60 text-white text-xs sm:text-sm outline-none transition-all duration-200 placeholder:text-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 focus:bg-slate-900/60"
                                     />
                                 </div>
                             </div>
 
                             {/* Password Field */}
-                            <div className="space-y-1.5">
+                            <div className="space-y-1">
                                 <label htmlFor="password" className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                                     Password
                                 </label>
@@ -164,7 +161,7 @@ export default function Login() {
                                         placeholder="Enter your password"
                                         value={form.password}
                                         onChange={(e) => setForm({ ...form, password: e.target.value })}
-                                        className="w-full pl-11 pr-12 py-2.5 rounded-xl border border-slate-800 bg-slate-950/60 text-white text-xs sm:text-sm outline-none transition-all duration-200 placeholder:text-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 focus:bg-slate-900/60"
+                                        className="w-full pl-11 pr-12 py-2 rounded-xl border border-slate-800 bg-slate-950/60 text-white text-xs sm:text-sm outline-none transition-all duration-200 placeholder:text-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 focus:bg-slate-900/60"
                                     />
                                     <button
                                         type="button"
@@ -187,10 +184,10 @@ export default function Login() {
                             </div>
 
                             {/* Submit Button */}
-                             <button
+                            <button
                                 type="submit"
                                 disabled={loading}
-                                className="w-full py-2.5 rounded-xl text-white text-xs sm:text-sm font-semibold tracking-wider transition-all duration-300 bg-purple-600 hover:bg-purple-500 shadow-[0_4px_15px_rgba(122,5,189,0.3)] hover:shadow-[0_4px_25px_rgba(122,5,189,0.5)] hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:opacity-75 disabled:cursor-not-allowed flex justify-center items-center gap-2 cursor-pointer"
+                                className="w-full py-2.5 rounded-xl text-white text-xs sm:text-sm font-semibold tracking-wider transition-all duration-300 bg-purple-600 hover:bg-purple-500 shadow-[0_4px_15px_rgba(122,5,189,0.3)] hover:shadow-[0_4px_25px_rgba(122,5,189,0.5)] focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:opacity-75 disabled:cursor-not-allowed flex justify-center items-center gap-2 cursor-pointer"
                             >
                                 {loading ? (
                                     <>
@@ -210,24 +207,59 @@ export default function Login() {
                                 )}
                             </button>
 
-                            {/* Mobile App Download Link */}
-                            <div className="pt-2 text-center">
+                            {/* Google Play Store Mobile App Download Badge */}
+                            <div className="pt-2 flex justify-center">
                                 <a
                                     href="https://interlink.jasminmobile.com/apk/app-release.apk"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     download
-                                    className="inline-flex items-center justify-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 font-medium transition-colors duration-200 group"
+                                    title="Download Jasmin Mobile Android App (APK)"
+                                    className="group inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl bg-slate-950/70 hover:bg-slate-900/90 border border-slate-700/60 hover:border-purple-500/50 shadow-md hover:shadow-purple-500/15 transition-all duration-200 cursor-pointer"
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
+                                    {/* Google Play Store SVG Icon */}
+                                    <svg viewBox="0 0 512 512" className="w-5 h-5 flex-shrink-0 drop-shadow-sm" aria-hidden="true">
+                                        <defs>
+                                            <linearGradient id="gplay-blue" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" stopColor="#00E5FF" />
+                                                <stop offset="100%" stopColor="#0077FF" />
+                                            </linearGradient>
+                                            <linearGradient id="gplay-green" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" stopColor="#00F076" />
+                                                <stop offset="100%" stopColor="#00A843" />
+                                            </linearGradient>
+                                            <linearGradient id="gplay-yellow" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" stopColor="#FFE000" />
+                                                <stop offset="100%" stopColor="#FF9900" />
+                                            </linearGradient>
+                                            <linearGradient id="gplay-red" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" stopColor="#FF3A44" />
+                                                <stop offset="100%" stopColor="#C9182B" />
+                                            </linearGradient>
+                                        </defs>
+                                        <path d="M32.5 7.6c-4.3 4.5-6.8 11.6-6.8 20.6v455.6c0 9 2.5 16.1 6.8 20.6l2.4 2.2 255.4-255.4v-6L34.9 5.4l-2.4 2.2z" fill="url(#gplay-blue)" />
+                                        <path d="M376.7 174.6L74.8 2.3C57.4-7.6 41.9-6.4 32.5 3.6L290.3 261l86.4-86.4z" fill="url(#gplay-green)" />
+                                        <path d="M376.7 337.4L290.3 251 32.5 508.8c9.4 10 24.9 11.2 42.3 1.3l301.9-172.7z" fill="url(#gplay-red)" />
+                                        <path d="M374.8 338.4l-84.5-84.5v-6l84.5-84.5 1.9 1.1 100.2 56.9c28.6 16.2 28.6 42.8 0 59.1l-100.2 56.9-1.9 1z" fill="url(#gplay-yellow)" />
                                     </svg>
-                                    <span className="hover:underline underline-offset-2">
-                                        Do you want to try our mobile app?
+
+                                    {/* Text Content */}
+                                    <div className="flex flex-col text-left leading-tight">
+                                        <span className="text-[8px] uppercase tracking-wider text-slate-400 font-semibold group-hover:text-slate-300">
+                                            GET IT ON
+                                        </span>
+                                        <span className="text-xs font-bold text-white tracking-tight group-hover:text-purple-200 transition-colors">
+                                            Google Play
+                                        </span>
+                                    </div>
+
+                                    {/* Download APK indicator */}
+                                    <span className="ml-1 pl-2 border-l border-slate-800 text-[10px] text-purple-400 font-medium flex items-center gap-1 group-hover:text-purple-300">
+                                        <span>APK</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-3 h-3">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                        </svg>
                                     </span>
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-purple-400 group-hover:translate-y-0.5 transition-transform">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                                    </svg>
                                 </a>
                             </div>
                         </form>
@@ -235,12 +267,12 @@ export default function Login() {
                 </div>
 
                 {/* Footer */}
-                <div className="z-10 mt-auto flex flex-col sm:flex-row justify-between items-center gap-2 border-t border-slate-900/60 pt-3 text-[10px] text-slate-500 w-full max-w-md mx-auto">
+                <div className="z-10 mt-auto flex flex-col sm:flex-row justify-between items-center gap-2 border-t border-slate-900/60 pt-2 pb-1 text-[10px] text-slate-500 w-full max-w-md mx-auto">
                     <div className="flex items-center gap-1.5">
                         <span>Powered by</span>
-                        <img src={jwlogo} alt="Jeenweb" className="h-5 w-auto rounded-sm opacity-60 hover:opacity-90 transition-opacity" />
+                        <img src={jwlogo} alt="Jeenweb" className="h-4.5 w-auto rounded-sm opacity-60 hover:opacity-90 transition-opacity" />
                     </div>
-                    <div className="text-center sm:text-right">
+                    <div className="text-center sm:text-right text-[10px]">
                         <div>Helpline: <a href="tel:9824466017" className="font-semibold text-slate-400 hover:text-slate-300 transition-colors">9824466017</a></div>
                         <div>Email: <a href="mailto:info@jeenweb.com" className="font-semibold text-slate-400 hover:text-slate-300 transition-colors">info@jeenweb.com</a></div>
                     </div>
