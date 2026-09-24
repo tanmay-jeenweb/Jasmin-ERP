@@ -69,6 +69,8 @@ const ticketRoutes = require("./routes/ticketRoutes.js");
 const externalRoutes = require("./routes/externalRoutes.js");
 const { createStockCacheTable } = require("./models/stockCacheModel.js");
 const { createRefreshTokensTable } = require("./models/refreshTokenModel.js");
+const { createSpecialTvaTable } = require("./models/specialTvaModel.js");
+const specialTvaRoutes = require("./routes/specialTvaRoutes.js");
 
 
 
@@ -164,6 +166,7 @@ app.use("/v1/api/landingtypes", landingTypeRoutes);
 app.use("/v1/api/ticket-types", ticketTypeRoutes);
 app.use("/v1/api/sub-ticket-types", subTicketTypeRoutes);
 app.use("/v1/api/tickets", ticketRoutes);
+app.use("/v1/api/special-tva", specialTvaRoutes);
 app.use("/v1/api/external", externalRoutes);
 
 
@@ -214,6 +217,7 @@ const startServer = async () => {
         await createTicketTypeTable();
         await createSubTicketTypeTable();
         await createTicketTables();
+        await createSpecialTvaTable();
 
 
 

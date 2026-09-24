@@ -22,6 +22,7 @@ const MASTERS = [
     { key: 'price_list_view', label: 'Price List View' },
     { key: 'landing_type_master', label: 'Landing Type Master' },
     { key: 'target_vs_achievement', label: 'Target vs Achievement' },
+    { key: 'brandwise_target_vs_achievement', label: 'Brandwise Target vs Achievement' },
     { key: 'abm_wise_tva', label: 'ABM Wise TvA Report' },
     { key: 'stock_vs_cash_deposit', label: 'Stock vs Cash Deposit' },
     { key: 'offer_master', label: 'Offers Master' },
@@ -33,6 +34,8 @@ const MASTERS = [
     { key: 'ticket_type_master', label: 'Ticket Type Master' },
     { key: 'sub_ticket_type_master', label: 'Sub Ticket Type Master' },
     { key: 'ticket_management', label: 'Ticket Management' },
+    { key: 'special_tva_master', label: 'Special TVA Master' },
+    { key: 'special_tva_report', label: 'Special TVA Report' },
 ];
 
 // ─── Table creation ──────────────────────────────────────────────────────────
@@ -142,11 +145,33 @@ const createUserTypePermissionsTable = async () => {
             WHERE master_name = 'target_vs_achievement'
         `);
 
+        // Seed initial brandwise_target_vs_achievement permission rows from target_vs_achievement for existing user types
+        await db.execute(`
+            INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete)
+            SELECT user_type_id, 'brandwise_target_vs_achievement', can_read, can_write, can_update, can_delete
+            FROM user_type_permissions
+            WHERE master_name = 'target_vs_achievement'
+        `);
+
         // Seed initial ticket_management permission rows for existing user types
         await db.execute(`
             INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete)
             SELECT id, 'ticket_management', 0, 0, 0, 0
             FROM user_types
+        `);
+
+        // Seed initial special_tva_master and special_tva_report permission rows from target_vs_achievement
+        await db.execute(`
+            INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete)
+            SELECT user_type_id, 'special_tva_master', can_read, can_write, can_update, can_delete
+            FROM user_type_permissions
+            WHERE master_name = 'target_vs_achievement'
+        `);
+        await db.execute(`
+            INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete)
+            SELECT user_type_id, 'special_tva_report', can_read, can_write, can_update, can_delete
+            FROM user_type_permissions
+            WHERE master_name = 'target_vs_achievement'
         `);
 
         console.log("✅ Permission keys migrated/seeded successfully.");

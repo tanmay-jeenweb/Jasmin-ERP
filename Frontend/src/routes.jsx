@@ -29,6 +29,7 @@ import Offers from "./pages/admin/Offers";
 import Home from "./pages/admin/Home";
 import OfferForm from "./pages/admin/OfferForm";
 import TargetVsAchievement from "./pages/admin/TargetVsAchievement";
+import BrandwiseTargetVsAchievement from "./pages/admin/BrandwiseTargetVsAchievement";
 import ABMWiseTvAReport from "./pages/admin/ABMWiseTvAReport";
 import StockVsCashDepositReport from "./pages/admin/StockVsCashDepositReport";
 import FinanceBrandMappingList from "./pages/admin/FinanceBrandMappingList";
@@ -45,6 +46,8 @@ import PriceListView from "./pages/admin/PriceListView";
 import IcatSettingsForm from "./pages/admin/IcatSettingsForm";
 import CreateTicket from "./pages/tickets/CreateTicket";
 import TicketList from "./pages/tickets/TicketList";
+import SpecialTvaMaster from "./pages/admin/SpecialTvaMaster";
+import SpecialTvaReport from "./pages/admin/SpecialTvaReport";
 
 
 export default function AppRoutes() {
@@ -136,6 +139,13 @@ export default function AppRoutes() {
                 />
             </Route>
 
+            <Route element={<ProtectedRoute requiredMaster="brandwise_target_vs_achievement" requiredAction="read" />}>
+                <Route
+                    path="/admin/brandwise-target-vs-achievement"
+                    element={<BrandwiseTargetVsAchievement />}
+                />
+            </Route>
+
             <Route element={<ProtectedRoute requiredMaster="abm_wise_tva" requiredAction="read" />}>
                 <Route
                     path="/admin/abm-wise-tva"
@@ -147,6 +157,20 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/stock-vs-cash-deposit"
                     element={<StockVsCashDepositReport />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredMaster="special_tva_master" requiredAction="read" />}>
+                <Route
+                    path="/admin/special-tva-master"
+                    element={<SpecialTvaMaster />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredMaster={["special_tva_report", "special_tva_master"]} requiredAction="read" />}>
+                <Route
+                    path="/admin/special-tva-report/:id"
+                    element={<SpecialTvaReport />}
                 />
             </Route>
 

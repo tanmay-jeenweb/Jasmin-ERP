@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import Navbar from "../../components/Navbar";
 import {
   getSubTicketTypes,
@@ -13,10 +14,12 @@ import toast from "react-hot-toast";
 import { usePermission } from "../../context/PermissionContext";
 
 // ─── Searchable Multi-Select User Dropdown ───────────────────────────────────
-function SearchableUserMultiSelect({ assignees, values, onChange, disabled }) {
+function SearchableUserMultiSelect({ assignees = [], values = [], onChange, disabled }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [dropdownStyle, setDropdownStyle] = useState({});
   const dropdownRef = useRef(null);
+  const popoverRef = useRef(null);
   const searchInputRef = useRef(null);
 
   // Selected values as set of strings for fast lookup
@@ -25,13 +28,50 @@ function SearchableUserMultiSelect({ assignees, values, onChange, disabled }) {
   }, [values]);
 
   const selectedUsers = useMemo(() => {
-    return assignees.filter((u) => selectedSet.has(String(u.id)));
+    return (assignees || []).filter((u) => selectedSet.has(String(u.id)));
   }, [assignees, selectedSet]);
+
+  // Calculate coordinates and determine direction (downward preferred)
+  const updateDropdownPosition = () => {
+    if (!dropdownRef.current) return;
+    const rect = dropdownRef.current.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const spaceBelow = viewportHeight - rect.bottom - 12;
+    const spaceAbove = rect.top - 12;
+
+    // Prefer opening downward if there is at least 200px or more space below than above
+    const openDownward = spaceBelow >= 200 || spaceBelow >= spaceAbove;
+
+    if (openDownward) {
+      setDropdownStyle({
+        position: "fixed",
+        top: `${rect.bottom + 6}px`,
+        left: `${rect.left}px`,
+        width: `${rect.width}px`,
+        maxHeight: `${Math.min(320, Math.max(180, spaceBelow))}px`,
+        zIndex: 99999,
+      });
+    } else {
+      setDropdownStyle({
+        position: "fixed",
+        bottom: `${viewportHeight - rect.top + 6}px`,
+        left: `${rect.left}px`,
+        width: `${rect.width}px`,
+        maxHeight: `${Math.min(320, Math.max(180, spaceAbove))}px`,
+        zIndex: 99999,
+      });
+    }
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleOutsideClick = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target) &&
+        popoverRef.current &&
+        !popoverRef.current.contains(e.target)
+      ) {
         setIsOpen(false);
       }
     };
@@ -39,24 +79,56 @@ function SearchableUserMultiSelect({ assignees, values, onChange, disabled }) {
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
-  // Focus search input when dropdown opens
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && isOpen) {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen]);
+
+  // Reposition on open, scroll, or resize
   useEffect(() => {
     if (isOpen) {
+      updateDropdownPosition();
+
+      const handleScrollOrResize = () => {
+        updateDropdownPosition();
+      };
+
+      window.addEventListener("resize", handleScrollOrResize);
+      window.addEventListener("scroll", handleScrollOrResize, true);
+
       setTimeout(() => {
         searchInputRef.current?.focus();
       }, 50);
+
+      return () => {
+        window.removeEventListener("resize", handleScrollOrResize);
+        window.removeEventListener("scroll", handleScrollOrResize, true);
+      };
     } else {
       setSearchTerm("");
     }
   }, [isOpen]);
 
+  // Re-adjust dropdown position if selected tags change the input height
+  useEffect(() => {
+    if (isOpen) {
+      updateDropdownPosition();
+    }
+  }, [values, isOpen]);
+
   const filtered = useMemo(() => {
-    if (!searchTerm.trim()) return assignees;
+    if (!searchTerm.trim()) return assignees || [];
     const term = searchTerm.toLowerCase().trim();
-    return assignees.filter((u) => {
+    return (assignees || []).filter((u) => {
       const name = (u.name || "").toLowerCase();
       const username = (u.username || "").toLowerCase();
-      const role = (u.role_name || "").toLowerCase();
+      const role = (u.role_name || u.role || "").toLowerCase();
       const email = (u.email || "").toLowerCase();
       return (
         name.includes(term) ||
@@ -106,7 +178,7 @@ function SearchableUserMultiSelect({ assignees, values, onChange, disabled }) {
                 >
                   <span>{u.name}</span>
                   <span className="text-[10px] text-indigo-500 font-normal">
-                    ({u.role_name || u.username})
+                    ({u.role_name || u.role || u.username})
                   </span>
                   <button
                     type="button"
@@ -146,118 +218,142 @@ function SearchableUserMultiSelect({ assignees, values, onChange, disabled }) {
         </div>
       </div>
 
-      {/* Dropdown Popover (Opens Upward) */}
-      {isOpen && (
-        <div className="absolute left-0 right-0 bottom-full mb-1.5 z-[1100] bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-          {/* Search Header */}
-          <div className="p-2.5 border-b border-slate-100 bg-slate-50">
-            <div className="relative flex items-center">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={2}
-                stroke="currentColor"
-                className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
-                />
-              </svg>
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search user by name, role, username..."
-                className="w-full bg-white border border-slate-200 rounded-lg pl-9 pr-7 py-2 text-sm outline-none text-slate-800 focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-              />
-              {searchTerm && (
-                <button
-                  type="button"
-                  onClick={() => setSearchTerm("")}
-                  className="absolute right-2 text-xs text-slate-400 hover:text-slate-600 w-5 h-5 flex items-center justify-center rounded-full hover:bg-slate-200"
+      {/* Dropdown Popover Portaled to body for unclipped floating */}
+      {isOpen &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            style={dropdownStyle}
+            className="bg-white rounded-xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+          >
+            {/* Search Header */}
+            <div className="p-2.5 border-b border-slate-100 bg-slate-50 shrink-0">
+              <div className="relative flex items-center">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                  className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none"
                 >
-                  ✕
-                </button>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+                  />
+                </svg>
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search user by name, role, username..."
+                  className="w-full bg-white border border-slate-200 rounded-lg pl-9 pr-7 py-2 text-sm outline-none text-slate-800 focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm("")}
+                    className="absolute right-2 text-xs text-slate-400 hover:text-slate-600 w-5 h-5 flex items-center justify-center rounded-full hover:bg-slate-200 cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Quick Actions (Select All / Clear All) */}
+              <div className="flex items-center justify-between mt-2 px-1 text-xs">
+                <span className="text-slate-500 font-medium">
+                  {selectedUsers.length} of {assignees.length} selected
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSelectAll}
+                    className="text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer"
+                  >
+                    Select All
+                  </button>
+                  <span className="text-slate-300">|</span>
+                  <button
+                    type="button"
+                    onClick={handleClearAll}
+                    className="text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
+                  >
+                    Clear All
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Users List with Checkboxes */}
+            <div className="overflow-y-auto p-1 divide-y divide-slate-50 flex-1 max-h-56">
+              {filtered.length === 0 ? (
+                <div className="py-6 text-center text-sm text-slate-400">
+                  {searchTerm ? (
+                    <span>No users found matching &ldquo;{searchTerm}&rdquo;</span>
+                  ) : (
+                    <span>No assignees available</span>
+                  )}
+                </div>
+              ) : (
+                filtered.map((user) => {
+                  const isSelected = selectedSet.has(String(user.id));
+                  return (
+                    <div
+                      key={user.id}
+                      onClick={() => toggleUser(user.id)}
+                      className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors ${
+                        isSelected
+                          ? "bg-indigo-50/90 text-indigo-700"
+                          : "text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}} // Handled by parent div onClick
+                          className="w-4 h-4 rounded text-indigo-600 accent-indigo-600 cursor-pointer pointer-events-none"
+                        />
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-slate-900">{user.name}</span>
+                          <span className="text-[12px] text-slate-500 flex items-center gap-1 mt-0.5">
+                            <span className="font-medium text-indigo-600">
+                              {user.role_name || user.role || "Staff"}
+                            </span>
+                            {user.username && (
+                              <span className="text-slate-400">• @{user.username}</span>
+                            )}
+                            {user.email && (
+                              <span className="text-slate-400">• {user.email}</span>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
 
-            {/* Quick Actions (Select All / Clear All) */}
-            <div className="flex items-center justify-between mt-2 px-1 text-xs">
-              <span className="text-slate-500 font-medium">
-                {selectedUsers.length} of {assignees.length} selected
+            {/* Bottom Done Action */}
+            <div className="px-3 py-2 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
+              <span className="text-xs text-slate-500">
+                {selectedUsers.length} selected
               </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleSelectAll}
-                  className="text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer"
-                >
-                  Select All
-                </button>
-                <span className="text-slate-300">|</span>
-                <button
-                  type="button"
-                  onClick={handleClearAll}
-                  className="text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
-                >
-                  Clear All
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-md hover:bg-indigo-700 transition-colors cursor-pointer"
+              >
+                Done
+              </button>
             </div>
-          </div>
-
-          {/* Users List with Checkboxes */}
-          <div className="max-h-52 overflow-y-auto p-1 divide-y divide-slate-50">
-            {filtered.length === 0 ? (
-              <div className="py-6 text-center text-sm text-slate-400">
-                No users found matching &ldquo;{searchTerm}&rdquo;
-              </div>
-            ) : (
-              filtered.map((user) => {
-                const isSelected = selectedSet.has(String(user.id));
-                return (
-                  <div
-                    key={user.id}
-                    onClick={() => toggleUser(user.id)}
-                    className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors ${
-                      isSelected
-                        ? "bg-indigo-50/90 text-indigo-700"
-                        : "text-slate-700 hover:bg-slate-50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => {}} // Handled by parent div onClick
-                        className="w-4 h-4 rounded text-indigo-600 accent-indigo-600 cursor-pointer pointer-events-none"
-                      />
-                      <div className="flex flex-col">
-                        <span className="font-semibold text-slate-900">{user.name}</span>
-                        <span className="text-[12px] text-slate-500 flex items-center gap-1 mt-0.5">
-                          <span className="font-medium text-indigo-600">
-                            {user.role_name || user.role}
-                          </span>
-                          {user.username && (
-                            <span className="text-slate-400">• @{user.username}</span>
-                          )}
-                          {user.email && (
-                            <span className="text-slate-400">• {user.email}</span>
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
