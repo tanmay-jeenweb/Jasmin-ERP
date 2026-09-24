@@ -29,6 +29,7 @@ import Offers from "./pages/admin/Offers";
 import Home from "./pages/admin/Home";
 import OfferForm from "./pages/admin/OfferForm";
 import TargetVsAchievement from "./pages/admin/TargetVsAchievement";
+import BrandwiseTargetVsAchievement from "./pages/admin/BrandwiseTargetVsAchievement";
 import ABMWiseTvAReport from "./pages/admin/ABMWiseTvAReport";
 import StockVsCashDepositReport from "./pages/admin/StockVsCashDepositReport";
 import FinanceBrandMappingList from "./pages/admin/FinanceBrandMappingList";
@@ -133,6 +134,13 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/target-vs-achievement"
                     element={<TargetVsAchievement />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredMaster="brandwise_target_vs_achievement" requiredAction="read" />}>
+                <Route
+                    path="/admin/brandwise-target-vs-achievement"
+                    element={<BrandwiseTargetVsAchievement />}
                 />
             </Route>
 

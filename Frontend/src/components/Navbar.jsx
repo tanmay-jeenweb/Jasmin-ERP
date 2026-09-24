@@ -377,6 +377,11 @@ export default function Navbar() {
             icon: "fa-solid fa-bullseye",
         },
         {
+            name: "Brandwise Target vs Achievement",
+            path: "/admin/brandwise-target-vs-achievement",
+            icon: "fa-solid fa-layer-group",
+        },
+        {
             name: "ABM wise TvA Report",
             path: "/admin/abm-wise-tva",
             icon: "fa-solid fa-ranking-star",
@@ -401,6 +406,9 @@ export default function Navbar() {
     const availableReports = allReports.filter(r => {
         if (r.path === "/admin/target-vs-achievement") {
             return isAdmin || hasPermission("target_vs_achievement", "read");
+        }
+        if (r.path === "/admin/brandwise-target-vs-achievement") {
+            return isAdmin || hasPermission("brandwise_target_vs_achievement", "read");
         }
         if (r.path === "/admin/abm-wise-tva") {
             return isAdmin || hasPermission("abm_wise_tva", "read");
