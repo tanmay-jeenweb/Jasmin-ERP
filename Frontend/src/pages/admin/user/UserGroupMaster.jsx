@@ -55,6 +55,8 @@ const MASTER_GROUPS = [
       { key: "stock_vs_cash_deposit", label: "Stock vs Cash Deposit", note: "Write = Import/Export Template" },
       { key: "finance_brand_report", label: "Finance Brand Report" },
       { key: "activity_report", label: "Activity Log Report" },
+      { key: "special_tva_master", label: "Special TVA Master", note: "Write = Create & Import Target" },
+      { key: "special_tva_report", label: "Special TVA Report", note: "Read & Export Reports" },
     ]
   },
   {

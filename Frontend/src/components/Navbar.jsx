@@ -4,6 +4,7 @@ import { logoutUser } from "../api/authApi";
 import { usePermission } from "../context/PermissionContext";
 import { getOffers } from "../api/offerApi";
 import { getVariations } from "../api/variationApi";
+import { getAllSpecialTvas } from "../api/specialTvaApi";
 
 const logo = "/Jasmin-Logo.png";
 
@@ -31,6 +32,7 @@ export default function Navbar() {
     const [isPriceListOpen, setIsPriceListOpen] = useState(false);
     const [isTicketsOpen, setIsTicketsOpen] = useState(false);
     const [priceFormats, setPriceFormats] = useState([]);
+    const [specialTvas, setSpecialTvas] = useState([]);
     const { hasPermission } = usePermission();
     const [runningOffers, setRunningOffers] = useState([]);
 
@@ -124,6 +126,23 @@ export default function Navbar() {
 
         if (canViewPriceList || canViewPriceReport) {
             fetchPriceFormats();
+        }
+    }, [isAdmin, hasPermission, location.pathname]);
+
+    useEffect(() => {
+        const fetchSpecialTvas = async () => {
+            try {
+                const res = await getAllSpecialTvas();
+                if (res.data?.success && Array.isArray(res.data.data)) {
+                    setSpecialTvas(res.data.data);
+                }
+            } catch (err) {
+                console.error("Failed to fetch special TVAs:", err);
+            }
+        };
+        const canViewSpecialTva = isAdmin || hasPermission("special_tva_report", "read") || hasPermission("special_tva_master", "read");
+        if (canViewSpecialTva) {
+            fetchSpecialTvas();
         }
     }, [isAdmin, hasPermission, location.pathname]);
 
@@ -266,6 +285,15 @@ export default function Navbar() {
             desc: "Manage Excel pricing formula rules"
         },
         {
+            name: "Special TVA Master",
+            path: "/admin/special-tva-master",
+            masterKey: "special_tva_master",
+            icon: "fa-solid fa-bullseye",
+            color: "bg-amber-50 text-amber-600 border border-amber-100/50",
+            activeColor: "bg-amber-100 text-amber-700",
+            desc: "Campaign periods & brand target allocation"
+        },
+        {
             name: "Support Master",
             path: "/admin/support",
             masterKey: "support_master",
@@ -345,6 +373,15 @@ export default function Navbar() {
             color: "bg-amber-50 text-amber-600 border border-amber-100/50",
             activeColor: "bg-amber-100 text-amber-700",
             desc: "Configure Price List exclusions"
+        },
+        {
+            name: "Special TVA Master",
+            path: "/admin/special-tva-master",
+            masterKey: "special_tva_master",
+            icon: "fa-solid fa-trophy",
+            color: "bg-amber-50 text-amber-600 border border-amber-100/50",
+            activeColor: "bg-amber-100 text-amber-700",
+            desc: "Configure campaign period & targets"
         }
     ];
 
@@ -980,7 +1017,7 @@ export default function Navbar() {
                             <div className="relative flex-1 min-w-0" id="reports-dropdown">
                                 <button
                                     onClick={toggleReportsMenu}
-                                    className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/abm-wise-tva") || location.pathname.startsWith("/admin/stock-vs-cash-deposit") || location.pathname.startsWith("/admin/finance-brand-mapping") || location.pathname.startsWith("/admin/finance-brand-report") || location.pathname.startsWith("/admin/price-list-report")
+                                    className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/brandwise-target-vs-achievement") || location.pathname.startsWith("/admin/abm-wise-tva") || location.pathname.startsWith("/admin/stock-vs-cash-deposit") || location.pathname.startsWith("/admin/finance-brand-mapping") || location.pathname.startsWith("/admin/finance-brand-report") || location.pathname.startsWith("/admin/price-list-report") || location.pathname.startsWith("/admin/special-tva-report")
                                         ? "bg-white/15"
                                         : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
@@ -1001,17 +1038,22 @@ export default function Navbar() {
                                 </button>
 
                                 {isReportsOpen && (() => {
+                                    const canSeeSpecialTvaReports = isAdmin || hasPermission("special_tva_report", "read") || hasPermission("special_tva_master", "read");
                                     const hasGeneralReports = availableReports.length > 0;
                                     const hasPriceListReports = canSeePriceListReports && priceFormats.length > 0;
+                                    const hasSpecialTvaReports = canSeeSpecialTvaReports && specialTvas.length > 0;
                                     let reportsColsCount = 0;
                                     if (hasGeneralReports) reportsColsCount++;
                                     if (hasPriceListReports) reportsColsCount++;
+                                    if (hasSpecialTvaReports) reportsColsCount++;
 
                                     let reportsDropdownWidthClass = "w-80";
                                     if (reportsColsCount === 2) reportsDropdownWidthClass = "w-[560px]";
+                                    if (reportsColsCount >= 3) reportsDropdownWidthClass = "w-[820px]";
 
                                     let reportsGridColsClass = "grid-cols-1 gap-3";
                                     if (reportsColsCount === 2) reportsGridColsClass = "grid-cols-2 divide-x divide-slate-100 gap-4";
+                                    if (reportsColsCount >= 3) reportsGridColsClass = "grid-cols-3 divide-x divide-slate-100 gap-4";
 
                                     return (
                                         <div className={`absolute right-0 top-full mt-1.5 ${reportsDropdownWidthClass} bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top-right animate-in fade-in slide-in-from-top-2 duration-200`}>
@@ -1084,6 +1126,46 @@ export default function Navbar() {
                                                                         </div>
                                                                         <div className="flex-1">
                                                                             <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-emerald-900 font-bold" : "text-slate-800 group-hover:text-slate-950"}`}>
+                                                                                {label}
+                                                                            </p>
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Section 3: Special TVA Reports */}
+                                                {hasSpecialTvaReports && (
+                                                    <div className={`flex flex-col gap-1.5 ${(hasGeneralReports || hasPriceListReports) ? "pl-4" : ""}`}>
+                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1 flex items-center gap-1.5">
+                                                            <i className="fa-solid fa-bullseye text-amber-500"></i>
+                                                            Special TVA Reports
+                                                        </p>
+                                                        <div className="flex flex-col gap-1">
+                                                            {specialTvas.map((st, idx) => {
+                                                                const label = `${st.title} Report`;
+                                                                const path = `/admin/special-tva-report/${st.id}`;
+                                                                const isActive = location.pathname === path;
+                                                                return (
+                                                                    <button
+                                                                        key={idx}
+                                                                        onClick={() => {
+                                                                            navigate(path);
+                                                                            setIsReportsOpen(false);
+                                                                        }}
+                                                                        className={`relative group flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border border-transparent ${isActive
+                                                                            ? "bg-amber-50/70 text-amber-700 font-semibold border-amber-100/50"
+                                                                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
+                                                                            }`}
+                                                                    >
+                                                                        <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${isActive ? "bg-amber-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"}`} />
+                                                                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${isActive ? "bg-amber-100/80 text-amber-700" : "bg-slate-100/80 text-slate-500 group-hover:scale-105"}`}>
+                                                                            <i className="fa-solid fa-chart-column text-xs"></i>
+                                                                        </div>
+                                                                        <div className="flex-1">
+                                                                            <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-amber-900 font-bold" : "text-slate-800 group-hover:text-slate-950"}`}>
                                                                                 {label}
                                                                             </p>
                                                                         </div>

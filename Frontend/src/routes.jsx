@@ -46,6 +46,8 @@ import PriceListView from "./pages/admin/PriceListView";
 import IcatSettingsForm from "./pages/admin/IcatSettingsForm";
 import CreateTicket from "./pages/tickets/CreateTicket";
 import TicketList from "./pages/tickets/TicketList";
+import SpecialTvaMaster from "./pages/admin/SpecialTvaMaster";
+import SpecialTvaReport from "./pages/admin/SpecialTvaReport";
 
 
 export default function AppRoutes() {
@@ -155,6 +157,20 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/stock-vs-cash-deposit"
                     element={<StockVsCashDepositReport />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredMaster="special_tva_master" requiredAction="read" />}>
+                <Route
+                    path="/admin/special-tva-master"
+                    element={<SpecialTvaMaster />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredMaster={["special_tva_report", "special_tva_master"]} requiredAction="read" />}>
+                <Route
+                    path="/admin/special-tva-report/:id"
+                    element={<SpecialTvaReport />}
                 />
             </Route>
 

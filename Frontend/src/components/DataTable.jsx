@@ -102,6 +102,7 @@ export default function DataTable({
   renderSubRows = null,
   expandedRowKeys = null,
   onToggleExpand = null,
+  headerGroups = null,
 }) {
   // Expansion state
   const [internalExpandedKeys, setInternalExpandedKeys] = useState(new Set());
@@ -164,21 +165,21 @@ export default function DataTable({
     loadPreference();
   }, [tableId]);
 
-  // ── Re-apply when initialColumns change (e.g. permissions change) ─────────
+  // ── Re-apply when initialColumns change (e.g. async load or permissions change) ──
   useEffect(() => {
     const currentKeys = initialColumns.map(c => c.key).join(',');
-    if (currentKeys !== prevKeys.current && prevKeys.current !== '') {
-      const ordered = savedOrderRef.current
+    if (currentKeys !== prevKeys.current) {
+      const ordered = (tableId && savedOrderRef.current)
         ? buildOrderedColumns(initialColumns, savedOrderRef.current)
         : initialColumns;
-      const hidden = savedOrderRef.current
+      const hidden = (tableId && savedOrderRef.current)
         ? buildHiddenSet(initialColumns, savedOrderRef.current)
         : new Set();
       setColumns(ordered);
       setHiddenColumns(hidden);
       prevKeys.current = currentKeys;
     }
-  }, [initialColumns]);
+  }, [initialColumns, tableId]);
 
   // ── Click-outside to close column chooser ────────────────────────────────
   useEffect(() => {
@@ -482,6 +483,25 @@ export default function DataTable({
         >
           <table className="min-w-full border-separate border-spacing-0">
             <thead>
+              {headerGroups && headerGroups.length > 0 && (
+                <tr>
+                  {headerGroups.map((group, idx) => {
+                    const span = group.columns
+                      ? group.columns.filter(k => visibleColumns.some(vc => vc.key === k)).length
+                      : group.colSpan;
+                    if (span <= 0) return null;
+                    return (
+                      <th
+                        key={idx}
+                        colSpan={span}
+                        className={`px-3 py-2 text-center text-xs font-bold uppercase tracking-wider text-white border-b border-r border-slate-700/60 ${group.className || 'bg-slate-900'}`}
+                      >
+                        {group.title}
+                      </th>
+                    );
+                  })}
+                </tr>
+              )}
               <tr>
                 {visibleColumns.map((column) => {
                   const originalColumn = initialColumns.find(c => c.key === column.key) || column;
