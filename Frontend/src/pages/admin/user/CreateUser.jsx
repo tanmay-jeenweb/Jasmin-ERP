@@ -12,6 +12,13 @@ import toast from "react-hot-toast";
 
 export default function CreateUser() {
     const navigate = useNavigate();
+    const currentUser = useMemo(() => {
+        try {
+            return JSON.parse(localStorage.getItem("user") || "{}");
+        } catch {
+            return {};
+        }
+    }, []);
     const [userTypes, setUserTypes] = useState([]);
     
     // Master lists options
@@ -803,18 +810,20 @@ export default function CreateUser() {
                         </div>
 
                         <div className="flex flex-col gap-3 pt-2">
-                            <div className="flex items-center gap-3">
-                                <input
-                                    id="deviceVerification"
-                                    type="checkbox"
-                                    checked={newUserForm.deviceVerificationRequired}
-                                    onChange={(e) => setNewUserForm({ ...newUserForm, deviceVerificationRequired: e.target.checked })}
-                                    className="h-4 w-4 text-[#6804a1] border-slate-300 rounded focus:ring-[#6804a1]"
-                                />
-                                <label htmlFor="deviceVerification" className="text-sm font-medium text-slate-700">
-                                    Require device verification for this user
-                                </label>
-                            </div>
+                            {currentUser.role === "super admin" && (
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        id="deviceVerification"
+                                        type="checkbox"
+                                        checked={newUserForm.deviceVerificationRequired}
+                                        onChange={(e) => setNewUserForm({ ...newUserForm, deviceVerificationRequired: e.target.checked })}
+                                        className="h-4 w-4 text-[#6804a1] border-slate-300 rounded focus:ring-[#6804a1]"
+                                    />
+                                    <label htmlFor="deviceVerification" className="text-sm font-medium text-slate-700">
+                                        Require device verification for this user
+                                    </label>
+                                </div>
+                            )}
                             <div className="flex items-center gap-3">
                                 <input
                                     id="webAccess"
