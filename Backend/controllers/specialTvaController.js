@@ -98,16 +98,17 @@ const getUserRestrictionsAndProfile = async (user) => {
             };
         }
 
+        // If no branches are mapped to this person, do NOT show all branches in that state; keep it blank
         return {
-            states: userStates,
-            branches: null,
+            states: null,
+            branches: [],
             userProfile
         };
     }
 
     return {
         states: null,
-        branches: null,
+        branches: [],
         userProfile
     };
 };
