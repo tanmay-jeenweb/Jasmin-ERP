@@ -25,7 +25,7 @@ const addMobileBrandController = async (req, res) => {
         }
 
         const parsedSpecialTva = Boolean(showInSpecialTva);
-        const parsedShowIndividually = Boolean(showIndividually);
+        const parsedShowIndividually = showIndividually !== undefined ? Boolean(showIndividually) : parsedSpecialTva;
 
         const result = await createMobileBrand(
             mobileBrand.trim(),
@@ -120,7 +120,7 @@ const updateMobileBrandController = async (req, res) => {
         }
 
         const parsedSpecialTva = Boolean(showInSpecialTva);
-        const parsedShowIndividually = Boolean(showIndividually);
+        const parsedShowIndividually = showIndividually !== undefined ? Boolean(showIndividually) : parsedSpecialTva;
 
         await updateMobileBrand(
             id,

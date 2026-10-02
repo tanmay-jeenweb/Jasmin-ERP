@@ -40,17 +40,29 @@ const getUserRestrictions = async (user) => {
         }
 
         const [mappingRows] = await db.execute(
-            `SELECT bm.name AS branch_name
+            `SELECT bm.name AS branch_name, bm.code AS branch_code
              FROM user_branch_mappings ubm
              JOIN branch_master bm ON ubm.branch_id = bm.id
              WHERE ubm.user_id = ?`,
             [user.id]
         );
-        const userBranches = mappingRows.map(r => r.branch_name);
+        const userBranches = [];
+        for (const r of mappingRows) {
+            if (r.branch_name) userBranches.push(r.branch_name);
+            if (r.branch_code) userBranches.push(r.branch_code);
+        }
+
+        // If specific branch mappings exist, they define the exact scope for the user
+        if (userBranches.length > 0) {
+            return {
+                states: null,
+                branches: userBranches
+            };
+        }
 
         return {
             states: userStates,
-            branches: userBranches.length > 0 ? userBranches : null
+            branches: null
         };
     }
     return { states: null, branches: null };

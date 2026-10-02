@@ -336,31 +336,32 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
     const endDate = formatDate(master.end_date);
 
     // 1. Fetch configured brands for Special TVA from mobile_brand_master
-    const [brandRows] = await db.execute(
+    const [allBrandRows] = await db.execute(
         `SELECT id, mobile_brand, share_percentage, show_in_special_tva, show_individually 
-         FROM mobile_brand_master 
-         WHERE show_in_special_tva = 1`
+         FROM mobile_brand_master`
     );
 
-    // Separate individual brands vs grouped brands
+    // Brands marked show_in_special_tva = 1 are shown individually.
+    // All other brands (show_in_special_tva = 0 or unselected) are grouped into Others.
     const individualBrands = [];
     const otherBrandsList = [];
 
-    for (const b of brandRows) {
+    for (const b of allBrandRows) {
         const rawName = (b.mobile_brand || '').trim();
         const stdName = standardizeBrand(rawName);
         const share = parseFloat(b.share_percentage) || 0;
-        const isIndividual = Boolean(b.show_individually);
+        const isSelected = Boolean(b.show_in_special_tva);
 
         const brandObj = {
             id: b.id,
             raw_name: rawName,
             brand_name: stdName,
             share_percentage: share,
-            show_individually: isIndividual
+            show_in_special_tva: isSelected,
+            show_individually: isSelected
         };
 
-        if (isIndividual) {
+        if (isSelected) {
             // Deduplicate if needed
             if (!individualBrands.some(ib => ib.brand_name.toLowerCase() === stdName.toLowerCase())) {
                 individualBrands.push(brandObj);
@@ -386,13 +387,17 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
 
     // Apply user permissions filter if present
     let filteredBranches = dataRows;
-    if (userStateRestriction && userStateRestriction.length > 0 && !userStateRestriction.includes('All')) {
+    if (userAllowedBranches && Array.isArray(userAllowedBranches) && userAllowedBranches.length > 0) {
+        // Specific branch mappings explicitly define the user's branch access
+        const allowedSet = new Set(userAllowedBranches.map(b => String(b).trim().toUpperCase()));
+        filteredBranches = filteredBranches.filter(r => 
+            (r.branch_name && allowedSet.has(String(r.branch_name).trim().toUpperCase())) ||
+            (r.branch_code && allowedSet.has(String(r.branch_code).trim().toUpperCase()))
+        );
+    } else if (userStateRestriction && userStateRestriction.length > 0 && !userStateRestriction.includes('All')) {
+        // Fallback: If no specific branch mappings, restrict by user's assigned states
         const upperStates = userStateRestriction.map(s => String(s).trim().toUpperCase());
         filteredBranches = filteredBranches.filter(r => r.state_name && upperStates.includes(r.state_name.trim().toUpperCase()));
-    }
-    if (userAllowedBranches && Array.isArray(userAllowedBranches)) {
-        const allowedSet = new Set(userAllowedBranches.map(b => String(b).trim().toUpperCase()));
-        filteredBranches = filteredBranches.filter(r => allowedSet.has(String(r.branch_name).trim().toUpperCase()));
     }
 
     // 3. Build branch code/name lookup
@@ -421,6 +426,16 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
             return standardizeBrand(modelMap[code]);
         }
         const desc = (itemDescription || '').toLowerCase();
+
+        // Check if any brand name in mobile_brand_master is mentioned in description
+        for (const b of allBrandRows) {
+            const bName = (b.mobile_brand || '').trim().toLowerCase();
+            if (bName && desc.includes(bName)) {
+                return standardizeBrand(b.mobile_brand);
+            }
+        }
+
+        // Standard brand keyword fallbacks
         if (desc.includes('samsung')) return 'Samsung';
         if (desc.includes('vivo')) return 'Vivo';
         if (desc.includes('oppo')) return 'OPPO';
@@ -437,6 +452,22 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
         if (desc.includes('lava')) return 'Lava';
         if (desc.includes('itel')) return 'Itel';
 
+        return 'Other';
+    };
+
+    // Helper to find target column: individual brand name or 'Other' for all unselected brands
+    const findMatchingColumn = (rawBrand) => {
+        if (!rawBrand) return 'Other';
+        const brandLower = rawBrand.trim().toLowerCase();
+
+        // 1. Check if it matches an individual brand (show_in_special_tva = 1)
+        const matchInd = individualBrands.find(
+            ib => ib.brand_name.toLowerCase() === brandLower ||
+                  (ib.raw_name && ib.raw_name.toLowerCase() === brandLower)
+        );
+        if (matchInd) return matchInd.brand_name;
+
+        // 2. All other brands that are not selected are grouped into Others
         return 'Other';
     };
 
@@ -466,8 +497,6 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
         }
     }
 
-    const individualSet = new Set(individualBrands.map(b => b.brand_name.toLowerCase()));
-
     // Aggregate Invoices
     for (const row of invoiceRows) {
         const invCode = (row.branch_code || '').toUpperCase();
@@ -477,13 +506,13 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
 
         const rawBrand = resolveBrand(row.item_code, row.item_model_name);
         const qty = parseFloat(row.qty) || 0;
+        const targetColumn = findMatchingColumn(rawBrand);
 
-        // Check if individual or Other
-        const matchIndividual = individualBrands.find(ib => ib.brand_name.toLowerCase() === rawBrand.toLowerCase());
-        const targetColumn = matchIndividual ? matchIndividual.brand_name : 'Other';
-
-        branchAchievements[bName][targetColumn] = (branchAchievements[bName][targetColumn] || 0) + qty;
-        branchAchievements[bName]['Total'] = (branchAchievements[bName]['Total'] || 0) + qty;
+        // Only accumulate if brand is participating in Special TVA
+        if (targetColumn) {
+            branchAchievements[bName][targetColumn] = (branchAchievements[bName][targetColumn] || 0) + qty;
+            branchAchievements[bName]['Total'] = (branchAchievements[bName]['Total'] || 0) + qty;
+        }
     }
 
     // Subtract Returns
@@ -495,12 +524,13 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
 
         const rawBrand = resolveBrand(row.item_code, row.item_model_name);
         const qty = parseFloat(row.qty) || 0;
+        const targetColumn = findMatchingColumn(rawBrand);
 
-        const matchIndividual = individualBrands.find(ib => ib.brand_name.toLowerCase() === rawBrand.toLowerCase());
-        const targetColumn = matchIndividual ? matchIndividual.brand_name : 'Other';
-
-        branchAchievements[bName][targetColumn] = (branchAchievements[bName][targetColumn] || 0) - qty;
-        branchAchievements[bName]['Total'] = (branchAchievements[bName]['Total'] || 0) - qty;
+        // Only subtract if brand is participating in Special TVA
+        if (targetColumn) {
+            branchAchievements[bName][targetColumn] = (branchAchievements[bName][targetColumn] || 0) - qty;
+            branchAchievements[bName]['Total'] = (branchAchievements[bName]['Total'] || 0) - qty;
+        }
     }
 
     // 6. Compute row records with all 3 grouped sections
@@ -539,14 +569,15 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
             grandTotals.brand_targets[ib.brand_name] += bTgt;
         }
 
-        // Other target = totalBranchTarget - allocatedTargetSum (ensures total matches exactly)
+        // Other target is 100% - sum of selected brand percentages (remaining target balance)
         const otherTarget = Math.max(0, totalBranchTarget - allocatedTargetSum);
         brandTargets['Other'] = otherTarget;
         grandTotals.brand_targets['Other'] += otherTarget;
 
-        // Total target
-        brandTargets['Total'] = totalBranchTarget;
-        grandTotals.brand_targets['Total'] += totalBranchTarget;
+        // Total target for Special TVA: sum of all participating Special TVA brand targets
+        const totalSpecialTvaTarget = allocatedTargetSum + otherTarget;
+        brandTargets['Total'] = totalSpecialTvaTarget;
+        grandTotals.brand_targets['Total'] += totalSpecialTvaTarget;
 
         // Section 1: Achievement QTY
         const achievementQty = {};
@@ -598,6 +629,7 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
         },
         brand_headers: brandHeaders,
         individual_brands: individualBrands,
+        other_brands: otherBrandsList,
         records,
         totals: grandTotals
     };

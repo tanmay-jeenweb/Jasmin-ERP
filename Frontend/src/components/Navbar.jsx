@@ -373,15 +373,6 @@ export default function Navbar() {
             color: "bg-amber-50 text-amber-600 border border-amber-100/50",
             activeColor: "bg-amber-100 text-amber-700",
             desc: "Configure Price List exclusions"
-        },
-        {
-            name: "Special TVA Master",
-            path: "/admin/special-tva-master",
-            masterKey: "special_tva_master",
-            icon: "fa-solid fa-trophy",
-            color: "bg-amber-50 text-amber-600 border border-amber-100/50",
-            activeColor: "bg-amber-100 text-amber-700",
-            desc: "Configure campaign period & targets"
         }
     ];
 
@@ -1013,7 +1004,7 @@ export default function Navbar() {
                             </div>
                         )}
                         {/* Reports Dropdown */}
-                        {(availableReports.length > 0 || (canSeePriceListReports && priceFormats.length > 0)) && (
+                        {(availableReports.length > 0 || (canSeePriceListReports && priceFormats.length > 0) || (canViewSpecialTva && specialTvas.length > 0)) && (
                             <div className="relative flex-1 min-w-0" id="reports-dropdown">
                                 <button
                                     onClick={toggleReportsMenu}

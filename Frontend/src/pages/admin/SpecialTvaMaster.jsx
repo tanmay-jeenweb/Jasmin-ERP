@@ -635,10 +635,12 @@ export default function SpecialTvaMaster() {
                 setSelectedRow(row);
                 setIsModalOpen(true);
               }}
-              className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors cursor-pointer"
-              title="Edit Campaign"
+              className="flex w-8 h-8 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-indigo-650 cursor-pointer hover:bg-purple-100 transition-colors"
+              title="Edit"
             >
-              <i className="fa-solid fa-pen text-xs"></i>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-[15px] h-[15px]">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931Z" />
+              </svg>
             </button>
           )}
 
@@ -646,10 +648,12 @@ export default function SpecialTvaMaster() {
           {canDelete && (
             <button
               onClick={() => handleDelete(row)}
-              className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-650 flex items-center justify-center transition-colors cursor-pointer"
-              title="Delete Campaign"
+              className="flex w-8 h-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 cursor-pointer hover:bg-rose-100 transition-colors"
+              title="Delete"
             >
-              <i className="fa-solid fa-trash text-xs"></i>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-[15px] h-[15px]">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5h12m-1.5 0-.563 12.375A2.25 2.25 0 0113.693 21H10.307a2.25 2.25 0 01-2.244-2.125L7.5 7.5m3-3h3A1.5 1.5 0 0115 6v1.5H9V6a1.5 1.5 0 011.5-1.5Z" />
+              </svg>
             </button>
           )}
         </div>
