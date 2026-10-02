@@ -62,6 +62,9 @@ export default function SpecialTvaReport() {
   const [exportingReport, setExportingReport] = useState(false);
   const [exportingTemplate, setExportingTemplate] = useState(false);
 
+  // Active tab state: "branch" | "abm"
+  const [activeTab, setActiveTab] = useState("branch");
+
   // Dropdown states
   const [showExportImportDropdown, setShowExportImportDropdown] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -120,19 +123,33 @@ export default function SpecialTvaReport() {
   const master = reportData?.master;
   const brandHeaders = reportData?.brand_headers || [];
   const rawRecords = reportData?.records || [];
+  const rawAbmRecords = reportData?.abm_records || [];
+  const userContext = reportData?.user_context;
+  const canViewAbmTab = Boolean(userContext?.can_view_abm_tab);
+  const isAbmUser = Boolean(userContext?.is_abm);
 
   // Unique filter options
   const uniqueStates = useMemo(() => {
     const s = new Set();
     rawRecords.forEach(r => { if (r.state) s.add(r.state.trim()); });
-    return Array.from(s).sort();
-  }, [rawRecords]);
+    rawAbmRecords.forEach(r => {
+      if (r.state && r.state !== "—") {
+        r.state.split(",").forEach(st => s.add(st.trim()));
+      }
+    });
+    return Array.from(s).filter(Boolean).sort();
+  }, [rawRecords, rawAbmRecords]);
 
   const uniqueZones = useMemo(() => {
     const z = new Set();
     rawRecords.forEach(r => { if (r.zone) z.add(r.zone.trim()); });
-    return Array.from(z).sort();
-  }, [rawRecords]);
+    rawAbmRecords.forEach(r => {
+      if (r.zone && r.zone !== "—") {
+        r.zone.split(",").forEach(zn => z.add(zn.trim()));
+      }
+    });
+    return Array.from(z).filter(Boolean).sort();
+  }, [rawRecords, rawAbmRecords]);
 
   const uniqueTypes = useMemo(() => {
     const t = new Set();
@@ -140,7 +157,7 @@ export default function SpecialTvaReport() {
     return Array.from(t).sort();
   }, [rawRecords]);
 
-  // Filter records
+  // Filter records (Branch Wise)
   const filteredRecords = useMemo(() => {
     return rawRecords.filter(row => {
       if (selectedStates.length > 0 && !selectedStates.includes(row.state)) return false;
@@ -150,7 +167,22 @@ export default function SpecialTvaReport() {
     });
   }, [rawRecords, selectedStates, selectedZones, selectedTypes]);
 
-  const totalActiveFilters = selectedStates.length + selectedZones.length + selectedTypes.length;
+  // Filter records (ABM Wise)
+  const filteredAbmRecords = useMemo(() => {
+    return rawAbmRecords.filter(row => {
+      if (selectedStates.length > 0) {
+        const rowStates = (row.state || "").split(",").map(s => s.trim());
+        if (!rowStates.some(s => selectedStates.includes(s))) return false;
+      }
+      if (selectedZones.length > 0) {
+        const rowZones = (row.zone || "").split(",").map(z => z.trim());
+        if (!rowZones.some(z => selectedZones.includes(z))) return false;
+      }
+      return true;
+    });
+  }, [rawAbmRecords, selectedStates, selectedZones]);
+
+  const totalActiveFilters = selectedStates.length + selectedZones.length + (activeTab === "branch" ? selectedTypes.length : 0);
 
   const handleClearAllFilters = () => {
     setSelectedStates([]);
@@ -234,6 +266,78 @@ export default function SpecialTvaReport() {
       totalsRowData: totals
     };
   }, [reportData, filteredRecords, brandHeaders]);
+
+  // ─── Format ABM Data for DataTable ──────────────────────────────────────────
+  const { abmTableRows, abmTotalsRowData } = useMemo(() => {
+    if (!reportData || filteredAbmRecords.length === 0) {
+      return { abmTableRows: [], abmTotalsRowData: null };
+    }
+
+    const totals = {
+      id: "Total",
+      s_no: "∑",
+      abm_name: `Total (${filteredAbmRecords.length})`,
+      branch_count: 0,
+      state: "—",
+      zone: "—",
+      period_target: 0
+    };
+
+    brandHeaders.forEach(bh => {
+      totals[`tgt_${bh}`] = 0;
+      totals[`ach_${bh}`] = 0;
+      totals[`pct_${bh}`] = 0;
+    });
+
+    const rows = filteredAbmRecords.map((r, idx) => {
+      const flatRow = {
+        id: r.id || `abm-${idx}`,
+        s_no: idx + 1,
+        abm_name: r.abm_name,
+        branch_count: r.branch_count || 0,
+        state: r.state || "—",
+        zone: r.zone || "—",
+        period_target: r.period_target || 0
+      };
+
+      totals.branch_count += (r.branch_count || 0);
+      totals.period_target += (r.period_target || 0);
+
+      // Section 1: Target
+      brandHeaders.forEach(bh => {
+        const val = r.brand_targets?.[bh] || 0;
+        flatRow[`tgt_${bh}`] = val;
+        totals[`tgt_${bh}`] += val;
+      });
+
+      // Section 2: Achievement QTY
+      brandHeaders.forEach(bh => {
+        const val = r.achievement_qty?.[bh] || 0;
+        flatRow[`ach_${bh}`] = val;
+        totals[`ach_${bh}`] += val;
+      });
+
+      // Section 3: Achievement %
+      brandHeaders.forEach(bh => {
+        const val = r.achievement_pct?.[bh] !== undefined ? r.achievement_pct[bh] : 0;
+        flatRow[`pct_${bh}`] = val;
+      });
+
+      return flatRow;
+    });
+
+    // Calculate totals achievement %
+    brandHeaders.forEach(bh => {
+      const totTgt = totals[`tgt_${bh}`] || 0;
+      const totAch = totals[`ach_${bh}`] || 0;
+      totals[`pct_${bh}`] = totTgt > 0 ? Number(((totAch / totTgt) * 100).toFixed(2)) : 0;
+    });
+
+    return {
+      abmTableRows: [...rows, totals],
+      abmTotalsRowData: totals
+    };
+  }, [reportData, filteredAbmRecords, brandHeaders]);
 
   // ─── Header Groups (Super-Headers) ──────────────────────────────────────────
   // Order: Fixed Columns -> Target -> Achievement -> Achievement %
@@ -394,6 +498,163 @@ export default function SpecialTvaReport() {
     return cols;
   }, [brandHeaders]);
 
+  // ─── Header Groups for ABM Wise View ────────────────────────────────────────
+  const abmHeaderGroups = useMemo(() => {
+    if (brandHeaders.length === 0) return [];
+    return [
+      {
+        title: "ABM Info & Target",
+        columns: ["s_no", "abm_name", "branch_count", "state", "zone", "period_target"],
+        colSpan: 6,
+        className: "bg-slate-900 border-r border-slate-700 text-slate-100"
+      },
+      {
+        title: "Target",
+        columns: brandHeaders.map(bh => `tgt_${bh}`),
+        colSpan: brandHeaders.length,
+        className: "bg-teal-900/95 border-r border-teal-700 text-teal-100 font-bold"
+      },
+      {
+        title: "Achievement",
+        columns: brandHeaders.map(bh => `ach_${bh}`),
+        colSpan: brandHeaders.length,
+        className: "bg-blue-900/95 border-r border-blue-700 text-blue-100 font-bold"
+      },
+      {
+        title: "Achievement %",
+        columns: brandHeaders.map(bh => `pct_${bh}`),
+        colSpan: brandHeaders.length,
+        className: "bg-indigo-900/95 border-r border-indigo-700 text-indigo-100 font-bold"
+      }
+    ];
+  }, [brandHeaders]);
+
+  // ─── DataTable Columns for ABM Wise View ────────────────────────────────────
+  const abmColumns = useMemo(() => {
+    const cols = [
+      {
+        key: "s_no",
+        label: "S.No.",
+        minWidth: "60px",
+        render: (row) => (
+          <span className={`text-center block ${row.id === "Total" ? "font-bold text-slate-900" : "text-slate-500"}`}>
+            {row.s_no}
+          </span>
+        )
+      },
+      {
+        key: "abm_name",
+        label: "ABM Name",
+        minWidth: "220px",
+        render: (row) => (
+          <span className={`block truncate ${row.id === "Total" ? "font-extrabold text-slate-950 text-sm" : "font-bold text-indigo-950"}`} title={row.abm_name}>
+            {row.abm_name}
+          </span>
+        )
+      },
+      {
+        key: "branch_count",
+        label: "Branches",
+        minWidth: "90px",
+        render: (row) => (
+          <div className="text-center">
+            {row.id === "Total" ? (
+              <span className="font-extrabold text-slate-900">{row.branch_count}</span>
+            ) : (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+                {row.branch_count}
+              </span>
+            )}
+          </div>
+        )
+      },
+      {
+        key: "state",
+        label: "State",
+        minWidth: "140px",
+        render: (row) => (
+          <span className="truncate block text-slate-650" title={row.state}>{row.state}</span>
+        )
+      },
+      {
+        key: "zone",
+        label: "Zone",
+        minWidth: "100px",
+        render: (row) => (
+          <span className="text-slate-650 truncate block" title={row.zone}>{row.zone || "—"}</span>
+        )
+      },
+      {
+        key: "period_target",
+        label: "Target",
+        minWidth: "125px",
+        render: (row) => (
+          <span className={`text-right block ${row.id === "Total" ? "font-extrabold text-amber-700 text-sm" : "font-bold text-slate-900"}`}>
+            {formatNumber(row.period_target)}
+          </span>
+        )
+      }
+    ];
+
+    // Target Columns
+    brandHeaders.forEach(bh => {
+      const isTotal = bh === "Total";
+      cols.push({
+        key: `tgt_${bh}`,
+        label: bh,
+        minWidth: isTotal ? "95px" : "85px",
+        render: (row) => {
+          const val = row[`tgt_${bh}`] || 0;
+          return (
+            <span className={`text-right block ${isTotal ? "font-extrabold text-teal-850" : "font-medium text-slate-700"}`}>
+              {formatNumber(val)}
+            </span>
+          );
+        }
+      });
+    });
+
+    // Achievement QTY Columns
+    brandHeaders.forEach(bh => {
+      const isTotal = bh === "Total";
+      cols.push({
+        key: `ach_${bh}`,
+        label: bh,
+        minWidth: isTotal ? "95px" : "85px",
+        render: (row) => {
+          const val = row[`ach_${bh}`] || 0;
+          return (
+            <span className={`text-right block ${isTotal ? "font-extrabold text-blue-850" : "font-medium text-slate-700"}`}>
+              {formatNumber(val)}
+            </span>
+          );
+        }
+      });
+    });
+
+    // Achievement % Columns
+    brandHeaders.forEach(bh => {
+      const isTotal = bh === "Total";
+      cols.push({
+        key: `pct_${bh}`,
+        label: bh,
+        minWidth: isTotal ? "95px" : "85px",
+        render: (row) => {
+          const pct = row[`pct_${bh}`];
+          return (
+            <div className="text-right">
+              <span className={getPctBadgeClass(pct)}>
+                {pct !== undefined && pct !== null ? `${pct}%` : "0%"}
+              </span>
+            </div>
+          );
+        }
+      });
+    });
+
+    return cols;
+  }, [brandHeaders]);
+
   // ─── Export Excel Template ───────────────────────────────────────────────────
   const handleExportTemplate = async () => {
     setExportingTemplate(true);
@@ -471,6 +732,215 @@ export default function SpecialTvaReport() {
   // ─── Export Full Styled Multi-Level Excel Report (New Column Order) ───────────
   // Order: Fixed Cols -> Target -> Achievement -> Achievement %
   const handleExportFullReport = async () => {
+    if (activeTab === "abm") {
+      if (!reportData || filteredAbmRecords.length === 0) {
+        toast.error("No ABM data available to export");
+        return;
+      }
+      setExportingReport(true);
+      try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("Special TVA ABM Report", {
+          views: [{ showGridLines: true, state: "frozen", xSplit: 2, ySplit: 2 }]
+        });
+
+        const brandsCount = brandHeaders.length;
+        const fixedColsCount = 6; // S.No., ABM Name, Branches, State, Zone, Target
+        const emptyBrands = new Array(Math.max(0, brandsCount - 1)).fill("");
+
+        // Row 1: Super Headers
+        const row1Values = [];
+        for (let i = 0; i < fixedColsCount; i++) row1Values.push("");
+        for (let i = 0; i < brandsCount; i++) row1Values.push(i === 0 ? "Target" : "");
+        for (let i = 0; i < brandsCount; i++) row1Values.push(i === 0 ? "Achievement" : "");
+        for (let i = 0; i < brandsCount; i++) row1Values.push(i === 0 ? "Achievement %" : "");
+
+        const headerRow1 = worksheet.addRow(row1Values);
+        headerRow1.height = 24;
+
+        // Row 2: Sub-headers
+        const row2Values = [
+          "S.No.",
+          "ABM Name",
+          "Branches",
+          "State",
+          "Zone",
+          "Target",
+          ...brandHeaders, // Target
+          ...brandHeaders, // Achievement QTY
+          ...brandHeaders  // Achievement %
+        ];
+
+        const headerRow2 = worksheet.addRow(row2Values);
+        headerRow2.height = 26;
+
+        // Merge super-headers in Row 1
+        const tgtStartCol = fixedColsCount + 1;
+        const tgtEndCol = fixedColsCount + brandsCount;
+        worksheet.mergeCells(1, tgtStartCol, 1, tgtEndCol);
+
+        const achStartCol = tgtEndCol + 1;
+        const achEndCol = tgtEndCol + brandsCount;
+        worksheet.mergeCells(1, achStartCol, 1, achEndCol);
+
+        const achPctStartCol = achEndCol + 1;
+        const achPctEndCol = achEndCol + brandsCount;
+        worksheet.mergeCells(1, achPctStartCol, 1, achPctEndCol);
+
+        // Theme Colors
+        const navyColor = "FF1E293B";
+        const tgtColor = "FF0F766E";
+        const achievementColor = "FF1E40AF";
+        const pctColor = "FF4338CA";
+
+        // Style Row 1
+        headerRow1.getCell(tgtStartCol).value = "Target";
+        headerRow1.getCell(tgtStartCol).alignment = { horizontal: "center", vertical: "middle" };
+        headerRow1.getCell(tgtStartCol).font = { name: "Segoe UI", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
+        headerRow1.getCell(tgtStartCol).fill = { type: "pattern", pattern: "solid", fgColor: { argb: tgtColor } };
+
+        headerRow1.getCell(achStartCol).value = "Achievement";
+        headerRow1.getCell(achStartCol).alignment = { horizontal: "center", vertical: "middle" };
+        headerRow1.getCell(achStartCol).font = { name: "Segoe UI", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
+        headerRow1.getCell(achStartCol).fill = { type: "pattern", pattern: "solid", fgColor: { argb: achievementColor } };
+
+        headerRow1.getCell(achPctStartCol).value = "Achievement %";
+        headerRow1.getCell(achPctStartCol).alignment = { horizontal: "center", vertical: "middle" };
+        headerRow1.getCell(achPctStartCol).font = { name: "Segoe UI", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
+        headerRow1.getCell(achPctStartCol).fill = { type: "pattern", pattern: "solid", fgColor: { argb: pctColor } };
+
+        for (let c = 1; c <= fixedColsCount; c++) {
+          const cell = headerRow1.getCell(c);
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: navyColor } };
+        }
+
+        // Style Row 2 (Sub-headers)
+        headerRow2.eachCell((cell, colNumber) => {
+          let bgColor = navyColor;
+          if (colNumber >= tgtStartCol && colNumber <= tgtEndCol) bgColor = "FF0D9488";
+          if (colNumber >= achStartCol && colNumber <= achEndCol) bgColor = "FF2563EB";
+          if (colNumber >= achPctStartCol && colNumber <= achPctEndCol) bgColor = "FF4F46E5";
+
+          cell.font = { name: "Segoe UI", size: 9.5, bold: true, color: { argb: "FFFFFFFF" } };
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bgColor } };
+          cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+          cell.border = {
+            top: { style: "thin", color: { argb: "FF94A3B8" } },
+            bottom: { style: "medium", color: { argb: "FFFFFFFF" } },
+            left: { style: "thin", color: { argb: "FF64748B" } },
+            right: { style: "thin", color: { argb: "FF64748B" } }
+          };
+        });
+
+        // Add ABM Data Rows
+        let sNo = 1;
+        filteredAbmRecords.forEach((row, rIdx) => {
+          const rowVals = [
+            sNo++,
+            row.abm_name || "",
+            row.branch_count || 0,
+            row.state || "",
+            row.zone || "",
+            row.period_target || 0,
+            ...brandHeaders.map(bh => row.brand_targets?.[bh] || 0),
+            ...brandHeaders.map(bh => row.achievement_qty?.[bh] || 0),
+            ...brandHeaders.map(bh => row.achievement_pct?.[bh] !== undefined ? `${row.achievement_pct[bh]}%` : "0%")
+          ];
+
+          const excelRow = worksheet.addRow(rowVals);
+          excelRow.height = 20;
+
+          const isEven = rIdx % 2 === 0;
+          const rowBg = isEven ? "FFFFFFFF" : "FFF8FAFC";
+
+          excelRow.eachCell((cell, colNumber) => {
+            cell.font = { name: "Segoe UI", size: 9 };
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: rowBg } };
+            cell.border = {
+              top: { style: "thin", color: { argb: "FFE2E8F0" } },
+              bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+              left: { style: "thin", color: { argb: "FFE2E8F0" } },
+              right: { style: "thin", color: { argb: "FFE2E8F0" } }
+            };
+
+            if (colNumber === 1 || colNumber === 3) {
+              cell.alignment = { horizontal: "center", vertical: "middle" };
+            } else if (colNumber === 2 || colNumber === 4 || colNumber === 5) {
+              cell.alignment = { horizontal: "left", vertical: "middle" };
+            } else {
+              cell.alignment = { horizontal: "right", vertical: "middle" };
+            }
+          });
+        });
+
+        // Add ABM Grand Totals Row
+        const totalsVals = [
+          "",
+          `Total (${filteredAbmRecords.length})`,
+          abmTotalsRowData?.branch_count || 0,
+          "",
+          "",
+          abmTotalsRowData?.period_target || 0,
+          ...brandHeaders.map(bh => abmTotalsRowData?.[`tgt_${bh}`] || 0),
+          ...brandHeaders.map(bh => abmTotalsRowData?.[`ach_${bh}`] || 0),
+          ...brandHeaders.map(bh => `${abmTotalsRowData?.[`pct_${bh}`] || 0}%`)
+        ];
+
+        const totalsRow = worksheet.addRow(totalsVals);
+        totalsRow.height = 24;
+        totalsRow.eachCell((cell, colNumber) => {
+          cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F172A" } };
+          cell.border = {
+            top: { style: "medium", color: { argb: "FF94A3B8" } },
+            bottom: { style: "medium", color: { argb: "FF94A3B8" } },
+            left: { style: "thin", color: { argb: "FF334155" } },
+            right: { style: "thin", color: { argb: "FF334155" } }
+          };
+          if (colNumber === 2) {
+            cell.alignment = { horizontal: "left", vertical: "middle" };
+          } else if (colNumber === 3) {
+            cell.alignment = { horizontal: "center", vertical: "middle" };
+          } else if (colNumber > 5) {
+            cell.alignment = { horizontal: "right", vertical: "middle" };
+          } else {
+            cell.alignment = { horizontal: "center", vertical: "middle" };
+          }
+        });
+
+        // Column widths
+        worksheet.columns.forEach((column, index) => {
+          if (index === 0) column.width = 8;
+          else if (index === 1) column.width = 28; // ABM Name
+          else if (index === 2) column.width = 12; // Branches
+          else if (index === 3) column.width = 24; // State
+          else if (index === 4) column.width = 16; // Zone
+          else if (index === 5) column.width = 16; // Target
+          else column.width = 13; // Brands
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Special_TVA_ABM_Report_${(master?.title || "Report").replace(/\s+/g, "_")}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        toast.success("ABM Excel report exported successfully!");
+        return;
+      } catch (err) {
+        console.error("Failed to export ABM Excel report:", err);
+        toast.error("Failed to export ABM Excel report. Please try again.");
+        return;
+      } finally {
+        setExportingReport(false);
+      }
+    }
+
     if (!reportData || filteredRecords.length === 0) {
       toast.error("No data available to export");
       return;
@@ -815,8 +1285,8 @@ export default function SpecialTvaReport() {
             )}
           </div>
 
-          {/* 3-Column Checklist Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          {/* Column Checklist Grid (3 columns for Branch, 2 columns for ABM) */}
+          <div className={`grid grid-cols-1 ${activeTab === "abm" ? "sm:grid-cols-2" : "sm:grid-cols-3"} gap-5`}>
             {/* Column 1: States */}
             <div className="flex flex-col border-r border-slate-100 pr-3">
               <div className="flex items-center justify-between mb-1.5">
@@ -860,7 +1330,7 @@ export default function SpecialTvaReport() {
             </div>
 
             {/* Column 2: Zones */}
-            <div className="flex flex-col border-r border-slate-100 pr-3">
+            <div className={`flex flex-col ${activeTab === "abm" ? "" : "border-r border-slate-100 pr-3"}`}>
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">Zones</span>
                 <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-semibold">
@@ -901,38 +1371,40 @@ export default function SpecialTvaReport() {
               </div>
             </div>
 
-            {/* Column 3: Store Types */}
-            <div className="flex flex-col">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">Store Type</span>
-                <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-semibold">
-                  {selectedTypes.length === 0 ? "All" : selectedTypes.length}
-                </span>
+            {/* Column 3: Store Types (Only for Branch view) */}
+            {activeTab !== "abm" && (
+              <div className="flex flex-col">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">Store Type</span>
+                  <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-semibold">
+                    {selectedTypes.length === 0 ? "All" : selectedTypes.length}
+                  </span>
+                </div>
+                <div className="flex justify-between text-[10px] font-bold text-indigo-600 mb-1.5 px-0.5">
+                  <button type="button" onClick={() => setSelectedTypes(uniqueTypes)} className="hover:underline bg-transparent border-none cursor-pointer">Select All</button>
+                  <button type="button" onClick={() => setSelectedTypes([])} className="hover:underline bg-transparent border-none cursor-pointer">Deselect All</button>
+                </div>
+                <div className="max-h-40 overflow-y-auto space-y-0.5 border border-slate-100 rounded-lg p-1">
+                  {uniqueTypes.map(tName => {
+                    const isChecked = selectedTypes.includes(tName);
+                    return (
+                      <label key={tName} className="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            if (isChecked) setSelectedTypes(selectedTypes.filter(t => t !== tName));
+                            else setSelectedTypes([...selectedTypes, tName]);
+                          }}
+                          className="accent-indigo-600 h-3.5 w-3.5"
+                        />
+                        <span className="capitalize">{tName}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="flex justify-between text-[10px] font-bold text-indigo-600 mb-1.5 px-0.5">
-                <button type="button" onClick={() => setSelectedTypes(uniqueTypes)} className="hover:underline bg-transparent border-none cursor-pointer">Select All</button>
-                <button type="button" onClick={() => setSelectedTypes([])} className="hover:underline bg-transparent border-none cursor-pointer">Deselect All</button>
-              </div>
-              <div className="max-h-40 overflow-y-auto space-y-0.5 border border-slate-100 rounded-lg p-1">
-                {uniqueTypes.map(tName => {
-                  const isChecked = selectedTypes.includes(tName);
-                  return (
-                    <label key={tName} className="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => {
-                          if (isChecked) setSelectedTypes(selectedTypes.filter(t => t !== tName));
-                          else setSelectedTypes([...selectedTypes, tName]);
-                        }}
-                        className="accent-indigo-600 h-3.5 w-3.5"
-                      />
-                      <span className="capitalize">{tName}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Footer */}
@@ -1098,15 +1570,66 @@ export default function SpecialTvaReport() {
           </div>
         )}
 
+        {/* Tab Switcher: Only displayed if user is Admin or ABM */}
+        {canViewAbmTab && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab("branch")}
+                className={`flex items-center gap-2 py-2.5 px-4 text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
+                  activeTab === "branch"
+                    ? "border-indigo-600 text-indigo-700 bg-white shadow-sm rounded-t-lg"
+                    : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                }`}
+              >
+                <i className="fa-solid fa-store text-xs"></i>
+                <span>Branch Wise Report</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  activeTab === "branch" ? "bg-indigo-100 text-indigo-800" : "bg-slate-100 text-slate-600"
+                }`}>
+                  {filteredRecords.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("abm")}
+                className={`flex items-center gap-2 py-2.5 px-4 text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
+                  activeTab === "abm"
+                    ? "border-indigo-600 text-indigo-700 bg-white shadow-sm rounded-t-lg"
+                    : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                }`}
+              >
+                <i className="fa-solid fa-user-tie text-xs"></i>
+                <span>ABM Wise Report</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  activeTab === "abm" ? "bg-indigo-100 text-indigo-800" : "bg-slate-100 text-slate-600"
+                }`}>
+                  {filteredAbmRecords.length}
+                </span>
+              </button>
+            </div>
+
+            {/* Scope / User Role info badge */}
+            <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 pb-2">
+              <span className="font-medium text-slate-600">Scope:</span>
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+                {userContext?.is_admin ? "Admin (All ABMs)" : `ABM (${userContext?.abm_name || userContext?.user_name || "Self"})`}
+              </span>
+            </div>
+          </div>
+        )}
+
         <DataTable
-          title={master?.title || "Special TVA Report"}
-          data={tableRows}
-          columns={columns}
+          title={`${master?.title || "Special TVA Report"}${canViewAbmTab ? (activeTab === "abm" ? " (ABM Wise)" : " (Branch Wise)") : ""}`}
+          data={activeTab === "abm" ? abmTableRows : tableRows}
+          columns={activeTab === "abm" ? abmColumns : columns}
           loading={loading}
-          headerGroups={headerGroups}
+          headerGroups={activeTab === "abm" ? abmHeaderGroups : headerGroups}
           toggleActions={filtersElement}
           actionButton={actionButtonElement}
-          searchPlaceholder="Search branch name..."
+          searchPlaceholder={activeTab === "abm" ? "Search ABM name..." : "Search branch name..."}
         />
       </main>
     </div>
