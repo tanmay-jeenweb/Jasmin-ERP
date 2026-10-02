@@ -427,17 +427,18 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
 
     // Apply user permissions filter if present
     let filteredBranches = dataRows;
-    if (userAllowedBranches && Array.isArray(userAllowedBranches) && userAllowedBranches.length > 0) {
-        // Specific branch mappings explicitly define the user's branch access
-        const allowedSet = new Set(userAllowedBranches.map(b => String(b).trim().toUpperCase()));
-        filteredBranches = filteredBranches.filter(r => 
-            (r.branch_name && allowedSet.has(String(r.branch_name).trim().toUpperCase())) ||
-            (r.branch_code && allowedSet.has(String(r.branch_code).trim().toUpperCase()))
-        );
-    } else if (userStateRestriction && userStateRestriction.length > 0 && !userStateRestriction.includes('All')) {
-        // Fallback: If no specific branch mappings, restrict by user's assigned states
-        const upperStates = userStateRestriction.map(s => String(s).trim().toUpperCase());
-        filteredBranches = filteredBranches.filter(r => r.state_name && upperStates.includes(r.state_name.trim().toUpperCase()));
+    if (userAllowedBranches !== null && Array.isArray(userAllowedBranches)) {
+        if (userAllowedBranches.length === 0) {
+            // User is non-admin and not mapped to any branch -> keep it blank
+            filteredBranches = [];
+        } else {
+            // Specific branch mappings explicitly define the user's branch access
+            const allowedSet = new Set(userAllowedBranches.map(b => String(b).trim().toUpperCase()));
+            filteredBranches = filteredBranches.filter(r => 
+                (r.branch_name && allowedSet.has(String(r.branch_name).trim().toUpperCase())) ||
+                (r.branch_code && allowedSet.has(String(r.branch_code).trim().toUpperCase()))
+            );
+        }
     }
 
     // 3. Build branch code/name lookup
