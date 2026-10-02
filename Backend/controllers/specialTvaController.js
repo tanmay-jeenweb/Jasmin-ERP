@@ -10,26 +10,63 @@ const {
 const { createAuditLog } = require('../models/auditLogModel.js');
 const db = require('../config/db.js');
 
-// Helper to get non-admin state and branch restrictions
-const getUserRestrictions = async (user) => {
-    if (!user || !user.id) return { states: null, branches: null };
-    const isAdmin = user.role === 'admin' || user.role === 'super admin';
-    if (isAdmin) return { states: null, branches: null };
+// Helper to get non-admin state and branch restrictions along with user role profile
+const getUserRestrictionsAndProfile = async (user) => {
+    if (!user || !user.id) {
+        return {
+            states: null,
+            branches: null,
+            userProfile: {
+                isAdmin: false,
+                isAbm: false,
+                isNormal: true,
+                canViewAbmTab: false,
+                userId: null,
+                userName: null
+            }
+        };
+    }
+
+    const isAdminRole = user.role === 'admin' || user.role === 'super admin';
 
     const [userRows] = await db.execute(
-        `SELECT u.id, u.role, ut.user_role, ut.type_name, u.state 
+        `SELECT u.id, u.name, u.username, u.role, ut.user_role, ut.type_name, u.state 
          FROM users u 
          LEFT JOIN user_types ut ON u.user_type_id = ut.id 
          WHERE u.id = ?`,
         [user.id]
     );
 
-    if (userRows.length > 0) {
-        const u = userRows[0];
-        if (u.role === 'admin' || u.role === 'super admin' || u.user_role === 'Admin' || u.type_name === 'Admin') {
-            return { states: null, branches: null };
-        }
+    let u = userRows.length > 0 ? userRows[0] : null;
+    const userName = u ? (u.name || u.username) : (user.name || user.username || '');
 
+    const isAdmin = isAdminRole || (u && (u.role === 'admin' || u.role === 'super admin' || u.user_role === 'Admin' || u.type_name === 'Admin'));
+    const isAbm = !isAdmin && u && (
+        (u.user_role && u.user_role.toUpperCase() === 'ABM') || 
+        (u.type_name && u.type_name.toUpperCase() === 'ABM') ||
+        (u.role && u.role.toUpperCase() === 'ABM')
+    );
+    const isNormal = !isAdmin && !isAbm;
+    const canViewAbmTab = isAdmin || isAbm;
+
+    const userProfile = {
+        isAdmin: !!isAdmin,
+        isAbm: !!isAbm,
+        isNormal: !!isNormal,
+        canViewAbmTab: !!canViewAbmTab,
+        userId: user.id,
+        userName
+    };
+
+    if (isAdmin) {
+        return {
+            states: null,
+            branches: null,
+            userProfile
+        };
+    }
+
+    if (u) {
         let userStates = null;
         if (u.state) {
             try {
@@ -56,16 +93,23 @@ const getUserRestrictions = async (user) => {
         if (userBranches.length > 0) {
             return {
                 states: null,
-                branches: userBranches
+                branches: userBranches,
+                userProfile
             };
         }
 
         return {
             states: userStates,
-            branches: null
+            branches: null,
+            userProfile
         };
     }
-    return { states: null, branches: null };
+
+    return {
+        states: null,
+        branches: null,
+        userProfile
+    };
 };
 
 const createSpecialTvaController = async (req, res) => {
@@ -203,12 +247,13 @@ const deleteSpecialTvaController = async (req, res) => {
 const getSpecialTvaReportController = async (req, res) => {
     try {
         const { id } = req.params;
-        const restrictions = await getUserRestrictions(req.user);
+        const restrictions = await getUserRestrictionsAndProfile(req.user);
 
         const reportData = await getSpecialTvaReportData(
             id,
             restrictions.states,
-            restrictions.branches
+            restrictions.branches,
+            restrictions.userProfile
         );
 
         res.status(200).json({

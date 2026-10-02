@@ -325,7 +325,7 @@ const formatDate = (val) => {
  * - Section 2: Achievement % for each Brand, Other, Total
  * - Section 3: Target for each Brand, Other, Total
  */
-const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllowedBranches = null) => {
+const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllowedBranches = null, userProfile = null) => {
     const master = await getSpecialTvaById(id);
     if (!master) {
         throw new Error('Special TVA master record not found');
@@ -378,12 +378,52 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
         'Total'
     ];
 
-    // 2. Fetch branches from special_tva_data_${id}
+    // 2. Fetch ABM lookup for branches from branch_master and user_branch_mappings
+    const branchAbmLookup = {};
+    try {
+        const [abmMappingRows] = await db.execute(`
+            SELECT 
+                bm.code AS branch_code,
+                bm.name AS branch_name,
+                COALESCE(abm_u.name, bm.abm, 'Unassigned') AS abm_name,
+                abm_u.id AS abm_user_id
+            FROM branch_master bm
+            LEFT JOIN user_branch_mappings abm_m ON bm.id = abm_m.branch_id
+            LEFT JOIN users abm_u ON (
+                abm_m.user_id = abm_u.id AND abm_u.id IN (
+                    SELECT u.id FROM users u
+                    JOIN user_types ut ON u.user_type_id = ut.id
+                    WHERE ut.user_role = 'ABM' OR ut.type_name = 'ABM'
+                )
+            )
+        `);
+
+        for (const row of abmMappingRows) {
+            const abmInfo = {
+                abm_name: (row.abm_name || '').trim() || 'Unassigned',
+                abm_user_id: row.abm_user_id || null
+            };
+            if (row.branch_code) branchAbmLookup[row.branch_code.trim().toUpperCase()] = abmInfo;
+            if (row.branch_name) branchAbmLookup[row.branch_name.trim().toUpperCase()] = abmInfo;
+        }
+    } catch (e) {
+        console.warn("Failed to load ABM mappings for branches:", e.message);
+    }
+
+    // 3. Fetch branches from special_tva_data_${id}
     const [dataRows] = await db.execute(
         `SELECT id, branch_code, branch_name, store_type, state_name, zone, mf, target 
          FROM \`${tableName}\` 
          ORDER BY branch_name ASC`
     );
+
+    for (const b of dataRows) {
+        const codeKey = (b.branch_code || '').trim().toUpperCase();
+        const nameKey = (b.branch_name || '').trim().toUpperCase();
+        const abmInfo = branchAbmLookup[codeKey] || branchAbmLookup[nameKey] || { abm_name: 'Unassigned', abm_user_id: null };
+        b.abm_name = abmInfo.abm_name;
+        b.abm_user_id = abmInfo.abm_user_id;
+    }
 
     // Apply user permissions filter if present
     let filteredBranches = dataRows;
@@ -604,6 +644,7 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
             state: branch.state_name || '',
             zone: branch.zone || '',
             mf: branch.mf || '',
+            abm_name: branch.abm_name || 'Unassigned',
             period_target: totalBranchTarget,
             achievement_qty: achievementQty,
             achievement_pct: achievementPct,
@@ -616,6 +657,116 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
         const totTgt = grandTotals.brand_targets[bh] || 0;
         const totAch = grandTotals.achievement_qty[bh] || 0;
         grandTotals.achievement_pct[bh] = totTgt > 0 ? Number(((totAch / totTgt) * 100).toFixed(2)) : 0.00;
+    }
+
+    // 7. Compute ABM aggregated records
+    const canViewAbmTab = Boolean(userProfile?.canViewAbmTab);
+    const isAbm = Boolean(userProfile?.isAbm);
+    const isAdmin = Boolean(userProfile?.isAdmin);
+
+    let abmRecords = [];
+    const abmTotals = {
+        branch_count: 0,
+        period_target: 0,
+        brand_targets: {},
+        achievement_qty: {},
+        achievement_pct: {}
+    };
+
+    for (const bh of brandHeaders) {
+        abmTotals.brand_targets[bh] = 0;
+        abmTotals.achievement_qty[bh] = 0;
+        abmTotals.achievement_pct[bh] = 0;
+    }
+
+    if (canViewAbmTab) {
+        const abmGroups = {};
+
+        for (const r of records) {
+            // For ABM user, consolidate their mapped branches under their name
+            const abmName = isAbm ? (userProfile?.userName || r.abm_name || 'My Report') : (r.abm_name || 'Unassigned');
+
+            if (!abmGroups[abmName]) {
+                abmGroups[abmName] = {
+                    abm_name: abmName,
+                    branch_count: 0,
+                    states: new Set(),
+                    zones: new Set(),
+                    period_target: 0,
+                    brand_targets: {},
+                    achievement_qty: {}
+                };
+                for (const bh of brandHeaders) {
+                    abmGroups[abmName].brand_targets[bh] = 0;
+                    abmGroups[abmName].achievement_qty[bh] = 0;
+                }
+            }
+
+            const grp = abmGroups[abmName];
+            grp.branch_count += 1;
+            if (r.state) grp.states.add(r.state.trim());
+            if (r.zone) grp.zones.add(r.zone.trim());
+            grp.period_target += Number(r.period_target || 0);
+
+            for (const bh of brandHeaders) {
+                grp.brand_targets[bh] += Number(r.brand_targets?.[bh] || 0);
+                grp.achievement_qty[bh] += Number(r.achievement_qty?.[bh] || 0);
+            }
+        }
+
+        let serialAbm = 1;
+        abmRecords = Object.values(abmGroups).map((g) => {
+            const achPct = {};
+            for (const bh of brandHeaders) {
+                const tgt = g.brand_targets[bh] || 0;
+                const ach = g.achievement_qty[bh] || 0;
+                achPct[bh] = tgt > 0 ? Number(((ach / tgt) * 100).toFixed(2)) : 0.00;
+            }
+
+            const stateList = Array.from(g.states).filter(Boolean);
+            const stateStr = stateList.length === 1 ? stateList[0] : (stateList.length > 1 ? stateList.join(', ') : '—');
+
+            const zoneList = Array.from(g.zones).filter(Boolean);
+            const zoneStr = zoneList.length === 1 ? zoneList[0] : (zoneList.length > 1 ? zoneList.join(', ') : '—');
+
+            return {
+                id: `abm-${serialAbm}`,
+                s_no: serialAbm++,
+                abm_name: g.abm_name,
+                branch_count: g.branch_count,
+                state: stateStr,
+                zone: zoneStr,
+                period_target: g.period_target,
+                brand_targets: g.brand_targets,
+                achievement_qty: g.achievement_qty,
+                achievement_pct: achPct
+            };
+        });
+
+        // Sort ABMs alphabetically, placing 'Unassigned' at bottom
+        abmRecords.sort((a, b) => {
+            if (a.abm_name === 'Unassigned') return 1;
+            if (b.abm_name === 'Unassigned') return -1;
+            return a.abm_name.localeCompare(b.abm_name);
+        });
+        // Re-index s_no after sort
+        abmRecords.forEach((item, idx) => { item.s_no = idx + 1; });
+
+        // Calculate grand totals for ABM records
+        for (const r of abmRecords) {
+            abmTotals.branch_count += r.branch_count;
+            abmTotals.period_target += r.period_target;
+            for (const bh of brandHeaders) {
+                abmTotals.brand_targets[bh] += r.brand_targets[bh] || 0;
+                abmTotals.achievement_qty[bh] += r.achievement_qty[bh] || 0;
+            }
+        }
+
+        for (const bh of brandHeaders) {
+            const tgt = abmTotals.brand_targets[bh] || 0;
+            const ach = abmTotals.achievement_qty[bh] || 0;
+            abmTotals.achievement_pct[bh] = tgt > 0 ? Number(((ach / tgt) * 100).toFixed(2)) : 0.00;
+        }
     }
 
     return {
@@ -631,7 +782,16 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
         individual_brands: individualBrands,
         other_brands: otherBrandsList,
         records,
-        totals: grandTotals
+        totals: grandTotals,
+        abm_records: abmRecords,
+        abm_totals: abmTotals,
+        user_context: {
+            is_admin: isAdmin,
+            is_abm: isAbm,
+            can_view_abm_tab: canViewAbmTab,
+            user_name: userProfile?.userName || '',
+            abm_name: isAbm ? (userProfile?.userName || '') : null
+        }
     };
 };
 
