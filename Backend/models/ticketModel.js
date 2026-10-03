@@ -8,6 +8,7 @@ const createTicketTables = async () => {
             ticket_no VARCHAR(50) NOT NULL UNIQUE,
             ticket_type_id INT NOT NULL,
             sub_ticket_type_id INT NOT NULL,
+            branch_id INT DEFAULT NULL,
             title VARCHAR(255) NOT NULL,
             description TEXT NOT NULL,
             images JSON DEFAULT NULL,
@@ -22,11 +23,23 @@ const createTicketTables = async () => {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (ticket_type_id) REFERENCES ticket_type_master(id) ON DELETE RESTRICT,
             FOREIGN KEY (sub_ticket_type_id) REFERENCES sub_ticket_type_master(id) ON DELETE RESTRICT,
+            FOREIGN KEY (branch_id) REFERENCES branch_master(id) ON DELETE SET NULL,
             FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (completed_by) REFERENCES users(id) ON DELETE SET NULL
         )
     `;
     await db.execute(createTicketsQuery);
+
+    // Self-healing migration for existing table
+    try {
+        const [cols] = await db.execute("SHOW COLUMNS FROM tickets LIKE 'branch_id'");
+        if (cols.length === 0) {
+            await db.execute("ALTER TABLE tickets ADD COLUMN branch_id INT NULL DEFAULT NULL AFTER sub_ticket_type_id");
+            try {
+                await db.execute("ALTER TABLE tickets ADD CONSTRAINT fk_tickets_branch FOREIGN KEY (branch_id) REFERENCES branch_master(id) ON DELETE SET NULL");
+            } catch (err) {}
+        }
+    } catch (err) {}
 
     // 2. Ticket Remarks / Activity Log table
     const createRemarksQuery = `
@@ -69,6 +82,7 @@ const generateTicketNumber = async () => {
 const createTicket = async ({
     ticketTypeId,
     subTicketTypeId,
+    branchId = null,
     title,
     description,
     images = [],
@@ -86,6 +100,7 @@ const createTicket = async ({
             ticket_no,
             ticket_type_id,
             sub_ticket_type_id,
+            branch_id,
             title,
             description,
             images,
@@ -94,13 +109,14 @@ const createTicket = async ({
             assigned_to,
             created_by,
             device_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?)
     `;
 
     const [result] = await db.execute(query, [
         ticketNo,
         ticketTypeId,
         subTicketTypeId,
+        branchId ? parseInt(branchId, 10) : null,
         title,
         description,
         imagesJson,
@@ -124,7 +140,7 @@ const createTicket = async ({
 };
 
 // Get tickets based on user role and assigned status
-const getTicketsForUser = async ({ userId, isAdmin, tab = 'active', search = '', ticketTypeId = null }) => {
+const getTicketsForUser = async ({ userId, isAdmin, tab = 'active', search = '', ticketTypeId = null, branchId = null }) => {
     let whereClauses = [];
     let params = [];
 
@@ -148,11 +164,17 @@ const getTicketsForUser = async ({ userId, isAdmin, tab = 'active', search = '',
         params.push(ticketTypeId);
     }
 
-    // Search by title, ticket_no, description, creator name
+    // Optional Filter by Branch
+    if (branchId) {
+        whereClauses.push("t.branch_id = ?");
+        params.push(branchId);
+    }
+
+    // Search by title, ticket_no, description, creator name, branch name
     if (search && search.trim()) {
         const searchTerm = `%${search.trim()}%`;
-        whereClauses.push("(t.ticket_no LIKE ? OR t.title LIKE ? OR t.description LIKE ? OR u_creator.name LIKE ?)");
-        params.push(searchTerm, searchTerm, searchTerm, searchTerm);
+        whereClauses.push("(t.ticket_no LIKE ? OR t.title LIKE ? OR t.description LIKE ? OR u_creator.name LIKE ? OR bm.name LIKE ? OR bm.code LIKE ?)");
+        params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
@@ -165,6 +187,10 @@ const getTicketsForUser = async ({ userId, isAdmin, tab = 'active', search = '',
             ttm.name AS ticket_type_name,
             t.sub_ticket_type_id,
             sttm.name AS sub_ticket_type_name,
+            t.branch_id,
+            bm.name AS branch_name,
+            bm.code AS branch_code,
+            bm.city AS branch_city,
             t.title,
             t.description,
             t.images,
@@ -183,6 +209,7 @@ const getTicketsForUser = async ({ userId, isAdmin, tab = 'active', search = '',
         FROM tickets t
         LEFT JOIN ticket_type_master ttm ON t.ticket_type_id = ttm.id
         LEFT JOIN sub_ticket_type_master sttm ON t.sub_ticket_type_id = sttm.id
+        LEFT JOIN branch_master bm ON t.branch_id = bm.id
         LEFT JOIN users u_creator ON t.created_by = u_creator.id
         LEFT JOIN users u_comp ON t.completed_by = u_comp.id
         ${whereSql}
@@ -237,6 +264,10 @@ const getTicketById = async (ticketId) => {
             ttm.name AS ticket_type_name,
             t.sub_ticket_type_id,
             sttm.name AS sub_ticket_type_name,
+            t.branch_id,
+            bm.name AS branch_name,
+            bm.code AS branch_code,
+            bm.city AS branch_city,
             t.title,
             t.description,
             t.images,
@@ -256,6 +287,7 @@ const getTicketById = async (ticketId) => {
         FROM tickets t
         LEFT JOIN ticket_type_master ttm ON t.ticket_type_id = ttm.id
         LEFT JOIN sub_ticket_type_master sttm ON t.sub_ticket_type_id = sttm.id
+        LEFT JOIN branch_master bm ON t.branch_id = bm.id
         LEFT JOIN users u_creator ON t.created_by = u_creator.id
         LEFT JOIN users u_comp ON t.completed_by = u_comp.id
         WHERE t.id = ?

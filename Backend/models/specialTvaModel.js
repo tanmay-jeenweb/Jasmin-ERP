@@ -341,8 +341,9 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
          FROM mobile_brand_master`
     );
 
-    // Brands marked show_in_special_tva = 1 are shown individually.
-    // All other brands (show_in_special_tva = 0 or unselected) are grouped into Others.
+    // Brands marked show_in_special_tva = 1 AND show_individually = 1 are shown individually.
+    // Brands marked show_in_special_tva = 1 AND show_individually = 0 are grouped into Others.
+    // All other brands (unselected) also roll into Others.
     const individualBrands = [];
     const otherBrandsList = [];
 
@@ -350,24 +351,27 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
         const rawName = (b.mobile_brand || '').trim();
         const stdName = standardizeBrand(rawName);
         const share = parseFloat(b.share_percentage) || 0;
-        const isSelected = Boolean(b.show_in_special_tva);
+        const isSpecialTva = Boolean(b.show_in_special_tva);
+        const isIndividual = isSpecialTva && Boolean(b.show_individually);
 
         const brandObj = {
             id: b.id,
             raw_name: rawName,
             brand_name: stdName,
             share_percentage: share,
-            show_in_special_tva: isSelected,
-            show_individually: isSelected
+            show_in_special_tva: isSpecialTva,
+            show_individually: isIndividual
         };
 
-        if (isSelected) {
+        if (isIndividual) {
             // Deduplicate if needed
             if (!individualBrands.some(ib => ib.brand_name.toLowerCase() === stdName.toLowerCase())) {
                 individualBrands.push(brandObj);
             }
-        } else {
-            otherBrandsList.push(brandObj);
+        } else if (isSpecialTva) {
+            if (!otherBrandsList.some(ob => ob.brand_name.toLowerCase() === stdName.toLowerCase())) {
+                otherBrandsList.push(brandObj);
+            }
         }
     }
 
@@ -496,20 +500,27 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
         return 'Other';
     };
 
-    // Helper to find target column: individual brand name or 'Other' for all unselected brands
+    // Helper to find target column: individual brand name or 'Other' ONLY for brands participating in Special TVA
     const findMatchingColumn = (rawBrand) => {
-        if (!rawBrand) return 'Other';
+        if (!rawBrand) return null;
         const brandLower = rawBrand.trim().toLowerCase();
 
-        // 1. Check if it matches an individual brand (show_in_special_tva = 1)
+        // 1. Check if it matches an individual brand (show_in_special_tva = 1 AND show_individually = 1)
         const matchInd = individualBrands.find(
             ib => ib.brand_name.toLowerCase() === brandLower ||
                   (ib.raw_name && ib.raw_name.toLowerCase() === brandLower)
         );
         if (matchInd) return matchInd.brand_name;
 
-        // 2. All other brands that are not selected are grouped into Others
-        return 'Other';
+        // 2. Check if it matches a brand explicitly marked for Special TVA under Others (show_in_special_tva = 1 AND show_individually = 0)
+        const matchOther = otherBrandsList.find(
+            ob => ob.brand_name.toLowerCase() === brandLower ||
+                  (ob.raw_name && ob.raw_name.toLowerCase() === brandLower)
+        );
+        if (matchOther) return 'Other';
+
+        // 3. Unselected brands (show_in_special_tva = 0) are completely excluded from the Special TVA report
+        return null;
     };
 
     // 5. Query sales and sales returns from sales_invoice_cache within date range
@@ -591,6 +602,9 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
         grandTotals.brand_targets[bh] = 0;
     }
 
+    // Total configured share percentage for brands explicitly grouped in "Others" (no 100 - sum)
+    const otherShareSum = otherBrandsList.reduce((acc, ob) => acc + (parseFloat(ob.share_percentage) || 0), 0);
+
     for (const branch of filteredBranches) {
         const totalBranchTarget = parseFloat(branch.target) || 0;
         grandTotals.target += totalBranchTarget;
@@ -610,8 +624,8 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
             grandTotals.brand_targets[ib.brand_name] += bTgt;
         }
 
-        // Other target is 100% - sum of selected brand percentages (remaining target balance)
-        const otherTarget = Math.max(0, totalBranchTarget - allocatedTargetSum);
+        // Other target: calculated strictly from configured share_percentage of brands in otherBrandsList
+        const otherTarget = otherShareSum > 0 ? Math.round((totalBranchTarget * otherShareSum) / 100) : 0;
         brandTargets['Other'] = otherTarget;
         grandTotals.brand_targets['Other'] += otherTarget;
 

@@ -71,7 +71,8 @@ export default function TicketList() {
     const [activeTab, setActiveTab] = useState("active"); // 'active' or 'history'
     const [ownershipFilter, setOwnershipFilter] = useState("ALL"); // 'ALL', 'MINE', 'ASSIGNED'
     const [selectedTicketTypeFilter, setSelectedTicketTypeFilter] = useState("");
-    const [formOptions, setFormOptions] = useState({ ticket_types: [], sub_ticket_types: [] });
+    const [selectedBranchFilter, setSelectedBranchFilter] = useState("");
+    const [formOptions, setFormOptions] = useState({ ticket_types: [], sub_ticket_types: [], branches: [] });
 
     // Loading states
     const [loadingTickets, setLoadingTickets] = useState(false);
@@ -122,13 +123,14 @@ export default function TicketList() {
         loadInitialData();
     }, []);
 
-    // Load Tickets based on activeTab
+    // Load Tickets based on activeTab, ticket type, and branch
     const loadTickets = useCallback(async () => {
         setLoadingTickets(true);
         try {
             const res = await getTickets({
                 tab: activeTab,
-                ticket_type_id: selectedTicketTypeFilter || undefined
+                ticket_type_id: selectedTicketTypeFilter || undefined,
+                branch_id: selectedBranchFilter || undefined
             });
             if (res.data?.success) {
                 setTickets(res.data.data || []);
@@ -147,7 +149,7 @@ export default function TicketList() {
         } finally {
             setLoadingTickets(false);
         }
-    }, [activeTab, selectedTicketTypeFilter]);
+    }, [activeTab, selectedTicketTypeFilter, selectedBranchFilter]);
 
     useEffect(() => {
         loadTickets();
@@ -323,6 +325,11 @@ export default function TicketList() {
                     return false;
                 }
 
+                // Branch filter
+                if (selectedBranchFilter && String(t.branch_id) !== String(selectedBranchFilter)) {
+                    return false;
+                }
+
                 return true;
             })
             .map((t) => ({
@@ -330,7 +337,7 @@ export default function TicketList() {
                 assigned_names: (t.assigned_users || []).map((u) => u.name).join(", "),
                 created_at_formatted: formatDateTime(t.created_at)
             }));
-    }, [tickets, ownershipFilter, selectedTicketTypeFilter, userMeta.currentUserId]);
+    }, [tickets, ownershipFilter, selectedTicketTypeFilter, selectedBranchFilter, userMeta.currentUserId]);
 
     // DataTable columns definition
     const columns = useMemo(() => [
@@ -353,6 +360,27 @@ export default function TicketList() {
                         </span>
                     )}
                 </div>
+            )
+        },
+        {
+            key: "branch_name",
+            label: "Branch",
+            minWidth: "150px",
+            render: (row) => (
+                row.branch_name ? (
+                    <div className="flex flex-col items-start gap-0.5">
+                        <span className="font-semibold text-xs text-slate-800 line-clamp-1" title={row.branch_name}>
+                            {row.branch_name}
+                        </span>
+                        {row.branch_code && (
+                            <span className="text-[10px] font-mono font-medium text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
+                                {row.branch_code}
+                            </span>
+                        )}
+                    </div>
+                ) : (
+                    <span className="text-xs text-slate-400 italic">General</span>
+                )
             )
         },
         {
@@ -547,6 +575,22 @@ export default function TicketList() {
                     searchPlaceholder="Search tickets..."
                     toggleActions={
                         <>
+                            {/* Branch Filter (if multiple branches available) */}
+                            {formOptions.branches && formOptions.branches.length > 1 && (
+                                <select
+                                    value={selectedBranchFilter}
+                                    onChange={(e) => setSelectedBranchFilter(e.target.value)}
+                                    className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 outline-none focus:border-[#6804a1] cursor-pointer max-w-[200px]"
+                                >
+                                    <option value="">All Branches</option>
+                                    {formOptions.branches.map((b) => (
+                                        <option key={b.id} value={b.id}>
+                                            {b.name} {b.code ? `(${b.code})` : ""}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+
                             {/* Ticket Type Filter */}
                             <select
                                 value={selectedTicketTypeFilter}
@@ -692,19 +736,44 @@ export default function TicketList() {
                                             </div>
                                         </div>
 
-                                        {/* Category & Assignees Banner */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200/80">
+                                        {/* Branch, Category & Assignees Banner */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200/80">
+                                            {/* Branch */}
+                                            <div>
+                                                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                                                    Branch
+                                                </span>
+                                                {ticketDetails.branch_name ? (
+                                                    <div>
+                                                        <p className="text-sm font-bold text-slate-900 leading-snug">
+                                                            {ticketDetails.branch_name}
+                                                        </p>
+                                                        {ticketDetails.branch_code && (
+                                                            <span className="inline-block mt-1 text-[10px] font-mono font-medium text-slate-600 bg-slate-200/70 px-1.5 py-0.2 rounded border border-slate-200">
+                                                                {ticketDetails.branch_code} {ticketDetails.branch_city ? `• ${ticketDetails.branch_city}` : ""}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-sm font-medium text-slate-400 italic">
+                                                        General / Head Office
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            {/* Category & Subtype */}
                                             <div>
                                                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
                                                     Category & Subtype
                                                 </span>
-                                                <p className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                                <p className="text-sm font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
                                                     <span className="text-indigo-600">{ticketDetails.ticket_type_name}</span>
                                                     <span className="text-slate-400 font-normal">/</span>
                                                     <span className="text-purple-700">{ticketDetails.sub_ticket_type_name}</span>
                                                 </p>
                                             </div>
 
+                                            {/* Assigned Resolvers */}
                                             <div>
                                                 <div className="flex items-center justify-between mb-1">
                                                     <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">

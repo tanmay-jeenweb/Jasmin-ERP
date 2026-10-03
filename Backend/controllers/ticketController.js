@@ -34,7 +34,7 @@ const checkHasTicketManagementPermission = async (user) => {
 // 1. Create a new Ticket
 const createTicketController = async (req, res) => {
     try {
-        const { ticket_type_id, sub_ticket_type_id, title, description, remarks } = req.body;
+        const { ticket_type_id, sub_ticket_type_id, branch_id, title, description, remarks } = req.body;
         const createdBy = req.user.id;
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
 
@@ -50,6 +50,55 @@ const createTicketController = async (req, res) => {
         }
         if (!description || !description.trim()) {
             return res.status(400).json({ success: false, message: 'Describe the issue (Description) is compulsory.' });
+        }
+
+        // Parse branch_id
+        let selectedBranchId = branch_id ? parseInt(branch_id, 10) : null;
+        if (isNaN(selectedBranchId) || selectedBranchId <= 0) {
+            selectedBranchId = null;
+        }
+
+        // Check if user is an admin
+        const [userRows] = await db.execute(
+            `SELECT u.id, u.role, ut.user_role, ut.type_name
+             FROM users u
+             LEFT JOIN user_types ut ON u.user_type_id = ut.id
+             WHERE u.id = ?`,
+            [createdBy]
+        );
+        let isAdmin = false;
+        if (userRows.length > 0) {
+            const u = userRows[0];
+            const role = String(u.role || '').toLowerCase();
+            const userRole = String(u.user_role || '').toLowerCase();
+            const typeName = String(u.type_name || '').toLowerCase();
+            if (role === 'admin' || role === 'super admin' || userRole === 'admin' || typeName === 'admin') {
+                isAdmin = true;
+            }
+        }
+
+        if (isAdmin) {
+            // Admin must select a branch
+            if (!selectedBranchId) {
+                return res.status(400).json({ success: false, message: 'Branch selection is required.' });
+            }
+        } else {
+            // Non-admin: fetch user's assigned branches from user_branch_mappings
+            const [mRows] = await db.execute(
+                `SELECT branch_id FROM user_branch_mappings WHERE user_id = ?`,
+                [createdBy]
+            );
+            const userMappedBranchIds = mRows.map(r => r.branch_id);
+
+            // If non-admin user has assigned branches, require branch selection and ensure it is one of their assigned branches
+            if (userMappedBranchIds.length > 0) {
+                if (!selectedBranchId) {
+                    return res.status(400).json({ success: false, message: 'Branch selection is required.' });
+                }
+                if (!userMappedBranchIds.includes(selectedBranchId)) {
+                    return res.status(403).json({ success: false, message: 'You are not assigned to the selected branch.' });
+                }
+            }
         }
 
         // Verify Ticket Type exists
@@ -90,6 +139,7 @@ const createTicketController = async (req, res) => {
         const result = await createTicket({
             ticketTypeId: parseInt(ticket_type_id, 10),
             subTicketTypeId: parseInt(sub_ticket_type_id, 10),
+            branchId: selectedBranchId,
             title: title.trim(),
             description: description.trim(),
             images: uploadedImages,
@@ -106,7 +156,7 @@ const createTicketController = async (req, res) => {
             'Ticket Creation',
             result.ticket_no,
             null,
-            { id: result.id, ticket_no: result.ticket_no, title: title.trim() }
+            { id: result.id, ticket_no: result.ticket_no, title: title.trim(), branch_id: selectedBranchId }
         );
 
         res.status(201).json({
@@ -128,14 +178,15 @@ const getTicketsController = async (req, res) => {
     try {
         const userId = req.user.id;
         const isAdmin = req.user.role === 'admin' || req.user.role === 'super admin';
-        const { tab = 'active', search = '', ticket_type_id = null } = req.query;
+        const { tab = 'active', search = '', ticket_type_id = null, branch_id = null } = req.query;
 
         const tickets = await getTicketsForUser({
             userId,
             isAdmin,
             tab,
             search,
-            ticketTypeId: ticket_type_id ? parseInt(ticket_type_id, 10) : null
+            ticketTypeId: ticket_type_id ? parseInt(ticket_type_id, 10) : null,
+            branchId: branch_id ? parseInt(branch_id, 10) : null
         });
 
         // Also check if current user has ticket management permission (for UI action flags)
@@ -406,9 +457,11 @@ const completeTicketController = async (req, res) => {
     }
 };
 
-// 7. Get form options (Ticket Types and Sub Ticket Types) for ticket creation and shift dropdowns
+// 7. Get form options (Ticket Types, Sub Ticket Types, and User Assigned Branches) for ticket creation and shift dropdowns
 const getTicketFormOptionsController = async (req, res) => {
     try {
+        const userId = req.user.id;
+
         // Fetch active ticket types
         const [ticketTypes] = await db.execute(`
             SELECT id, name FROM ticket_type_master ORDER BY name ASC
@@ -446,11 +499,56 @@ const getTicketFormOptionsController = async (req, res) => {
             };
         });
 
+        // Determine if user is admin
+        const [userRows] = await db.execute(
+            `SELECT u.id, u.role, ut.user_role, ut.type_name
+             FROM users u
+             LEFT JOIN user_types ut ON u.user_type_id = ut.id
+             WHERE u.id = ?`,
+            [userId]
+        );
+
+        let isAdmin = false;
+        if (userRows.length > 0) {
+            const u = userRows[0];
+            const role = String(u.role || '').toLowerCase();
+            const userRole = String(u.user_role || '').toLowerCase();
+            const typeName = String(u.type_name || '').toLowerCase();
+            if (role === 'admin' || role === 'super admin' || userRole === 'admin' || typeName === 'admin') {
+                isAdmin = true;
+            }
+        }
+
+        let branches = [];
+        if (isAdmin) {
+            // Admins can see all active branches
+            const [allBranches] = await db.execute(`
+                SELECT bm.id, bm.name, bm.code, bm.city, bm.state_id, COALESCE(sm.name, '') AS state_name
+                FROM branch_master bm
+                LEFT JOIN state_master sm ON bm.state_id = sm.id
+                WHERE bm.status = 'active'
+                ORDER BY bm.name ASC
+            `);
+            branches = allBranches;
+        } else {
+            // Non-admin (such as ABM or store user): ONLY show branches assigned to them in user_branch_mappings
+            const [mappedBranches] = await db.execute(`
+                SELECT bm.id, bm.name, bm.code, bm.city, bm.state_id, COALESCE(sm.name, '') AS state_name
+                FROM user_branch_mappings ubm
+                JOIN branch_master bm ON ubm.branch_id = bm.id
+                LEFT JOIN state_master sm ON bm.state_id = sm.id
+                WHERE ubm.user_id = ? AND bm.status = 'active'
+                ORDER BY bm.name ASC
+            `, [userId]);
+            branches = mappedBranches;
+        }
+
         res.status(200).json({
             success: true,
             data: {
                 ticket_types: ticketTypes,
-                sub_ticket_types: parsedSubTickets
+                sub_ticket_types: parsedSubTickets,
+                branches
             }
         });
     } catch (error) {

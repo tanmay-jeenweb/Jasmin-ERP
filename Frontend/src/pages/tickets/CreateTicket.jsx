@@ -8,6 +8,8 @@ export default function CreateTicket() {
     const navigate = useNavigate();
 
     // Form data states
+    const [branches, setBranches] = useState([]);
+    const [selectedBranch, setSelectedBranch] = useState("");
     const [ticketTypes, setTicketTypes] = useState([]);
     const [allSubTicketTypes, setAllSubTicketTypes] = useState([]);
     const [selectedTicketType, setSelectedTicketType] = useState("");
@@ -24,7 +26,7 @@ export default function CreateTicket() {
     const [isDragOver, setIsDragOver] = useState(false);
     const fileInputRef = useRef(null);
 
-    // Fetch active ticket types and sub ticket types
+    // Fetch active ticket types, sub ticket types, and user assigned branches
     useEffect(() => {
         const fetchOptions = async () => {
             setLoadingOptions(true);
@@ -33,6 +35,12 @@ export default function CreateTicket() {
                 if (res.data?.success) {
                     setTicketTypes(res.data.data.ticket_types || []);
                     setAllSubTicketTypes(res.data.data.sub_ticket_types || []);
+                    const userBranches = res.data.data.branches || [];
+                    setBranches(userBranches);
+                    // If user only has 1 branch assigned, automatically select it!
+                    if (userBranches.length === 1) {
+                        setSelectedBranch(String(userBranches[0].id));
+                    }
                 }
             } catch (err) {
                 console.error("Failed to load ticket options:", err);
@@ -135,6 +143,10 @@ export default function CreateTicket() {
         e.preventDefault();
 
         // Validation checks
+        if (branches.length > 0 && !selectedBranch) {
+            toast.error("Please select a Branch.");
+            return;
+        }
         if (!selectedTicketType) {
             toast.error("Please select a Ticket Type.");
             return;
@@ -155,6 +167,9 @@ export default function CreateTicket() {
         setSubmitting(true);
         try {
             const formData = new FormData();
+            if (selectedBranch) {
+                formData.append("branch_id", selectedBranch);
+            }
             formData.append("ticket_type_id", selectedTicketType);
             formData.append("sub_ticket_type_id", selectedSubTicketType);
             formData.append("title", title.trim());
@@ -185,6 +200,11 @@ export default function CreateTicket() {
 
     const handleReset = () => {
         if (window.confirm("Are you sure you want to clear this form?")) {
+            if (branches.length === 1) {
+                setSelectedBranch(String(branches[0].id));
+            } else {
+                setSelectedBranch("");
+            }
             setSelectedTicketType("");
             setSelectedSubTicketType("");
             setTitle("");
@@ -234,8 +254,50 @@ export default function CreateTicket() {
                     </div>
 
                     <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6">
-                        {/* Row 1: Ticket Type & Sub Ticket Type */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        {/* Row 1: Branch, Ticket Type & Sub Ticket Type */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 md:grid-cols-2 gap-5">
+                            {/* Branch Selection */}
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                        Branch {branches.length > 0 && <span className="text-rose-600">*</span>}
+                                    </label>
+                                    {branches.length === 1 ? (
+                                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                                            Auto-selected
+                                        </span>
+                                    ) : branches.length > 1 ? (
+                                        <span className="text-[10px] font-medium text-slate-500">
+                                            {branches.length} available
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                            No Branch Assigned
+                                        </span>
+                                    )}
+                                </div>
+                                <select
+                                    value={selectedBranch}
+                                    onChange={(e) => setSelectedBranch(e.target.value)}
+                                    required={branches.length > 0}
+                                    disabled={loadingOptions || submitting || branches.length === 0}
+                                    className="w-full px-3.5 py-2.5 border-[1.5px] border-slate-300 rounded-xl text-sm outline-none text-slate-800 bg-white focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition-all cursor-pointer font-medium disabled:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-75"
+                                >
+                                    {branches.length === 0 ? (
+                                        <option value="">No branches assigned to your account</option>
+                                    ) : (
+                                        <>
+                                            <option value="">-- Select Branch --</option>
+                                            {branches.map((b) => (
+                                                <option key={b.id} value={b.id}>
+                                                    {b.name} {b.code ? `(${b.code})` : ""} {b.city ? `— ${b.city}` : ""}
+                                                </option>
+                                            ))}
+                                        </>
+                                    )}
+                                </select>
+                            </div>
+
                             {/* Ticket Type */}
                             <div>
                                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
@@ -454,7 +516,7 @@ export default function CreateTicket() {
                             </button>
                             <button
                                 type="submit"
-                                disabled={submitting || !selectedTicketType || !selectedSubTicketType || !title.trim() || !description.trim()}
+                                disabled={submitting || (branches.length > 0 && !selectedBranch) || !selectedTicketType || !selectedSubTicketType || !title.trim() || !description.trim()}
                                 className="w-full sm:w-auto px-8 py-2.5 rounded-xl text-white font-bold text-sm bg-gradient-to-r from-indigo-600 to-[#6804a1] hover:from-indigo-700 hover:to-[#570387] shadow-lg shadow-indigo-600/30 transition-all transform active:scale-95 cursor-pointer disabled:bg-slate-400 disabled:cursor-not-allowed disabled:shadow-none disabled:active:scale-100 flex items-center justify-center gap-2"
                             >
                                 {submitting ? (

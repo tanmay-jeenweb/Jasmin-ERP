@@ -11,23 +11,25 @@ function BrandModal({ isOpen, row, onClose, onSave, saving }) {
   const [forCode, setForCode] = useState("No");
   const [sharePercentage, setSharePercentage] = useState("");
   const [showInSpecialTva, setShowInSpecialTva] = useState(false);
+  const [showIndividually, setShowIndividually] = useState(false);
 
   useEffect(() => {
     if (row) {
       setMobileBrand(row.mobile_brand || "");
       setForCode(row.for_code || "No");
-      const isSpecial = Boolean(row.show_in_special_tva);
-      setShowInSpecialTva(isSpecial);
       setSharePercentage(
-        isSpecial && row.share_percentage !== undefined && row.share_percentage !== null
+        row.share_percentage !== undefined && row.share_percentage !== null
           ? row.share_percentage
           : ""
       );
+      setShowInSpecialTva(Boolean(row.show_in_special_tva));
+      setShowIndividually(Boolean(row.show_individually));
     } else {
       setMobileBrand("");
       setForCode("No");
       setSharePercentage("");
       setShowInSpecialTva(false);
+      setShowIndividually(false);
     }
   }, [row, isOpen]);
 
@@ -38,15 +40,13 @@ function BrandModal({ isOpen, row, onClose, onSave, saving }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!mobileBrand.trim()) return;
-    let shareVal = 0;
-    if (showInSpecialTva) {
-      shareVal = sharePercentage !== "" ? parseFloat(sharePercentage) : 0;
-      if (isNaN(shareVal) || shareVal <= 0 || shareVal > 100) {
-        toast.error("Please enter a valid share percentage between 0.01 and 100");
-        return;
-      }
+    const shareVal = sharePercentage !== "" ? parseFloat(sharePercentage) : 0;
+    if (isNaN(shareVal) || shareVal < 0 || shareVal > 100) {
+      toast.error("Share percentage must be between 0 and 100");
+      return;
     }
-    onSave(isEdit ? row.id : null, mobileBrand.trim(), forCode, shareVal, showInSpecialTva);
+    const finalShowIndividually = showInSpecialTva ? showIndividually : false;
+    onSave(isEdit ? row.id : null, mobileBrand.trim(), forCode, shareVal, showInSpecialTva, finalShowIndividually);
   };
 
   return (
@@ -68,19 +68,45 @@ function BrandModal({ isOpen, row, onClose, onSave, saving }) {
         {/* Modal Body */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           <div className="px-6 py-4 space-y-3.5 overflow-y-auto">
-            {/* Brand Name */}
-            <div>
-              <label className="block text-xs font-bold text-slate-650 uppercase tracking-wider mb-1.5">
-                Brand Name <span className="text-rose-650">*</span>
-              </label>
-              <input
-                type="text"
-                value={mobileBrand}
-                onChange={(e) => setMobileBrand(e.target.value)}
-                required
-                placeholder="e.g. Apple, Samsung, OnePlus"
-                className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-2 text-sm outline-none text-slate-800 focus:border-indigo-650 transition-colors"
-              />
+            {/* 2-Column Grid for Brand Name & Share Percentage */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-650 uppercase tracking-wider mb-1.5">
+                  Brand Name <span className="text-rose-650">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={mobileBrand}
+                  onChange={(e) => setMobileBrand(e.target.value)}
+                  required
+                  placeholder="e.g. Apple, Samsung, OnePlus"
+                  className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-2 text-sm outline-none text-slate-800 focus:border-indigo-650 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-650 uppercase tracking-wider mb-1.5">
+                  Share Percentage (%)
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={sharePercentage}
+                    onChange={(e) => setSharePercentage(e.target.value)}
+                    placeholder="e.g. 40.00"
+                    className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-2 text-sm outline-none text-slate-800 focus:border-indigo-650 transition-colors pr-8"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-semibold text-xs select-none">
+                    %
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Used in TVA to auto calculate target value & quantity.
+                </p>
+              </div>
             </div>
 
             {/* For Code Selection (Compact Inline) */}
@@ -117,7 +143,8 @@ function BrandModal({ isOpen, row, onClose, onSave, saving }) {
               <label className="block text-xs font-bold text-slate-650 uppercase tracking-wider mb-2">
                 Special TVA Settings
               </label>
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 transition-all space-y-3">
+              <div className="space-y-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200/80 transition-all">
+                {/* Checkbox 1: Show in special TVA report */}
                 <label className="flex items-start gap-3 cursor-pointer select-none">
                   <input
                     type="checkbox"
@@ -126,7 +153,7 @@ function BrandModal({ isOpen, row, onClose, onSave, saving }) {
                       const checked = e.target.checked;
                       setShowInSpecialTva(checked);
                       if (!checked) {
-                        setSharePercentage("");
+                        setShowIndividually(false);
                       }
                     }}
                     className="mt-0.5 w-[18px] h-[18px] rounded border-slate-300 text-indigo-650 accent-indigo-650 cursor-pointer"
@@ -136,36 +163,32 @@ function BrandModal({ isOpen, row, onClose, onSave, saving }) {
                       Show in special TVA report
                     </span>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Include this brand individually in the Special TVA report. Brands not selected will be grouped in &quot;Others&quot;.
+                      Include this brand in the special Target vs Achievement (TVA) report.
                     </p>
                   </div>
                 </label>
 
-                {/* Conditional Share Percentage (%) only shown when checked */}
+                {/* Checkbox 2: Show individually or in others - Aligned left */}
                 {showInSpecialTva && (
-                  <div className="pt-3 border-t border-slate-200/70">
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Share Percentage (%) <span className="text-rose-650">*</span>
-                    </label>
-                    <div className="relative max-w-[240px]">
+                  <div className="pt-2.5 border-t border-slate-200/70 transition-all">
+                    <label className="flex items-start gap-3 cursor-pointer select-none">
                       <input
-                        type="number"
-                        min="0.01"
-                        max="100"
-                        step="0.01"
-                        value={sharePercentage}
-                        onChange={(e) => setSharePercentage(e.target.value)}
-                        required={showInSpecialTva}
-                        placeholder="e.g. 40.00"
-                        className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-2 text-sm outline-none text-slate-800 focus:border-indigo-650 transition-colors pr-8 bg-white"
+                        type="checkbox"
+                        checked={showIndividually}
+                        onChange={(e) => setShowIndividually(e.target.checked)}
+                        className="mt-0.5 w-[18px] h-[18px] rounded border-slate-300 text-indigo-650 accent-indigo-650 cursor-pointer"
                       />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-semibold text-xs select-none">
-                        %
-                      </span>
-                    </div>
-                    <p className="mt-1 text-[11px] text-slate-400">
-                      Used in Special TVA to calculate this brand&apos;s individual target quantity.
-                    </p>
+                      <div>
+                        <span className="text-sm font-semibold text-slate-800">
+                          Show individually or in others
+                        </span>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {showIndividually
+                            ? "Checked: Show individually in the report."
+                            : "Unchecked: Group in \"Others\"."}
+                        </p>
+                      </div>
+                    </label>
                   </div>
                 )}
               </div>
@@ -220,7 +243,7 @@ export default function MobileBrandMaster() {
     loadBrands();
   }, []);
 
-  const handleSave = async (id, mobileBrand, forCode, sharePercentage, showInSpecialTva) => {
+  const handleSave = async (id, mobileBrand, forCode, sharePercentage, showInSpecialTva, showIndividually) => {
     setSaving(true);
     try {
       const payload = {
@@ -228,7 +251,7 @@ export default function MobileBrandMaster() {
         forCode,
         sharePercentage,
         showInSpecialTva,
-        showIndividually: showInSpecialTva ? 1 : 0
+        showIndividually
       };
       if (id) {
         // Edit Mode
@@ -275,9 +298,6 @@ export default function MobileBrandMaster() {
       {
         key: "share_percentage", label: "Share %", minWidth: "110px",
         render: (row) => {
-          if (!row.show_in_special_tva) {
-            return <span className="text-slate-400 text-xs font-medium">—</span>;
-          }
           const val = parseFloat(row.share_percentage) || 0;
           return (
             <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
@@ -301,7 +321,7 @@ export default function MobileBrandMaster() {
       {
         key: "show_in_special_tva",
         label: "Special TVA",
-        minWidth: "130px",
+        minWidth: "120px",
         render: (row) => {
           const isSpecial = Boolean(row.show_in_special_tva);
           return (
@@ -309,10 +329,32 @@ export default function MobileBrandMaster() {
               className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
                 isSpecial
                   ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "bg-slate-100 text-slate-500"
+              }`}
+            >
+              {isSpecial ? "Yes" : "No"}
+            </span>
+          );
+        }
+      },
+      {
+        key: "show_individually",
+        label: "TVA Display",
+        minWidth: "140px",
+        render: (row) => {
+          if (!row.show_in_special_tva) {
+            return <span className="text-slate-400 text-xs font-medium">—</span>;
+          }
+          const isIndividual = Boolean(row.show_individually);
+          return (
+            <span
+              className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                isIndividual
+                  ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
                   : "bg-amber-50 text-amber-700 border border-amber-200"
               }`}
             >
-              {isSpecial ? "Individual" : "In Others"}
+              {isIndividual ? "Individually" : "In Others"}
             </span>
           );
         }
