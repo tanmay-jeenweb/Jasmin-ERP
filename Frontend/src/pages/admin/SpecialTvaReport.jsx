@@ -127,6 +127,21 @@ export default function SpecialTvaReport() {
   const userContext = reportData?.user_context;
   const canViewAbmTab = Boolean(userContext?.can_view_abm_tab);
   const isAbmUser = Boolean(userContext?.is_abm);
+  const otherSharePercentage = reportData?.other_share_percentage ?? reportData?.allocation_summary?.other_share_percentage;
+
+  // Helper to format target column labels with configured share %
+  const getBrandTargetLabel = (bh) => {
+    if (bh === "Other" && otherSharePercentage !== undefined && otherSharePercentage !== null) {
+      return `Other (${otherSharePercentage}%)`;
+    }
+    const ind = reportData?.individual_brands?.find(
+      b => b.brand_name?.toLowerCase() === bh.toLowerCase()
+    );
+    if (ind && ind.share_percentage > 0) {
+      return `${bh} (${ind.share_percentage}%)`;
+    }
+    return bh;
+  };
 
   // Unique filter options
   const uniqueStates = useMemo(() => {
@@ -444,8 +459,8 @@ export default function SpecialTvaReport() {
       const isTotal = bh === "Total";
       cols.push({
         key: `tgt_${bh}`,
-        label: bh,
-        minWidth: isTotal ? "95px" : "85px",
+        label: getBrandTargetLabel(bh),
+        minWidth: isTotal ? "95px" : "90px",
         render: (row) => {
           const val = row[`tgt_${bh}`] || 0;
           return (
@@ -601,8 +616,8 @@ export default function SpecialTvaReport() {
       const isTotal = bh === "Total";
       cols.push({
         key: `tgt_${bh}`,
-        label: bh,
-        minWidth: isTotal ? "95px" : "85px",
+        label: getBrandTargetLabel(bh),
+        minWidth: isTotal ? "95px" : "90px",
         render: (row) => {
           const val = row[`tgt_${bh}`] || 0;
           return (
@@ -766,7 +781,7 @@ export default function SpecialTvaReport() {
           "State",
           "Zone",
           "Target",
-          ...brandHeaders, // Target
+          ...brandHeaders.map(bh => getBrandTargetLabel(bh)), // Target
           ...brandHeaders, // Achievement QTY
           ...brandHeaders  // Achievement %
         ];
@@ -975,7 +990,7 @@ export default function SpecialTvaReport() {
         "Zone",
         "MF",
         "Target",
-        ...brandHeaders, // Target
+        ...brandHeaders.map(bh => getBrandTargetLabel(bh)), // Target
         ...brandHeaders, // Achievement QTY
         ...brandHeaders  // Achievement %
       ];

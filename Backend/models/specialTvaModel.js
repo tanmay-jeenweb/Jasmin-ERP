@@ -358,7 +358,7 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
             id: b.id,
             raw_name: rawName,
             brand_name: stdName,
-            share_percentage: share,
+            share_percentage: isIndividual ? share : 0,
             show_in_special_tva: isSpecialTva,
             show_individually: isIndividual
         };
@@ -602,8 +602,19 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
         grandTotals.brand_targets[bh] = 0;
     }
 
-    // Total configured share percentage for brands explicitly grouped in "Others" (no 100 - sum)
-    const otherShareSum = otherBrandsList.reduce((acc, ob) => acc + (parseFloat(ob.share_percentage) || 0), 0);
+    // 1. Calculate sum of all individual brand share percentages
+    const totalIndividualShare = individualBrands.reduce(
+        (acc, ib) => acc + (parseFloat(ib.share_percentage) || 0),
+        0
+    );
+
+    // 2. All percentage left after individual allocation is allocated to Others: 100 - sum(individual).
+    // If difference is negative, clamp to 0 (never negative).
+    const hasAnySpecialTvaBrands = individualBrands.length > 0 || otherBrandsList.length > 0;
+    const rawOtherShare = 100 - totalIndividualShare;
+    const otherSharePercentage = hasAnySpecialTvaBrands && rawOtherShare > 0
+        ? parseFloat(rawOtherShare.toFixed(2))
+        : 0.00;
 
     for (const branch of filteredBranches) {
         const totalBranchTarget = parseFloat(branch.target) || 0;
@@ -624,8 +635,8 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
             grandTotals.brand_targets[ib.brand_name] += bTgt;
         }
 
-        // Other target: calculated strictly from configured share_percentage of brands in otherBrandsList
-        const otherTarget = otherShareSum > 0 ? Math.round((totalBranchTarget * otherShareSum) / 100) : 0;
+        // Other target: calculated from residual percentage (100 - sum of individual)
+        const otherTarget = otherSharePercentage > 0 ? Math.round((totalBranchTarget * otherSharePercentage) / 100) : 0;
         brandTargets['Other'] = otherTarget;
         grandTotals.brand_targets['Other'] += otherTarget;
 
@@ -796,6 +807,11 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
         brand_headers: brandHeaders,
         individual_brands: individualBrands,
         other_brands: otherBrandsList,
+        allocation_summary: {
+            total_individual_share: parseFloat(totalIndividualShare.toFixed(2)),
+            other_share_percentage: otherSharePercentage
+        },
+        other_share_percentage: otherSharePercentage,
         records,
         totals: grandTotals,
         abm_records: abmRecords,
