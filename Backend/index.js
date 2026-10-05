@@ -69,6 +69,7 @@ const { createStockCacheTable } = require("./models/stockCacheModel.js");
 const { createRefreshTokensTable } = require("./models/refreshTokenModel.js");
 const { createSpecialTvaTable } = require("./models/specialTvaModel.js");
 const specialTvaRoutes = require("./routes/specialTvaRoutes.js");
+const appRoutes = require("./routes/appRoutes.js");
 
 
 
@@ -152,6 +153,11 @@ app.use("/v1/api/sub-ticket-types", subTicketTypeRoutes);
 app.use("/v1/api/tickets", ticketRoutes);
 app.use("/v1/api/special-tva", specialTvaRoutes);
 app.use("/v1/api/external", externalRoutes);
+app.use("/v1/api/app", appRoutes);
+
+// Direct shortcut download URLs for easy user clicks / link sharing
+app.get("/download/app", (req, res) => res.redirect("/v1/api/app/download"));
+app.get("/download/apk", (req, res) => res.redirect("/v1/api/app/download"));
 
 
 

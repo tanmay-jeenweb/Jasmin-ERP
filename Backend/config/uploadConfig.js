@@ -34,6 +34,17 @@ if (!fs.existsSync(uploadDir)) {
     }
 }
 
+// Ensure apk subdirectory exists for APK distributions
+const apkUploadDir = path.join(uploadDir, "apk");
+if (!fs.existsSync(apkUploadDir)) {
+    try {
+        fs.mkdirSync(apkUploadDir, { recursive: true });
+        console.log(`Created APK uploads directory at: ${apkUploadDir}`);
+    } catch (err) {
+        console.error(`Failed to create APK uploads directory at ${apkUploadDir}:`, err);
+    }
+}
+
 // Determine uploadBaseUrl:
 // If running on Windows and UPLOAD_BASE_URL points to the remote production domain (interlink.jasminmobile.com),
 // use local http://localhost:${port}/uploads so locally uploaded files can be loaded by the browser.
@@ -48,6 +59,7 @@ const serveMethod = isWindows ? "express" : (process.env.UPLOAD_SERVE_METHOD || 
 
 module.exports = {
     uploadDir,
+    apkUploadDir,
     uploadBaseUrl,
     serveMethod,
     
