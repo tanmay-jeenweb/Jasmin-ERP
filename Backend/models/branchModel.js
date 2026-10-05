@@ -18,6 +18,7 @@ const createBranchTable = async () => {
             abm VARCHAR(255) NOT NULL,
             branch_cls_05 VARCHAR(255) NOT NULL DEFAULT '',
             status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+            internal_status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
             added_by INT NOT NULL,
             device_id VARCHAR(255),
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -42,6 +43,11 @@ const createBranchTable = async () => {
         } catch (err) {
             // ignore if column already exists
         }
+        try {
+            await db.execute(`ALTER TABLE branch_master ADD COLUMN internal_status ENUM('active', 'inactive') NOT NULL DEFAULT 'active'`);
+        } catch (err) {
+            // ignore if column already exists
+        }
     } catch (err) {
         console.error("Error altering branch_master columns:", err);
     }
@@ -50,8 +56,8 @@ const createBranchTable = async () => {
 const createBranch = async (data, addedBy, deviceId) => {
     const query = `
         INSERT INTO branch_master (
-            name, code, phone, email, pincode, GSTIN, opened_on, store_type, state_id, city, address, abm, status, added_by, device_id, branch_cls_05
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            name, code, phone, email, pincode, GSTIN, opened_on, store_type, state_id, city, address, abm, status, internal_status, added_by, device_id, branch_cls_05
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     const [result] = await db.execute(query, [
         data.name,
@@ -67,6 +73,7 @@ const createBranch = async (data, addedBy, deviceId) => {
         data.address,
         data.abm,
         data.status || 'active',
+        data.internal_status || 'active',
         addedBy,
         deviceId,
         data.branch_cls_05 || ''
@@ -92,6 +99,7 @@ const getAllBranches = async () => {
             bm.address,
             COALESCE(abm_u.name, bm.abm) AS abm,
             bm.status,
+            COALESCE(bm.internal_status, 'active') AS internal_status,
             COALESCE(u.name, 'Unknown') AS added_by_name,
             bm.device_id,
             bm.timestamp,
@@ -127,6 +135,7 @@ const updateBranch = async (id, data) => {
             address = ?, 
             abm = ?, 
             status = ?,
+            internal_status = ?,
             branch_cls_05 = ?
         WHERE id = ?
     `;
@@ -144,9 +153,16 @@ const updateBranch = async (id, data) => {
         data.address,
         data.abm,
         data.status,
+        data.internal_status || 'active',
         data.branch_cls_05 || '',
         id
     ]);
+    return result;
+};
+
+const updateBranchInternalStatus = async (id, internalStatus) => {
+    const query = `UPDATE branch_master SET internal_status = ? WHERE id = ?`;
+    const [result] = await db.execute(query, [internalStatus, id]);
     return result;
 };
 
@@ -174,6 +190,7 @@ const getBranchById = async (id) => {
             bm.address,
             COALESCE(abm_u.name, bm.abm) AS abm,
             bm.status,
+            COALESCE(bm.internal_status, 'active') AS internal_status,
             bm.added_by,
             bm.device_id,
             bm.timestamp,
@@ -225,8 +242,8 @@ const upsertBranches = async (branches, addedBy, deviceId) => {
             const query = `
                 INSERT INTO branch_master (
                     name, code, phone, email, pincode, GSTIN, opened_on, 
-                    store_type, state_id, city, address, abm, status, added_by, device_id, branch_cls_05
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    store_type, state_id, city, address, abm, status, internal_status, added_by, device_id, branch_cls_05
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     name = VALUES(name),
                     phone = VALUES(phone),
@@ -279,6 +296,7 @@ module.exports = {
     createBranch,
     getAllBranches,
     updateBranch,
+    updateBranchInternalStatus,
     deleteBranch,
     getBranchById,
     upsertBranches

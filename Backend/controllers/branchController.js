@@ -2,6 +2,7 @@ const {
     createBranch,
     getAllBranches,
     updateBranch,
+    updateBranchInternalStatus,
     deleteBranch,
     getBranchById,
     upsertBranches
@@ -135,6 +136,8 @@ const updateBranchController = async (req, res) => {
         if (!beforeData) {
             return res.status(404).json({ success: false, message: 'Branch not found' });
         }
+
+        req.body.internal_status = req.body.internal_status || beforeData.internal_status || 'active';
 
         await updateBranch(id, req.body);
         
@@ -320,11 +323,53 @@ const getEligibleAbmsController = async (req, res) => {
     }
 };
 
+const toggleBranchInternalStatusController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { internal_status } = req.body;
+
+        const beforeData = await getBranchById(id);
+        if (!beforeData) {
+            return res.status(404).json({ success: false, message: 'Branch not found' });
+        }
+
+        const newInternalStatus = internal_status
+            ? (['active', 'inactive'].includes(String(internal_status).toLowerCase()) ? String(internal_status).toLowerCase() : 'active')
+            : (beforeData.internal_status === 'active' ? 'inactive' : 'active');
+
+        await updateBranchInternalStatus(id, newInternalStatus);
+
+        const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
+        await createAuditLog(
+            req.user?.id,
+            req.user?.name || req.user?.username || 'Unknown',
+            deviceId,
+            'Branch Master',
+            'updated',
+            { internal_status: beforeData.internal_status },
+            { internal_status: newInternalStatus, branch_id: id, branch_name: beforeData.name }
+        );
+
+        res.status(200).json({
+            success: true,
+            message: `Branch internal status updated to ${newInternalStatus}`,
+            data: { id, internal_status: newInternalStatus }
+        });
+    } catch (error) {
+        console.error('Error toggling branch internal status:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+
 module.exports = {
     addBranchController,
     getAllBranchesController,
     updateBranchController,
     deleteBranchController,
     syncBranchesController,
-    getEligibleAbmsController
+    getEligibleAbmsController,
+    toggleBranchInternalStatusController
 };
