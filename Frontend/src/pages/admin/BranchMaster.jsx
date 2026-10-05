@@ -1,7 +1,7 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
-import { getBranches, updateBranch, deleteBranch, syncBranches } from "../../api/branchApi";
+import { getBranches, updateBranch, deleteBranch, syncBranches, toggleBranchInternalStatus } from "../../api/branchApi";
 import DataTable from "../../components/DataTable";
 import toast from "react-hot-toast";
 import { usePermission } from "../../context/PermissionContext";
@@ -30,7 +30,8 @@ function BranchViewModal({ isOpen, row, onClose }) {
     { label: "City", value: row.city },
     { label: "Area Branch Manager (ABM)", value: row.abm || "—" },
     { label: "Zone", value: row.branch_cls_05 || "—" },
-    { label: "Status", value: row.status ? row.status.toUpperCase() : "—", isStatus: true },
+    { label: "API Status", value: row.status ? row.status.toUpperCase() : "—", isStatus: true, statusVal: row.status },
+    { label: "Internal Status", value: (row.internal_status || "active").toUpperCase(), isStatus: true, statusVal: row.internal_status || "active" },
     { label: "Address", value: row.address, fullWidth: true },
   ];
 
@@ -58,7 +59,9 @@ function BranchViewModal({ isOpen, row, onClose }) {
                 <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{f.label}</span>
                 {f.isStatus ? (
                   <p className="mt-1">
-                    <span className={`inline-flex items-center px-2.5 py-[3px] rounded-md text-xs font-bold ${row.status === "active" ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}>
+                    <span className={`inline-flex items-center px-2.5 py-[3px] rounded-md text-xs font-bold ${
+                      (f.statusVal || f.value || "").toLowerCase() === "active" ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                    }`}>
                       {f.value}
                     </span>
                   </p>
@@ -91,7 +94,23 @@ export default function BranchMaster() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const [showActive, setShowActive] = useState(true);
-  const [selectedClass05, setSelectedClass05] = useState("");
+  const [selectedZones, setSelectedZones] = useState([]);
+  const [selectedApiStatuses, setSelectedApiStatuses] = useState([]);
+  const [zoneFilterSearch, setZoneFilterSearch] = useState("");
+  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+  const filterDropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target)) {
+        setIsFilterDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const activeFilterCount = (selectedZones.length > 0 ? 1 : 0) + (selectedApiStatuses.length > 0 ? 1 : 0);
 
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -116,32 +135,17 @@ export default function BranchMaster() {
     loadData();
   }, []);
 
-  const handleToggleStatus = async (row) => {
-    const nextStatus = row.status === "active" ? "inactive" : "active";
+  const handleToggleInternalStatus = async (row) => {
+    const currentInternalStatus = row.internal_status || "active";
+    const nextStatus = currentInternalStatus === "active" ? "inactive" : "active";
     setSaving(true);
     try {
-      const updatedData = {
-        name: row.name,
-        code: row.code,
-        phone: row.phone,
-        email: row.email,
-        pincode: row.pincode,
-        GSTIN: row.GSTIN,
-        opened_on: row.opened_on ? new Date(row.opened_on).toISOString().split("T")[0] : "",
-        store_type: row.store_type,
-        state_id: row.state_id,
-        city: row.city,
-        address: row.address,
-        abm: row.abm,
-        status: nextStatus,
-        branch_cls_05: row.branch_cls_05 || ""
-      };
-      await updateBranch(row.id, updatedData);
-      toast.success(`Branch status updated to ${nextStatus}`);
+      await toggleBranchInternalStatus(row.id, nextStatus);
+      toast.success(`Branch internal status updated to ${nextStatus}`);
       await loadData();
     } catch (err) {
-      console.error("Failed to toggle status", err);
-      toast.error(err?.response?.data?.message || "Failed to update branch status.");
+      console.error("Failed to toggle internal status", err);
+      toast.error(err?.response?.data?.message || "Failed to update branch internal status.");
     } finally {
       setSaving(false);
     }
@@ -190,7 +194,8 @@ export default function BranchMaster() {
         "Other phones": "",
         "Store type": row.store_type ? row.store_type.charAt(0).toUpperCase() + row.store_type.slice(1) : "",
         "Zone": row.branch_cls_05 || "",
-        "Status": row.status === "active" ? "Active" : "InActive"
+        "API Status": row.status === "active" ? "Active" : "InActive",
+        "Internal Status": (row.internal_status || "active") === "active" ? "Active" : "InActive"
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(dataToExport);
@@ -225,11 +230,13 @@ export default function BranchMaster() {
 
   const filteredBranches = useMemo(() => {
     return branches.filter(b => {
-      const matchStatus = b.status === (showActive ? "active" : "inactive");
-      const matchClass05 = !selectedClass05 || b.branch_cls_05 === selectedClass05;
-      return matchStatus && matchClass05;
+      const internalStatus = b.internal_status || "active";
+      const matchInternalStatus = internalStatus === (showActive ? "active" : "inactive");
+      const matchZone = selectedZones.length === 0 || selectedZones.includes(b.branch_cls_05 || "");
+      const matchApiStatus = selectedApiStatuses.length === 0 || selectedApiStatuses.includes(b.status || "active");
+      return matchInternalStatus && matchZone && matchApiStatus;
     });
-  }, [branches, showActive, selectedClass05]);
+  }, [branches, showActive, selectedZones, selectedApiStatuses]);
 
   const columns = useMemo(() => {
     const cols = [
@@ -265,6 +272,32 @@ export default function BranchMaster() {
       {
         key: "branch_cls_05", label: "Zone",
         render: (row) => <span className="text-slate-650">{row.branch_cls_05 || "—"}</span>
+      },
+      {
+        key: "status", label: "API Status",
+        render: (row) => {
+          const isApiActive = row.status === "active";
+          return (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+              isApiActive ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"
+            }`}>
+              {row.status ? row.status.toUpperCase() : "—"}
+            </span>
+          );
+        }
+      },
+      {
+        key: "internal_status", label: "Internal Status",
+        render: (row) => {
+          const isInternalActive = (row.internal_status || "active") === "active";
+          return (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+              isInternalActive ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"
+            }`}>
+              {isInternalActive ? "ACTIVE" : "INACTIVE"}
+            </span>
+          );
+        }
       }
     ];
 
@@ -276,7 +309,7 @@ export default function BranchMaster() {
       cols.push({
         key: "actions", label: "Actions", sortable: false, minWidth: "200px",
         render: (row) => {
-          const isActive = row.status === "active";
+          const isInternalActive = (row.internal_status || "active") === "active";
           return (
             <div className="flex items-center gap-2">
               {/* View Action */}
@@ -310,12 +343,16 @@ export default function BranchMaster() {
                 </button>
               )}
 
-              {/* Active/Inactive Toggle */}
+              {/* Internal Active/Inactive Toggle */}
               {canUpdate && (
                 <button
-                  onClick={() => handleToggleStatus(row)}
-                  className={`flex w-8 h-8 items-center justify-center rounded-lg border cursor-pointer transition-colors ${isActive ? "border-green-200 bg-green-50 text-green-600 hover:bg-green-100" : "border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"}`}
-                  title={isActive ? "Mark Inactive" : "Mark Active"}
+                  onClick={() => handleToggleInternalStatus(row)}
+                  className={`flex w-8 h-8 items-center justify-center rounded-lg border cursor-pointer transition-colors ${
+                    isInternalActive 
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100" 
+                      : "border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
+                  }`}
+                  title={isInternalActive ? "Mark Internally Inactive" : "Mark Internally Active"}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-[15px] h-[15px]">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />
@@ -373,17 +410,202 @@ export default function BranchMaster() {
           searchPlaceholder="Search branches by name, code, city..."
           toggleActions={
             <div className="flex items-center gap-4">
-              <select
-                value={selectedClass05}
-                onChange={(e) => setSelectedClass05(e.target.value)}
-                className="h-10 rounded-lg border border-slate-300 bg-slate-50 px-3 text-sm outline-none text-slate-700 focus:border-indigo-650 transition-colors"
-              >
-                <option value="">All Zones</option>
-                {uniqueClass05Values.map(val => (
-                  <option key={val} value={val}>{val}</option>
-                ))}
-              </select>
-              <div className="flex items-center gap-2.5 mr-4 cursor-pointer select-none" onClick={() => setShowActive(v => !v)}>
+              {/* Combined Filter Popover (Zones & API Status) */}
+              <div className="relative" ref={filterDropdownRef}>
+                <button
+                  id="branch-filter-button"
+                  type="button"
+                  onClick={() => setIsFilterDropdownOpen(prev => !prev)}
+                  className={`flex items-center gap-2 h-10 px-3.5 rounded-lg border text-sm font-semibold shadow-sm transition-all duration-150 cursor-pointer focus:outline-none ${
+                    activeFilterCount > 0 || isFilterDropdownOpen
+                      ? "bg-indigo-50 border-indigo-300 text-indigo-700 hover:bg-indigo-100/70"
+                      : "bg-white border-slate-300 hover:border-slate-400 text-slate-700"
+                  }`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4 text-slate-500">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.539.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591l-5.432 5.432a2.25 2.25 0 0 0-.659 1.591v2.927a2.25 2.25 0 0 1-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 0 0-.659-1.591L3.659 7.409A2.25 2.25 0 0 1 3 5.818V4.774c0-.54.378-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z" />
+                  </svg>
+                  <span>Filter</span>
+                  {activeFilterCount > 0 && (
+                    <span className="bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2}
+                    stroke="currentColor"
+                    className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isFilterDropdownOpen ? "rotate-180" : ""}`}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
+
+                {/* Popover Card */}
+                {isFilterDropdownOpen && (
+                  <div
+                    id="branch-filter-popover"
+                    className="absolute left-0 mt-2 w-[500px] bg-white border border-slate-200 rounded-xl shadow-2xl p-4 z-50 grid grid-cols-2 gap-4"
+                  >
+                    {/* Column 1: Zones */}
+                    <div className="flex flex-col border-r border-slate-100 pr-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">Zones</span>
+                        <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-semibold">
+                          {selectedZones.length === 0 ? "All" : `${selectedZones.length} selected`}
+                        </span>
+                      </div>
+
+                      {/* Search box */}
+                      <div className="px-2 py-1.5 border border-slate-200 rounded-lg flex items-center gap-1.5 mb-2 bg-slate-50">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                        </svg>
+                        <input
+                          type="text"
+                          placeholder="Search zones..."
+                          value={zoneFilterSearch}
+                          onChange={(e) => setZoneFilterSearch(e.target.value)}
+                          className="w-full text-xs border-none outline-none bg-transparent"
+                        />
+                      </div>
+
+                      {/* Bulk Actions */}
+                      <div className="flex justify-between items-center text-[10px] font-bold text-indigo-600 mb-2 px-1">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedZones(uniqueClass05Values)}
+                          className="bg-transparent border-none cursor-pointer hover:underline text-indigo-650 font-semibold"
+                        >
+                          Select All
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedZones([])}
+                          className="bg-transparent border-none cursor-pointer hover:underline text-indigo-655 font-semibold"
+                        >
+                          Clear (All)
+                        </button>
+                      </div>
+
+                      {/* Checklist */}
+                      <div className="max-h-48 overflow-y-auto px-1 py-1 space-y-0.5 border border-slate-100 rounded-lg">
+                        {uniqueClass05Values
+                          .filter(name => name.toLowerCase().includes(zoneFilterSearch.toLowerCase()))
+                          .map(zoneName => {
+                            const isChecked = selectedZones.includes(zoneName);
+                            return (
+                              <label key={zoneName} className="flex items-center gap-2 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 rounded cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    if (isChecked) {
+                                      setSelectedZones(selectedZones.filter(z => z !== zoneName));
+                                    } else {
+                                      setSelectedZones([...selectedZones, zoneName]);
+                                    }
+                                  }}
+                                  className="accent-indigo-600 h-3.5 w-3.5 flex-shrink-0"
+                                />
+                                <span className="truncate">{zoneName}</span>
+                              </label>
+                            );
+                          })}
+                        {uniqueClass05Values.filter(name => name.toLowerCase().includes(zoneFilterSearch.toLowerCase())).length === 0 && (
+                          <div className="text-center py-3 text-xs text-slate-400 italic">No zones found</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Column 2: API Status */}
+                    <div className="flex flex-col pl-1">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">API Status</span>
+                        <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-semibold">
+                          {selectedApiStatuses.length === 0 ? "All" : `${selectedApiStatuses.length} selected`}
+                        </span>
+                      </div>
+
+                      {/* Bulk Actions */}
+                      <div className="flex justify-between items-center text-[10px] font-bold text-indigo-600 mb-2 px-1">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedApiStatuses(["active", "inactive"])}
+                          className="bg-transparent border-none cursor-pointer hover:underline text-indigo-650 font-semibold"
+                        >
+                          Select All
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedApiStatuses([])}
+                          className="bg-transparent border-none cursor-pointer hover:underline text-indigo-655 font-semibold"
+                        >
+                          Clear (All)
+                        </button>
+                      </div>
+
+                      {/* API Status Checklist */}
+                      <div className="max-h-48 overflow-y-auto px-1 py-1 space-y-1.5 border border-slate-100 rounded-lg">
+                        {[
+                          { value: "active", label: "Active", badgeCls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                          { value: "inactive", label: "Inactive", badgeCls: "bg-rose-50 text-rose-700 border-rose-200" }
+                        ].map(opt => {
+                          const isChecked = selectedApiStatuses.includes(opt.value);
+                          return (
+                            <label key={opt.value} className="flex items-center justify-between px-2.5 py-2 text-xs text-slate-700 hover:bg-slate-50 rounded cursor-pointer select-none border border-slate-100">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    if (isChecked) {
+                                      setSelectedApiStatuses(selectedApiStatuses.filter(s => s !== opt.value));
+                                    } else {
+                                      setSelectedApiStatuses([...selectedApiStatuses, opt.value]);
+                                    }
+                                  }}
+                                  className="accent-indigo-600 h-3.5 w-3.5 flex-shrink-0"
+                                />
+                                <span className="font-medium text-slate-800">{opt.label}</span>
+                              </div>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded border font-bold ${opt.badgeCls}`}>
+                                {opt.value.toUpperCase()}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+
+                      {/* Footer Actions */}
+                      <div className="mt-auto pt-3 border-t border-slate-100 flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedZones([]);
+                            setSelectedApiStatuses([]);
+                            setZoneFilterSearch("");
+                          }}
+                          className="text-xs text-slate-500 hover:text-rose-600 font-semibold cursor-pointer bg-transparent border-none"
+                        >
+                          Reset All
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsFilterDropdownOpen(false)}
+                          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-xs font-semibold cursor-pointer border-none transition-colors"
+                        >
+                          Done
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2.5 mr-4 cursor-pointer select-none" onClick={() => setShowActive(v => !v)} title="Toggle Internal Active/Inactive Filter">
+                <span className="text-[12px] text-slate-500 font-medium hidden sm:inline">Internal:</span>
                 <span className={`text-[13px] font-bold transition-colors ${!showActive ? "text-rose-600" : "text-slate-400"}`}>Inactive</span>
                 <div className={`relative w-[38px] h-5 rounded-full transition-colors ${showActive ? "bg-indigo-650" : "bg-slate-300"}`}>
                   <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.15)] transition-transform ${showActive ? "translate-x-[18px]" : "translate-x-0"}`} />

@@ -5,7 +5,8 @@ const {
     updateBranchController,
     deleteBranchController,
     syncBranchesController,
-    getEligibleAbmsController
+    getEligibleAbmsController,
+    toggleBranchInternalStatusController
 } = require('../controllers/branchController.js');
 const { verifyToken, verifyPermission } = require('../middleware/authMiddleware.js');
 
@@ -16,6 +17,7 @@ router.post('/sync', verifyToken, verifyPermission('branch_master', 'write'), sy
 router.get('/all', verifyToken, verifyPermission(['branch_master', 'finance_brand_mapping'], 'read'), getAllBranchesController);
 router.get('/eligible-abms', verifyToken, verifyPermission('branch_master', 'read'), getEligibleAbmsController);
 router.put('/update/:id', verifyToken, verifyPermission('branch_master', 'update'), updateBranchController);
+router.patch('/internal-status/:id', verifyToken, verifyPermission('branch_master', 'update'), toggleBranchInternalStatusController);
 router.delete('/delete/:id', verifyToken, verifyPermission('branch_master', 'delete'), deleteBranchController);
 
 module.exports = router;

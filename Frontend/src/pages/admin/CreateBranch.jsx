@@ -29,6 +29,7 @@ export default function CreateBranch() {
     address: "",
     abm: "",
     status: "active",
+    internal_status: "active",
     branch_cls_05: ""
   });
 
@@ -81,6 +82,7 @@ export default function CreateBranch() {
           address: branch.address || "",
           abm: branch.abm || "",
           status: branch.status || "active",
+          internal_status: branch.internal_status || "active",
           branch_cls_05: branch.branch_cls_05 || ""
         });
       } else {
@@ -149,7 +151,8 @@ export default function CreateBranch() {
     { label: "City", name: "city", type: "text", required: true, placeholder: "e.g. Mumbai" },
     { label: "Area Branch Manager (ABM)", name: "abm", type: "select", required: true, options: abms.map(u => ({ value: u.name, label: `${u.name} (${u.username})` })), prompt: "Select an ABM" },
     { label: "Zone", name: "branch_cls_05", type: "text", required: false, placeholder: "e.g. Central-Gujarat" },
-    { label: "Status", name: "status", type: "select", required: true, options: [{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }] },
+    { label: "API Status", name: "status", type: "select", required: true, options: [{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }] },
+    { label: "Internal Status", name: "internal_status", type: "select", required: true, options: [{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }] },
     { label: "Address", name: "address", type: "textarea", required: true, placeholder: "Full office/store address...", fullWidth: true }
   ];
 
