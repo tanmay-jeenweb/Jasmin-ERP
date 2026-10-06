@@ -36,6 +36,7 @@ const MASTERS = [
     { key: 'ticket_management', label: 'Ticket Management' },
     { key: 'special_tva_master', label: 'Special TVA Master' },
     { key: 'special_tva_report', label: 'Special TVA Report' },
+    { key: 'price_list_template_master', label: 'Price List Template Master' },
 ];
 
 // ─── Table creation ──────────────────────────────────────────────────────────
@@ -172,6 +173,14 @@ const createUserTypePermissionsTable = async () => {
             SELECT user_type_id, 'special_tva_report', can_read, can_write, can_update, can_delete
             FROM user_type_permissions
             WHERE master_name = 'target_vs_achievement'
+        `);
+
+        // Seed initial price_list_template_master permission rows from variation_master for existing user types
+        await db.execute(`
+            INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete)
+            SELECT user_type_id, 'price_list_template_master', can_read, can_write, can_update, can_delete
+            FROM user_type_permissions
+            WHERE master_name = 'variation_master'
         `);
 
         console.log("✅ Permission keys migrated/seeded successfully.");

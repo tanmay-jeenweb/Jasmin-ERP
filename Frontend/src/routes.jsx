@@ -48,6 +48,7 @@ import CreateTicket from "./pages/tickets/CreateTicket";
 import TicketList from "./pages/tickets/TicketList";
 import SpecialTvaMaster from "./pages/admin/SpecialTvaMaster";
 import SpecialTvaReport from "./pages/admin/SpecialTvaReport";
+import PriceListTemplateMaster from "./pages/admin/PriceListTemplateMaster";
 
 
 export default function AppRoutes() {
@@ -345,6 +346,13 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/settings/icat"
                     element={<IcatSettingsForm />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredMasters={["price_list_template_master", "variation_master", "price_list"]} requiredAction="read" />}>
+                <Route
+                    path="/admin/price-list-templates"
+                    element={<PriceListTemplateMaster />}
                 />
             </Route>
 

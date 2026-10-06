@@ -285,6 +285,15 @@ export default function Navbar() {
             desc: "Manage Excel pricing formula rules"
         },
         {
+            name: "Price List Template Master",
+            path: "/admin/price-list-templates",
+            masterKeys: ["price_list_template_master", "variation_master", "price_list"],
+            icon: "fa-solid fa-sliders",
+            color: "bg-indigo-50 text-indigo-600 border border-indigo-100/50",
+            activeColor: "bg-indigo-100 text-indigo-700",
+            desc: "Custom Price List export templates"
+        },
+        {
             name: "Special TVA Master",
             path: "/admin/special-tva-master",
             masterKey: "special_tva_master",
@@ -807,6 +816,18 @@ export default function Navbar() {
                                                 )}
                                             </div>
                                         )}
+                                        <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between px-1">
+                                            <button
+                                                onClick={() => {
+                                                    navigate("/admin/price-list-templates");
+                                                    setIsPriceListOpen(false);
+                                                }}
+                                                className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 hover:text-indigo-900 transition cursor-pointer"
+                                            >
+                                                <i className="fa-solid fa-sliders text-xs"></i>
+                                                <span>Price List Template Master</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
