@@ -39,6 +39,7 @@ const createSpecialTvaDataTable = async (id) => {
             zone VARCHAR(150) DEFAULT '',
             mf VARCHAR(100) DEFAULT '',
             target DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+            brand_targets JSON DEFAULT NULL,
             added_by INT NULL,
             device_id VARCHAR(255) DEFAULT 'Unknown',
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -49,6 +50,21 @@ const createSpecialTvaDataTable = async (id) => {
     `;
     await db.execute(query);
     console.log(`Dedicated table '${tableName}' ready`);
+};
+
+/**
+ * Ensures brand_targets JSON column exists in special_tva_data_${id}
+ */
+const ensureBrandTargetsColumn = async (tableName) => {
+    try {
+        const [cols] = await db.execute(`SHOW COLUMNS FROM \`${tableName}\` LIKE 'brand_targets'`);
+        if (cols.length === 0) {
+            await db.execute(`ALTER TABLE \`${tableName}\` ADD COLUMN brand_targets JSON DEFAULT NULL AFTER target`);
+            console.log(`Added brand_targets column to ${tableName}`);
+        }
+    } catch (err) {
+        console.warn(`Could not verify/add brand_targets column for ${tableName}:`, err.message);
+    }
 };
 
 /**
@@ -225,11 +241,14 @@ const deleteSpecialTva = async (id) => {
 
 /**
  * Bulk upserts targets into special_tva_data_${id}
- * records: array of { branch_name, branch_code, target, mf }
+ * records: array of { branch_name, branch_code, target, mf, brand_targets }
  */
 const upsertSpecialTvaTargets = async (id, records = [], addedBy = null, deviceId = 'Unknown') => {
     const tableName = `special_tva_data_${id}`;
     if (!records || records.length === 0) return { updated: 0 };
+
+    // Ensure brand_targets column exists
+    await ensureBrandTargetsColumn(tableName);
 
     // Get all branches to ensure correct mapping
     const allBranches = await getAllBranches();
@@ -247,15 +266,34 @@ const upsertSpecialTvaTargets = async (id, records = [], addedBy = null, deviceI
 
         if (!branch) continue;
 
-        const targetVal = parseFloat(rec.target) || 0.00;
+        // Parse brand_targets if provided
+        let brandTargetsObj = null;
+        let sumBrandTargets = 0;
+        if (rec.brand_targets && typeof rec.brand_targets === 'object') {
+            brandTargetsObj = {};
+            for (const [bName, bVal] of Object.entries(rec.brand_targets)) {
+                const numVal = parseFloat(bVal) || 0;
+                brandTargetsObj[bName.trim()] = numVal;
+                sumBrandTargets += numVal;
+            }
+        }
+
+        // Total target: explicitly passed target, or sum of brand targets
+        let targetVal = parseFloat(rec.target);
+        if (isNaN(targetVal) || targetVal <= 0) {
+            targetVal = sumBrandTargets;
+        }
+
         const mfVal = rec.mf !== undefined && rec.mf !== null ? String(rec.mf).trim() : '';
+        const brandTargetsJson = brandTargetsObj ? JSON.stringify(brandTargetsObj) : null;
 
         const sql = `
             INSERT INTO \`${tableName}\` (
-                branch_code, branch_name, store_type, state_name, zone, mf, target, added_by, device_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                branch_code, branch_name, store_type, state_name, zone, mf, target, brand_targets, added_by, device_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 target = VALUES(target),
+                brand_targets = IF(VALUES(brand_targets) IS NOT NULL, VALUES(brand_targets), brand_targets),
                 mf = IF(VALUES(mf) != '', VALUES(mf), mf),
                 added_by = VALUES(added_by),
                 device_id = VALUES(device_id)
@@ -269,6 +307,7 @@ const upsertSpecialTvaTargets = async (id, records = [], addedBy = null, deviceI
             branch.branch_cls_05 || '',
             mfVal,
             targetVal,
+            brandTargetsJson,
             addedBy,
             deviceId
         ]);
@@ -415,8 +454,9 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
     }
 
     // 3. Fetch branches from special_tva_data_${id}
+    await ensureBrandTargetsColumn(tableName);
     const [dataRows] = await db.execute(
-        `SELECT id, branch_code, branch_name, store_type, state_name, zone, mf, target 
+        `SELECT id, branch_code, branch_name, store_type, state_name, zone, mf, target, brand_targets 
          FROM \`${tableName}\` 
          ORDER BY branch_name ASC`
     );
@@ -617,33 +657,60 @@ const getSpecialTvaReportData = async (id, userStateRestriction = null, userAllo
         : 0.00;
 
     for (const branch of filteredBranches) {
-        const totalBranchTarget = parseFloat(branch.target) || 0;
-        grandTotals.target += totalBranchTarget;
+        // Parse imported brand targets from database
+        let importedTargets = {};
+        if (branch.brand_targets) {
+            try {
+                importedTargets = typeof branch.brand_targets === 'string'
+                    ? JSON.parse(branch.brand_targets)
+                    : branch.brand_targets;
+            } catch (e) {
+                importedTargets = {};
+            }
+        }
+
+        // Case-insensitive lookup helper for imported brand targets
+        const getImportedVal = (name) => {
+            if (!importedTargets || typeof importedTargets !== 'object') return 0;
+            const lower = name.toLowerCase().trim();
+            for (const [k, v] of Object.entries(importedTargets)) {
+                if (k.toLowerCase().trim() === lower) {
+                    return parseFloat(v) || 0;
+                }
+            }
+            return 0;
+        };
 
         const achMap = branchAchievements[branch.branch_name] || {};
 
-        // Section 3: Brand Targets
+        // Section 3: Brand Targets from imported data (no percentage distribution)
         const brandTargets = {};
-        let allocatedTargetSum = 0;
+        let sumBrandTargets = 0;
 
-        // Individual brand targets based on share_percentage
+        // Individual brand targets from Excel import
         for (const ib of individualBrands) {
-            const share = ib.share_percentage;
-            const bTgt = share > 0 ? Math.round((totalBranchTarget * share) / 100) : 0;
+            const bTgt = getImportedVal(ib.brand_name);
             brandTargets[ib.brand_name] = bTgt;
-            allocatedTargetSum += bTgt;
+            sumBrandTargets += bTgt;
             grandTotals.brand_targets[ib.brand_name] += bTgt;
         }
 
-        // Other target: calculated from residual percentage (100 - sum of individual)
-        const otherTarget = otherSharePercentage > 0 ? Math.round((totalBranchTarget * otherSharePercentage) / 100) : 0;
+        // Other target from Excel import
+        const otherTarget = getImportedVal('Other');
         brandTargets['Other'] = otherTarget;
         grandTotals.brand_targets['Other'] += otherTarget;
 
-        // Total target for Special TVA: sum of all participating Special TVA brand targets
-        const totalSpecialTvaTarget = allocatedTargetSum + otherTarget;
+        // Total Target: sum of imported individual + other targets,
+        // or fallback to branch.target if sum is 0
+        const totalSpecialTvaTarget = (sumBrandTargets + otherTarget) > 0
+            ? (sumBrandTargets + otherTarget)
+            : (parseFloat(branch.target) || 0);
+
         brandTargets['Total'] = totalSpecialTvaTarget;
         grandTotals.brand_targets['Total'] += totalSpecialTvaTarget;
+
+        const totalBranchTarget = totalSpecialTvaTarget;
+        grandTotals.target += totalBranchTarget;
 
         // Section 1: Achievement QTY
         const achievementQty = {};
