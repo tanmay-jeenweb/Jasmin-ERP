@@ -13,6 +13,8 @@ import { getPricingFormulas as getVariations } from "../../api/pricingFormulaApi
 import toast from "react-hot-toast";
 import { usePermission } from "../../context/PermissionContext";
 import ExcelJS from "exceljs";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 // Standard fixed columns present across Price Lists
 const STANDARD_PRICE_LIST_COLUMNS = [
@@ -47,12 +49,15 @@ export default function PriceListTemplateMaster() {
   // ─── Export Modal State ───
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportingTemplate, setExportingTemplate] = useState(null);
-  const [exportLoading, setExportLoading] = useState(false);
+  const [exportLoadingExcel, setExportLoadingExcel] = useState(false);
+  const [exportLoadingPdf, setExportLoadingPdf] = useState(false);
   const [exportFetchingFilters, setExportFetchingFilters] = useState(false);
   const [availableBrands, setAvailableBrands] = useState([]);
   const [availableCategories, setAvailableCategories] = useState([]);
+  const [availableDates, setAvailableDates] = useState([]);
   const [selectedBrands, setSelectedBrands] = useState([]);
   const [selectedCategories, setSelectedCategories] = useState([]);
+  const [selectedDate, setSelectedDate] = useState("");
   const [brandSearchText, setBrandSearchText] = useState("");
   const [categorySearchText, setCategorySearchText] = useState("");
   const [isBrandFilterOpen, setIsBrandFilterOpen] = useState(false);
@@ -277,6 +282,7 @@ export default function PriceListTemplateMaster() {
     setExportingTemplate(template);
     setSelectedBrands([]);
     setSelectedCategories([]);
+    setSelectedDate("");
     setBrandSearchText("");
     setCategorySearchText("");
     setIsBrandFilterOpen(false);
@@ -289,8 +295,10 @@ export default function PriceListTemplateMaster() {
       if (res.data?.success) {
         const brands = res.data.brands || [];
         const categories = res.data.categories || [];
+        const dates = res.data.dates || [];
         setAvailableBrands(brands);
         setAvailableCategories(categories);
+        setAvailableDates(dates);
         // Default select all brands and all categories
         setSelectedBrands([...brands]);
         setSelectedCategories([...categories]);
@@ -303,8 +311,8 @@ export default function PriceListTemplateMaster() {
     }
   };
 
-  // Execute Excel download using live DB data
-  const handleDownloadReport = async () => {
+  // Execute Excel download using DB data (live or date snapshot)
+  const handleDownloadExcel = async () => {
     if (!exportingTemplate) return;
 
     if (availableBrands.length > 0 && selectedBrands.length === 0) {
@@ -317,13 +325,15 @@ export default function PriceListTemplateMaster() {
       return;
     }
 
-    setExportLoading(true);
-    const loadToastId = toast.loading("Generating template report from database...");
+    setExportLoadingExcel(true);
+    const loadToastId = toast.loading("Generating Excel report from database...");
 
     try {
+      const targetDateParam = selectedDate || null;
       const res = await getTemplateExportData(exportingTemplate.id, {
         brands: selectedBrands,
-        categories: selectedCategories
+        categories: selectedCategories,
+        date: targetDateParam
       });
 
       if (!res.data?.success) {
@@ -371,7 +381,7 @@ export default function PriceListTemplateMaster() {
           name: "Segoe UI",
           size: 11,
           bold: true,
-          color: { argb: "FF3B0764" } // Deep purple text for high contrast and readability
+          color: { argb: "FF3B0764" } // Deep purple text
         };
         cell.alignment = { vertical: "middle", horizontal: "center" };
       });
@@ -383,21 +393,33 @@ export default function PriceListTemplateMaster() {
           const colKey = col.key;
           let val = rowItem[colKey];
 
-          // Map standard field fallbacks
-          if (colKey === "brand") {
-            val = rowItem.brand || rowItem.brand_name || "—";
-          } else if (colKey === "icat_name" || colKey === "product_name") {
-            val = rowItem.product_name || rowItem.icat_name || "—";
-          } else if (colKey === "product_code") {
-            val = rowItem.product_code || "—";
-          } else if (colKey === "model_group_name") {
-            val = rowItem.model_group_name || "—";
-          } else if (colKey === "model_name") {
-            val = rowItem.model_name || "—";
+          // If not found directly, try case-insensitive or column_name match
+          if (val === undefined || val === null) {
+            const matchKey = Object.keys(rowItem).find(
+              (k) => k.trim().toLowerCase() === colKey.trim().toLowerCase()
+            );
+            if (matchKey) {
+              val = rowItem[matchKey];
+            } else if (col.column_name && rowItem[col.column_name] !== undefined) {
+              val = rowItem[col.column_name];
+            }
           }
 
-          // Format numbers if numeric
-          if (val !== undefined && val !== null && val !== "" && val !== "—" && val !== "-") {
+          // Map standard field fallbacks
+          if (colKey === "brand") {
+            val = rowItem.brand || rowItem.brand_name || "";
+          } else if (colKey === "icat_name" || colKey === "product_name") {
+            val = rowItem.product_category || rowItem.product_name || rowItem.icat_name || rowItem.original_icat_name || "";
+          } else if (colKey === "product_code") {
+            val = rowItem.product_code || "";
+          } else if (colKey === "model_group_name") {
+            val = rowItem.model_group_name || "";
+          } else if (colKey === "model_name") {
+            val = rowItem.model_name || "";
+          }
+
+          // Format numbers if numeric and present in DB
+          if (val !== undefined && val !== null && String(val).trim() !== "" && String(val).trim() !== "—" && String(val).trim() !== "-") {
             const num = Number(val);
             if (!isNaN(num) && typeof val !== "boolean") {
               rowData[colKey] = num;
@@ -405,7 +427,8 @@ export default function PriceListTemplateMaster() {
               rowData[colKey] = val;
             }
           } else {
-            rowData[colKey] = col.type === "custom" ? 0 : "—";
+            // When there is NO data in DB, do NOT set to 0! Leave blank for custom columns, "—" for standard
+            rowData[colKey] = col.type === "custom" ? "" : "—";
           }
         });
 
@@ -425,7 +448,9 @@ export default function PriceListTemplateMaster() {
 
           const colDef = exportColumns[colNumber - 1];
           if (colDef && colDef.type === "custom") {
-            cell.numFmt = "0.00";
+            if (typeof cell.value === "number") {
+              cell.numFmt = "0.00";
+            }
             cell.alignment = { horizontal: "right", vertical: "middle" };
           } else {
             cell.alignment = { horizontal: "left", vertical: "middle" };
@@ -442,7 +467,7 @@ export default function PriceListTemplateMaster() {
       const link = document.createElement("a");
       link.href = url;
       const cleanName = (exportingTemplate.template_name || "Template_Report").replace(/[^a-zA-Z0-9_-]/g, "_");
-      const dateStr = new Date().toISOString().split("T")[0];
+      const dateStr = (targetDateParam || new Date().toISOString().split("T")[0]).replace(/[^a-zA-Z0-9_-]/g, "_");
       link.download = `${cleanName}_${dateStr}.xlsx`;
       link.click();
       window.URL.revokeObjectURL(url);
@@ -453,7 +478,189 @@ export default function PriceListTemplateMaster() {
       console.error("Download template report error:", err);
       toast.error("Failed to generate Excel report", { id: loadToastId });
     } finally {
-      setExportLoading(false);
+      setExportLoadingExcel(false);
+    }
+  };
+
+  // Execute PDF download using DB data (live or date snapshot)
+  const handleDownloadPdf = async () => {
+    if (!exportingTemplate) return;
+
+    if (availableBrands.length > 0 && selectedBrands.length === 0) {
+      toast.error("Please select at least one brand");
+      return;
+    }
+
+    if (availableCategories.length > 0 && selectedCategories.length === 0) {
+      toast.error("Please select at least one category");
+      return;
+    }
+
+    setExportLoadingPdf(true);
+    const loadToastId = toast.loading("Generating PDF report from database...");
+
+    try {
+      const targetDateParam = selectedDate || null;
+      const res = await getTemplateExportData(exportingTemplate.id, {
+        brands: selectedBrands,
+        categories: selectedCategories,
+        date: targetDateParam
+      });
+
+      if (!res.data?.success) {
+        toast.error(res.data?.message || "Failed to fetch export data", { id: loadToastId });
+        return;
+      }
+
+      const rows = res.data.data || [];
+      const exportColumns = res.data.columns || exportingTemplate.columns || [];
+
+      if (rows.length === 0) {
+        toast.error("No records found in database matching selected filters", { id: loadToastId });
+        return;
+      }
+
+      if (exportColumns.length === 0) {
+        toast.error("No columns configured for this template", { id: loadToastId });
+        return;
+      }
+
+      // Initialize landscape A4 PDF
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4"
+      });
+
+      const templateTitle = exportingTemplate.template_name || "Price List Template";
+      const formatTitle = exportingTemplate.format_name || "Price List";
+      const dateLabel = targetDateParam ? `Snapshot: ${targetDateParam}` : `Live Data (${new Date().toLocaleDateString("en-IN")})`;
+
+      // Top Header Banner
+      doc.setFillColor(104, 4, 161); // Jasmin purple #6804a1
+      doc.rect(0, 0, 297, 16, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text(templateTitle, 14, 10.5);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.text(`Format: ${formatTitle} | ${dateLabel}`, 283, 10.5, { align: "right" });
+
+      // Summary sub-header
+      doc.setTextColor(71, 85, 105);
+      doc.setFontSize(8);
+      const brandsSummary = selectedBrands.length === availableBrands.length ? "All Brands" : `${selectedBrands.length} Brands`;
+      const catsSummary = selectedCategories.length === availableCategories.length ? "All Categories" : `${selectedCategories.length} Categories`;
+      doc.text(`Filters: ${brandsSummary} | ${catsSummary} | Total Records: ${rows.length}`, 14, 21);
+
+      // Prepare autoTable headers and body
+      const tableHeaders = [exportColumns.map(col => col.label || col.key)];
+      const tableData = rows.map(rowItem => {
+        return exportColumns.map(col => {
+          const colKey = col.key;
+          let val = rowItem[colKey];
+
+          if (val === undefined || val === null) {
+            const matchKey = Object.keys(rowItem).find(
+              (k) => k.trim().toLowerCase() === colKey.trim().toLowerCase()
+            );
+            if (matchKey) {
+              val = rowItem[matchKey];
+            } else if (col.column_name && rowItem[col.column_name] !== undefined) {
+              val = rowItem[col.column_name];
+            }
+          }
+
+          if (colKey === "brand") {
+            return rowItem.brand || rowItem.brand_name || "";
+          } else if (colKey === "icat_name" || colKey === "product_name") {
+            return rowItem.product_category || rowItem.product_name || rowItem.icat_name || "";
+          } else if (colKey === "product_code") {
+            return rowItem.product_code || "";
+          } else if (colKey === "model_group_name") {
+            return rowItem.model_group_name || "";
+          } else if (colKey === "model_name") {
+            return rowItem.model_name || "";
+          }
+
+          if (val !== undefined && val !== null && String(val).trim() !== "" && String(val).trim() !== "—" && String(val).trim() !== "-") {
+            const num = Number(val);
+            if (!isNaN(num) && typeof val !== "boolean") {
+              return num.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+            return String(val);
+          }
+          return "";
+        });
+      });
+
+      // Align custom price columns to the right, standard to left
+      const columnStyles = {};
+      exportColumns.forEach((col, idx) => {
+        if (col.type === "custom") {
+          columnStyles[idx] = { halign: "right" };
+        } else {
+          columnStyles[idx] = { halign: "left" };
+        }
+      });
+
+      autoTable(doc, {
+        head: tableHeaders,
+        body: tableData,
+        startY: 24,
+        theme: "striped",
+        headStyles: {
+          fillColor: [104, 4, 161],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 8,
+          halign: "center",
+          valign: "middle"
+        },
+        bodyStyles: {
+          fontSize: 7.5,
+          textColor: [30, 41, 59],
+          cellPadding: 1.8,
+          valign: "middle"
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252]
+        },
+        columnStyles: columnStyles,
+        margin: { left: 12, right: 12, bottom: 14 },
+        didDrawPage: (data) => {
+          const pageCount = doc.internal.getNumberOfPages();
+          const currentPage = data.pageNumber;
+          doc.setFontSize(7.5);
+          doc.setTextColor(148, 163, 184);
+          doc.text(
+            `Generated by Jasmin ERP on ${new Date().toLocaleString("en-IN")}`,
+            12,
+            202
+          );
+          doc.text(
+            `Page ${currentPage} of ${pageCount}`,
+            285,
+            202,
+            { align: "right" }
+          );
+        }
+      });
+
+      const cleanName = (exportingTemplate.template_name || "Template_Report").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const dateStr = (targetDateParam || new Date().toISOString().split("T")[0]).replace(/[^a-zA-Z0-9_-]/g, "_");
+      doc.save(`${cleanName}_${dateStr}.pdf`);
+
+      toast.success("PDF report downloaded successfully!", { id: loadToastId });
+      setIsExportModalOpen(false);
+    } catch (err) {
+      console.error("PDF export error:", err);
+      toast.error("Failed to generate PDF report", { id: loadToastId });
+    } finally {
+      setExportLoadingPdf(false);
     }
   };
 
@@ -877,6 +1084,80 @@ export default function PriceListTemplateMaster() {
                 </div>
               ) : (
                 <div className="space-y-4">
+                  {/* FILTER 0: Date Selection Filter */}
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <i className="fa-regular fa-calendar text-xs text-purple-700"></i>
+                        <span className="text-xs font-bold text-slate-700">Price List Date Filter</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {selectedDate && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedDate("")}
+                            className="inline-flex items-center gap-1 text-[11px] text-purple-700 font-bold hover:text-purple-900 hover:underline cursor-pointer"
+                          >
+                            <i className="fa-solid fa-rotate-left text-[10px]"></i>
+                            Reset to Live Data
+                          </button>
+                        )}
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                          selectedDate ? "bg-amber-100 text-amber-800" : "bg-purple-100 text-purple-800"
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${selectedDate ? "bg-amber-500" : "bg-purple-600 animate-pulse"}`}></span>
+                          {selectedDate ? `Snapshot: ${selectedDate}` : "Live / Active Prices"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                      <div className="relative flex-1">
+                        <input
+                          type="date"
+                          value={selectedDate}
+                          onChange={(e) => setSelectedDate(e.target.value)}
+                          className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 bg-white font-medium text-slate-700 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
+                        />
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-medium sm:w-1/2">
+                        {selectedDate ? (
+                          <span className="text-amber-800 font-medium">
+                            <i className="fa-solid fa-clock-rotate-left mr-1 text-amber-600"></i>
+                            Exports latest prices recorded on <b>{selectedDate}</b>
+                          </span>
+                        ) : (
+                          <span>
+                            <i className="fa-solid fa-bolt mr-1 text-purple-600"></i>
+                            Exports current real-time prices from database
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {availableDates.length > 0 && (
+                      <div className="pt-1 flex flex-wrap items-center gap-1.5 border-t border-slate-200/60 mt-1">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">
+                          Recorded Dates:
+                        </span>
+                        {availableDates.slice(0, 6).map((d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => setSelectedDate(selectedDate === d ? "" : d)}
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border transition cursor-pointer ${
+                              selectedDate === d
+                                ? "bg-purple-700 text-white border-purple-700 shadow-xs"
+                                : "bg-white text-slate-600 border-slate-200 hover:border-purple-300 hover:text-purple-700"
+                            }`}
+                          >
+                            {d}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   {/* FILTER 1: Brands Filter (Multi-select dropdown with search, select all / deselect all) */}
                   <div ref={brandFilterRef} className="relative">
                     <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
@@ -1085,25 +1366,47 @@ export default function PriceListTemplateMaster() {
               <button
                 type="button"
                 onClick={() => setIsExportModalOpen(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 rounded-xl transition cursor-pointer"
+                className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 rounded-xl transition cursor-pointer"
               >
                 Cancel
               </button>
+              
+              {/* PDF Download Button */}
               <button
                 type="button"
-                onClick={handleDownloadReport}
-                disabled={exportLoading || exportFetchingFilters}
-                className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-[#6804a1] hover:bg-[#530382] rounded-xl transition shadow-sm cursor-pointer disabled:opacity-50"
+                onClick={handleDownloadPdf}
+                disabled={exportLoadingPdf || exportLoadingExcel || exportFetchingFilters}
+                className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-purple-900 bg-purple-100 hover:bg-purple-200/90 border border-purple-200/80 rounded-xl transition shadow-xs cursor-pointer disabled:opacity-50"
               >
-                {exportLoading ? (
+                {exportLoadingPdf ? (
+                  <>
+                    <i className="fa-solid fa-spinner fa-spin text-xs"></i>
+                    <span>Generating PDF...</span>
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-file-pdf text-xs text-purple-700"></i>
+                    <span>Download PDF</span>
+                  </>
+                )}
+              </button>
+
+              {/* Excel Download Button */}
+              <button
+                type="button"
+                onClick={handleDownloadExcel}
+                disabled={exportLoadingExcel || exportLoadingPdf || exportFetchingFilters}
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-[#6804a1] hover:bg-[#530382] rounded-xl transition shadow-sm cursor-pointer disabled:opacity-50"
+              >
+                {exportLoadingExcel ? (
                   <>
                     <i className="fa-solid fa-spinner fa-spin text-xs"></i>
                     <span>Exporting Excel...</span>
                   </>
                 ) : (
                   <>
-                    <i className="fa-solid fa-download text-xs"></i>
-                    <span>Download Template Report</span>
+                    <i className="fa-solid fa-file-excel text-xs"></i>
+                    <span>Download Excel</span>
                   </>
                 )}
               </button>

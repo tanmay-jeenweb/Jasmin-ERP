@@ -247,7 +247,9 @@ const getTemplateFilterOptionsController = async (req, res) => {
             success: true,
             template,
             brands: options.brands,
-            categories: options.categories
+            categories: options.categories,
+            dates: options.dates || [],
+            timestamps: options.timestamps || []
         });
     } catch (error) {
         console.error('Error fetching template filter options:', error);
@@ -256,12 +258,12 @@ const getTemplateFilterOptionsController = async (req, res) => {
 };
 
 /**
- * Controller to fetch live DB data for template export, filtered by selected brands & categories
+ * Controller to fetch DB data for template export, filtered by selected brands, categories, and date
  */
 const getTemplateExportDataController = async (req, res) => {
     try {
         const { id } = req.params;
-        const { brands, categories } = req.body;
+        const { brands, categories, date } = req.body;
 
         const template = await getPriceListTemplateById(id);
         if (!template) {
@@ -273,8 +275,13 @@ const getTemplateExportDataController = async (req, res) => {
             return res.status(403).json({ success: false, message: 'Access denied: You are not authorized for this state' });
         }
 
-        // Fetch filtered data directly from MySQL table for this variation
-        const rawData = await getTemplateExportData(template.variation_id, brands || [], categories || []);
+        // Fetch filtered data directly from MySQL table (live or historical snapshot)
+        const rawData = await getTemplateExportData(
+            template.variation_id,
+            brands || [],
+            categories || [],
+            date || null
+        );
 
         // Dynamic columns defined on template: separate standard vs custom
         const templateColumns = Array.isArray(template.columns) ? template.columns : [];

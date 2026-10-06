@@ -220,7 +220,7 @@ const getHistoryTimestamps = async (variationId) => {
                 DATE_FORMAT(timestamp, '%h:%i:%s %p') AS time_part,
                 COUNT(*) AS record_count
             FROM \`${historyTableName}\`
-            GROUP BY DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s')
+            GROUP BY full_timestamp, date_part, time_part
             ORDER BY full_timestamp DESC
         `;
         const [results] = await db.execute(query);
