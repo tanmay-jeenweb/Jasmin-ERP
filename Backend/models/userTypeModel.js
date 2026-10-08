@@ -37,6 +37,8 @@ const MASTERS = [
     { key: 'special_tva_master', label: 'Special TVA Master' },
     { key: 'special_tva_report', label: 'Special TVA Report' },
     { key: 'price_list_template_master', label: 'Price List Template Master' },
+    { key: 'contest_winnings_master', label: 'Contest Winnings Master' },
+    { key: 'scratch_win_reconciliation', label: 'Scratch & Win Reconciliation' },
 ];
 
 // ─── Table creation ──────────────────────────────────────────────────────────

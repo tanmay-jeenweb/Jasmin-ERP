@@ -382,6 +382,15 @@ export default function Navbar() {
             color: "bg-amber-50 text-amber-600 border border-amber-100/50",
             activeColor: "bg-amber-100 text-amber-700",
             desc: "Configure Price List exclusions"
+        },
+        {
+            name: "Contest Winnings Master",
+            path: "/admin/contest-winnings-master",
+            masterKey: "contest_winnings_master",
+            icon: "fa-solid fa-gift",
+            color: "bg-orange-50 text-orange-600 border border-orange-100/50",
+            activeColor: "bg-orange-100 text-orange-700",
+            desc: "Live Scratch & Win contest master & sync"
         }
     ];
 
@@ -437,6 +446,11 @@ export default function Navbar() {
             name: "Finance & Brand Report",
             path: "/admin/finance-brand-report",
             icon: "fa-solid fa-file-invoice",
+        },
+        {
+            name: "Scratch & Win Reconciliation",
+            path: "/admin/scratch-win-reconciliation",
+            icon: "fa-solid fa-ticket",
         }
     ];
 
@@ -461,6 +475,9 @@ export default function Navbar() {
         }
         if (r.path === "/admin/report") {
             return isAdmin || hasPermission("activity_report", "read");
+        }
+        if (r.path === "/admin/scratch-win-reconciliation") {
+            return isAdmin || hasPermission("scratch_win_reconciliation", "read") || hasPermission("contest_winnings_master", "read");
         }
         return true;
     });
@@ -1029,7 +1046,7 @@ export default function Navbar() {
                             <div className="relative flex-1 min-w-0" id="reports-dropdown">
                                 <button
                                     onClick={toggleReportsMenu}
-                                    className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/brandwise-target-vs-achievement") || location.pathname.startsWith("/admin/abm-wise-tva") || location.pathname.startsWith("/admin/stock-vs-cash-deposit") || location.pathname.startsWith("/admin/finance-brand-mapping") || location.pathname.startsWith("/admin/finance-brand-report") || location.pathname.startsWith("/admin/price-list-report") || location.pathname.startsWith("/admin/special-tva-report")
+                                    className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/brandwise-target-vs-achievement") || location.pathname.startsWith("/admin/abm-wise-tva") || location.pathname.startsWith("/admin/stock-vs-cash-deposit") || location.pathname.startsWith("/admin/finance-brand-mapping") || location.pathname.startsWith("/admin/finance-brand-report") || location.pathname.startsWith("/admin/price-list-report") || location.pathname.startsWith("/admin/special-tva-report") || location.pathname.startsWith("/admin/scratch-win-reconciliation")
                                         ? "bg-white/15"
                                         : "bg-[#6804a1] hover:bg-white/5"
                                         }`}

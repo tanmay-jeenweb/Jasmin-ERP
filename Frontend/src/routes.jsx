@@ -49,6 +49,8 @@ import TicketList from "./pages/tickets/TicketList";
 import SpecialTvaMaster from "./pages/admin/SpecialTvaMaster";
 import SpecialTvaReport from "./pages/admin/SpecialTvaReport";
 import PriceListTemplateMaster from "./pages/admin/PriceListTemplateMaster";
+import ContestWinningMaster from "./pages/admin/ContestWinningMaster";
+import ScratchWinReconciliation from "./pages/admin/ScratchWinReconciliation";
 
 
 export default function AppRoutes() {
@@ -380,15 +382,21 @@ export default function AppRoutes() {
                     element={<PricingFormulaForm />}
                 />
                 <Route
-                    path="/admin/pricing-formulas/copy/:copyId"
-                    element={<PricingFormulaForm />}
-                />
-                <Route
                     path="/admin/variations/add"
                     element={<Navigate to="/admin/pricing-formulas/add" replace />}
                 />
             </Route>
 
+            <Route element={<ProtectedRoute requiredMasters={["contest_winnings_master", "scratch_win_reconciliation"]} requiredAction="read" />}>
+                <Route
+                    path="/admin/contest-winnings-master"
+                    element={<ContestWinningMaster />}
+                />
+                <Route
+                    path="/admin/scratch-win-reconciliation"
+                    element={<ScratchWinReconciliation />}
+                />
+            </Route>
 
         </Routes>
     );
