@@ -58,10 +58,18 @@ export default function PriceListTemplateMaster() {
   const [selectedBrands, setSelectedBrands] = useState([]);
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedDate, setSelectedDate] = useState("");
+  const [distinctModelGroup, setDistinctModelGroup] = useState(true);
   const [brandSearchText, setBrandSearchText] = useState("");
   const [categorySearchText, setCategorySearchText] = useState("");
   const [isBrandFilterOpen, setIsBrandFilterOpen] = useState(false);
   const [isCategoryFilterOpen, setIsCategoryFilterOpen] = useState(false);
+
+  // Check if exporting template includes model_group_name column
+  const hasModelGroupInTemplate = useMemo(() => {
+    if (!exportingTemplate) return false;
+    const cols = Array.isArray(exportingTemplate.columns) ? exportingTemplate.columns : [];
+    return cols.some(c => (c.key || c.column_name) === "model_group_name");
+  }, [exportingTemplate]);
 
   // Refs for outside click closing
   const columnDropdownRef = useRef(null);
@@ -283,6 +291,7 @@ export default function PriceListTemplateMaster() {
     setSelectedBrands([]);
     setSelectedCategories([]);
     setSelectedDate("");
+    setDistinctModelGroup(true);
     setBrandSearchText("");
     setCategorySearchText("");
     setIsBrandFilterOpen(false);
@@ -333,7 +342,8 @@ export default function PriceListTemplateMaster() {
       const res = await getTemplateExportData(exportingTemplate.id, {
         brands: selectedBrands,
         categories: selectedCategories,
-        date: targetDateParam
+        date: targetDateParam,
+        distinctModelGroup: distinctModelGroup
       });
 
       if (!res.data?.success) {
@@ -504,7 +514,8 @@ export default function PriceListTemplateMaster() {
       const res = await getTemplateExportData(exportingTemplate.id, {
         brands: selectedBrands,
         categories: selectedCategories,
-        date: targetDateParam
+        date: targetDateParam,
+        distinctModelGroup: distinctModelGroup
       });
 
       if (!res.data?.success) {
@@ -1157,6 +1168,39 @@ export default function PriceListTemplateMaster() {
                       </div>
                     )}
                   </div>
+
+                  {/* Distinct Model Group Toggle (Only when template has Model Group Name) */}
+                  {hasModelGroupInTemplate && (
+                    <div className="flex items-center justify-between p-3.5 rounded-xl bg-purple-50/70 border border-purple-200/80">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-purple-600/10 flex items-center justify-center text-purple-700 shrink-0">
+                          <i className="fa-solid fa-layer-group text-sm"></i>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-800">
+                              Unique Model Groups
+                            </span>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200/60">
+                              Model Group Name
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Exports 1 row per model group (uses first color variant, omits duplicate rows)
+                          </p>
+                        </div>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer ml-3 shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={distinctModelGroup}
+                          onChange={(e) => setDistinctModelGroup(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#6804a1]"></div>
+                      </label>
+                    </div>
+                  )}
 
                   {/* FILTER 1: Brands Filter (Multi-select dropdown with search, select all / deselect all) */}
                   <div ref={brandFilterRef} className="relative">

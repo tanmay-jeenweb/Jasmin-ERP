@@ -5,7 +5,7 @@ const { getSetting, setSetting } = require("../models/settingModel.js");
 // - To update version: change HARDCODED_APP_VERSION here, or set in .env
 // - Direct APK download link:
 // =========================================================================
-const HARDCODED_APP_VERSION = "1.0.0";
+const HARDCODED_APP_VERSION = "01.05.10";
 const APK_DOWNLOAD_URL = "https://interlink.jasminmobile.com/apk/app-release.apk";
 
 /**

@@ -270,7 +270,8 @@ const getTemplateExportData = async (variationId, selectedBrands = [], selectedC
                    COALESCE(imm.product_name, p.icat_name) AS icat_name,
                    p.icat_name AS original_icat_name,
                    COALESCE(imm.product_name, p.icat_name) AS product_category,
-                   imm.product_name AS imm_product_name
+                   imm.product_name AS imm_product_name,
+                   COALESCE(NULLIF(TRIM(p.model_group_name), ''), imm.model_group_name) AS model_group_name
             FROM \`${tableName}\` p
             LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
             WHERE ${whereClauses.join(' AND ')}
@@ -307,7 +308,8 @@ const getTemplateExportData = async (variationId, selectedBrands = [], selectedC
                        COALESCE(imm.product_name, p.icat_name) AS icat_name,
                        p.icat_name AS original_icat_name,
                        COALESCE(imm.product_name, p.icat_name) AS product_category,
-                       imm.product_name AS imm_product_name
+                       imm.product_name AS imm_product_name,
+                       COALESCE(NULLIF(TRIM(p.model_group_name), ''), imm.model_group_name) AS model_group_name
                 FROM \`${tableName}\` p
                 LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
                 WHERE ${fallbackClauses.join(' AND ')}
@@ -342,7 +344,8 @@ const getTemplateExportData = async (variationId, selectedBrands = [], selectedC
                        COALESCE(imm.product_name, p.icat_name) AS icat_name,
                        p.icat_name AS original_icat_name,
                        COALESCE(imm.product_name, p.icat_name) AS product_category,
-                       imm.product_name AS imm_product_name
+                       imm.product_name AS imm_product_name,
+                       COALESCE(NULLIF(TRIM(p.model_group_name), ''), imm.model_group_name) AS model_group_name
                 FROM \`${liveTableName}\` p
                 LEFT JOIN item_model_master imm ON p.product_code = imm.item_code
                 WHERE ${liveClauses.join(' AND ')}

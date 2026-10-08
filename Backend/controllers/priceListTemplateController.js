@@ -263,7 +263,7 @@ const getTemplateFilterOptionsController = async (req, res) => {
 const getTemplateExportDataController = async (req, res) => {
     try {
         const { id } = req.params;
-        const { brands, categories, date } = req.body;
+        const { brands, categories, date, distinctModelGroup } = req.body;
 
         const template = await getPriceListTemplateById(id);
         if (!template) {
@@ -309,6 +309,34 @@ const getTemplateExportDataController = async (req, res) => {
             return allowedCustomNames.has(colName);
         });
 
+        // Deduplication for model_group_name:
+        // If template has model_group_name column and distinctModelGroup is not explicitly false,
+        // deduplicate rows by model_group_name keeping the first color/variant record
+        const hasModelGroupCol = templateColumns.some(
+            c => (c.key || c.column_name) === 'model_group_name'
+        );
+
+        let finalData = filteredData;
+        const shouldDeduplicate = hasModelGroupCol && distinctModelGroup !== false && distinctModelGroup !== 'false';
+
+        if (shouldDeduplicate && Array.isArray(finalData)) {
+            const seenGroups = new Set();
+            const deduplicated = [];
+            for (const row of finalData) {
+                const rawGroup = row.model_group_name || '';
+                const groupKey = rawGroup ? String(rawGroup).trim().toLowerCase() : null;
+                if (groupKey) {
+                    if (!seenGroups.has(groupKey)) {
+                        seenGroups.add(groupKey);
+                        deduplicated.push(row);
+                    }
+                } else {
+                    deduplicated.push(row);
+                }
+            }
+            finalData = deduplicated;
+        }
+
         res.status(200).json({
             success: true,
             template: {
@@ -318,7 +346,7 @@ const getTemplateExportDataController = async (req, res) => {
                 variation_id: template.variation_id
             },
             columns: finalExportColumns,
-            data: filteredData
+            data: finalData
         });
     } catch (error) {
         console.error('Error fetching template export data:', error);
