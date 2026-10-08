@@ -73,11 +73,33 @@ export default function Offers({ showExpired = false }) {
       },
       {
         key: "model_group_name", label: "Model Group(s)",
-        render: (row) => (
-          <span className="font-bold text-indigo-650 whitespace-normal break-all">
-            {row.model_group_name || "—"}
-          </span>
-        )
+        render: (row) => {
+          const list = row.model_groups_list;
+          if (Array.isArray(list) && list.length > 0) {
+            return (
+              <div className="flex flex-wrap items-center gap-1.5 py-0.5">
+                {list.map((mg, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50/70 text-indigo-700 border border-indigo-100/60"
+                  >
+                    <span>{mg.name}</span>
+                    {mg.is_discontinued && (
+                      <span className="inline-flex items-center text-[9.5px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                        Discontinued
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            );
+          }
+          return (
+            <span className="font-bold text-indigo-650 whitespace-normal break-all">
+              {row.model_group_name || "—"}
+            </span>
+          );
+        }
       },
       {
         key: "state_name", label: "State",
