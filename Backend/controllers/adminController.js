@@ -76,6 +76,11 @@ const createUserByAdmin = async (req, res) => {
             return res.status(400).json({ success: false, message: "Name, username, email and password are required" });
         }
         
+        const isSuperAdmin = req.user?.role === 'super admin';
+        const isDeviceVerificationRequired = isSuperAdmin
+            ? (typeof deviceVerificationRequired === 'boolean' ? deviceVerificationRequired : true)
+            : true;
+
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = await createUser(
             name,
@@ -85,7 +90,7 @@ const createUserByAdmin = async (req, res) => {
             userTypeId || null,
             mobNo || null,
             dateOfJoin || null,
-            typeof deviceVerificationRequired === 'boolean' ? deviceVerificationRequired : true,
+            isDeviceVerificationRequired,
             true,
             role || 'user',
             state || null,
@@ -116,7 +121,7 @@ const createUserByAdmin = async (req, res) => {
                 user_type_id: userTypeId || null,
                 mob_no: mobNo || null,
                 date_of_join: dateOfJoin || null,
-                device_verification_required: deviceVerificationRequired,
+                device_verification_required: isDeviceVerificationRequired,
                 role: role || 'user',
                 state,
                 city,
@@ -413,6 +418,11 @@ const updateUserBySuperAdmin = async (req, res) => {
             zone: currentUser.zone
         };
 
+        const isSuperAdmin = req.user?.role === 'super admin';
+        const finalDeviceVerification = (isSuperAdmin && deviceVerificationRequired !== undefined)
+            ? (deviceVerificationRequired ? 1 : 0)
+            : currentUser.device_verification_required;
+
         let query = `
             UPDATE users SET 
                 name = ?,
@@ -439,7 +449,7 @@ const updateUserBySuperAdmin = async (req, res) => {
             email !== undefined ? email : currentUser.email,
             userTypeId !== undefined ? userTypeId : currentUser.user_type_id,
             mobNo !== undefined ? mobNo : currentUser.mob_no,
-            deviceVerificationRequired !== undefined ? (deviceVerificationRequired ? 1 : 0) : currentUser.device_verification_required,
+            finalDeviceVerification,
             active !== undefined ? (active ? 1 : 0) : currentUser.active,
             role !== undefined ? role : currentUser.role,
             state !== undefined ? (state ? JSON.stringify(state) : null) : currentUser.state,
@@ -471,7 +481,7 @@ const updateUserBySuperAdmin = async (req, res) => {
             email: email !== undefined ? email : currentUser.email,
             user_type_id: userTypeId !== undefined ? userTypeId : currentUser.user_type_id,
             mob_no: mobNo !== undefined ? mobNo : currentUser.mob_no,
-            device_verification_required: deviceVerificationRequired !== undefined ? (deviceVerificationRequired ? 1 : 0) : currentUser.device_verification_required,
+            device_verification_required: finalDeviceVerification,
             active: active !== undefined ? (active ? 1 : 0) : currentUser.active,
             role: role !== undefined ? role : currentUser.role,
             web_access: webAccess !== undefined ? (webAccess ? 1 : 0) : currentUser.web_access,

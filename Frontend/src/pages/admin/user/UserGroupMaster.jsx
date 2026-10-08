@@ -42,6 +42,7 @@ const MASTER_GROUPS = [
       { key: "price_list", label: "Price List", note: "Write = Price List Import/Export" },
       { key: "price_list_report", label: "Price List Report" },
       { key: "price_list_view", label: "Price List View" },
+      { key: "price_list_template_master", label: "Price List Template Master", note: "Write = Create/Export Template" },
       { key: "landing_type_master", label: "Landing Type Master" },
       { key: "finance_brand_mapping", label: "Finance Brand Mapping" },
     ]
@@ -50,10 +51,13 @@ const MASTER_GROUPS = [
     category: "📊 Reports & Analytics",
     masters: [
       { key: "target_vs_achievement", label: "Target vs Achievement", note: "Write = Import/Export Template & Sync" },
+      { key: "brandwise_target_vs_achievement", label: "Brandwise Target vs Achievement", note: "Write = Import/Export Template & Sync" },
       { key: "abm_wise_tva", label: "ABM Wise TvA Report" },
       { key: "stock_vs_cash_deposit", label: "Stock vs Cash Deposit", note: "Write = Import/Export Template" },
       { key: "finance_brand_report", label: "Finance Brand Report" },
       { key: "activity_report", label: "Activity Log Report" },
+      { key: "special_tva_master", label: "Special TVA Master", note: "Write = Create & Import Target" },
+      { key: "special_tva_report", label: "Special TVA Report", note: "Read & Export Reports" },
     ]
   },
   {
@@ -69,6 +73,14 @@ const MASTER_GROUPS = [
       { key: "support_master", label: "Support Master" },
       { key: "alert_master", label: "Alert Master" },
       { key: "offer_master", label: "Offers Master" },
+    ]
+  },
+  {
+    category: "🎫 Ticket Management",
+    masters: [
+      { key: "ticket_type_master", label: "Ticket Type Master" },
+      { key: "sub_ticket_type_master", label: "Sub Ticket Type Master" },
+      { key: "ticket_management", label: "Ticket Management (Shift & Manage)" },
     ]
   }
 ];

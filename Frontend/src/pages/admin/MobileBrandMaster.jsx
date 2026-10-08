@@ -6,19 +6,43 @@ import toast from "react-hot-toast";
 import { usePermission } from "../../context/PermissionContext";
 
 // ─── Brand Modal (Handles both Create and Edit) ───────────────────────────────────
-function BrandModal({ isOpen, row, onClose, onSave, saving }) {
+function BrandModal({ isOpen, row, onClose, onSave, saving, allBrands }) {
   const [mobileBrand, setMobileBrand] = useState("");
   const [forCode, setForCode] = useState("No");
+  const [sharePercentage, setSharePercentage] = useState("");
+  const [showInSpecialTva, setShowInSpecialTva] = useState(false);
+  const [showIndividually, setShowIndividually] = useState(false);
 
   useEffect(() => {
     if (row) {
       setMobileBrand(row.mobile_brand || "");
       setForCode(row.for_code || "No");
+      const isInd = Boolean(row.show_in_special_tva) && Boolean(row.show_individually);
+      setSharePercentage(
+        isInd && row.share_percentage !== undefined && row.share_percentage !== null
+          ? row.share_percentage
+          : ""
+      );
+      setShowInSpecialTva(Boolean(row.show_in_special_tva));
+      setShowIndividually(Boolean(row.show_individually));
     } else {
       setMobileBrand("");
       setForCode("No");
+      setSharePercentage("");
+      setShowInSpecialTva(false);
+      setShowIndividually(false);
     }
   }, [row, isOpen]);
+
+  // Sum of other individual brands (excluding the current brand if editing)
+  const otherIndividualBrandsSum = useMemo(() => {
+    if (!allBrands || !Array.isArray(allBrands)) return 0;
+    return allBrands.reduce((acc, b) => {
+      if (row && b.id === row.id) return acc;
+      const isInd = Boolean(b.show_in_special_tva) && Boolean(b.show_individually);
+      return acc + (isInd ? (parseFloat(b.share_percentage) || 0) : 0);
+    }, 0);
+  }, [allBrands, row]);
 
   if (!isOpen) return null;
 
@@ -27,19 +51,44 @@ function BrandModal({ isOpen, row, onClose, onSave, saving }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!mobileBrand.trim()) return;
-    onSave(isEdit ? row.id : null, mobileBrand.trim(), forCode);
+
+    const isIndividualSpecialTva = Boolean(showInSpecialTva) && Boolean(showIndividually);
+    let shareVal = 0;
+    if (isIndividualSpecialTva) {
+      shareVal = sharePercentage !== "" ? parseFloat(sharePercentage) : 0;
+      if (isNaN(shareVal) || shareVal < 0 || shareVal > 100) {
+        toast.error("Share percentage must be between 0 and 100");
+        return;
+      }
+    }
+
+    onSave(
+      isEdit ? row.id : null,
+      mobileBrand.trim(),
+      forCode,
+      shareVal,
+      Boolean(showInSpecialTva),
+      isIndividualSpecialTva
+    );
   };
 
+  const currentEnteredShare = (showInSpecialTva && showIndividually && sharePercentage !== "")
+    ? (parseFloat(sharePercentage) || 0)
+    : 0;
+  const totalAllocated = otherIndividualBrandsSum + currentEnteredShare;
+  const rawRemaining = 100 - totalAllocated;
+  const remainingForOthers = Math.max(0, parseFloat(rawRemaining.toFixed(2)));
+
   return (
-    <div className="fixed inset-0 z-[1000] bg-slate-900/55 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-[18px] w-full max-w-[500px] mx-auto shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-[1000] bg-slate-900/55 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-white rounded-[18px] w-full max-w-[600px] mx-auto shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
-        <div className="px-7 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-br from-indigo-600 to-indigo-700">
+        <div className="px-6 py-3.5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-br from-indigo-600 to-indigo-700 shrink-0">
           <div>
-            <h2 className="m-0 text-lg font-bold text-white">{isEdit ? "Edit Brand" : "Create Brand"}</h2>
-            <p className="mt-1 text-[13px] text-indigo-100">{isEdit ? "Update brand details" : "Add a new brand to the system"}</p>
+            <h2 className="m-0 text-base sm:text-lg font-bold text-white">{isEdit ? "Edit Brand" : "Create Brand"}</h2>
+            <p className="mt-0.5 text-xs text-indigo-100">{isEdit ? "Update brand details" : "Add a new brand to the system"}</p>
           </div>
-          <button onClick={onClose} className="bg-white/15 border-none rounded-lg w-[34px] h-[34px] cursor-pointer flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+          <button onClick={onClose} className="bg-white/15 border-none rounded-lg w-[32px] h-[32px] cursor-pointer flex items-center justify-center text-white hover:bg-white/20 transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-[18px] h-[18px]">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -47,10 +96,11 @@ function BrandModal({ isOpen, row, onClose, onSave, saving }) {
         </div>
 
         {/* Modal Body */}
-        <form onSubmit={handleSubmit}>
-          <div className="px-7 py-6">
-            <div className="mb-5">
-              <label className="block text-xs font-bold text-slate-650 uppercase tracking-wider mb-2">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+          <div className="px-6 py-4 space-y-4 overflow-y-auto">
+            {/* Brand Name (Full-Width) */}
+            <div>
+              <label className="block text-xs font-bold text-slate-650 uppercase tracking-wider mb-1.5">
                 Brand Name <span className="text-rose-650">*</span>
               </label>
               <input
@@ -59,49 +109,155 @@ function BrandModal({ isOpen, row, onClose, onSave, saving }) {
                 onChange={(e) => setMobileBrand(e.target.value)}
                 required
                 placeholder="e.g. Apple, Samsung, OnePlus"
-                className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-[11px] text-[15px] outline-none text-slate-800 focus:border-indigo-650 transition-colors"
+                className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-2 text-sm outline-none text-slate-800 focus:border-indigo-650 transition-colors"
               />
             </div>
 
-            <div className="mb-2">
-              <label className="block text-xs font-bold text-slate-650 uppercase tracking-wider mb-2">
-                For Code <span className="text-rose-650">*</span>
-              </label>
-              <div className="flex gap-6 items-center">
-                <label className="flex items-center gap-2 text-[15px] text-slate-855 cursor-pointer font-medium">
+            {/* For Code Selection (Compact Inline) */}
+            <div className="flex items-center gap-4 bg-slate-50/80 px-3.5 py-2.5 rounded-lg border border-slate-200/60">
+              <span className="text-xs font-bold text-slate-650 uppercase tracking-wider">
+                For Code <span className="text-rose-650">*</span>:
+              </span>
+              <div className="flex gap-5 items-center">
+                <label className="flex items-center gap-1.5 text-sm text-slate-800 cursor-pointer font-medium select-none">
                   <input
                     type="radio"
                     name="forCode"
                     checked={forCode === "Yes"}
                     onChange={() => setForCode("Yes")}
-                    className="w-[18px] h-[18px] accent-indigo-650 cursor-pointer"
+                    className="w-4 h-4 accent-indigo-650 cursor-pointer"
                   />
                   Yes
                 </label>
-                <label className="flex items-center gap-2 text-[15px] text-slate-855 cursor-pointer font-medium">
+                <label className="flex items-center gap-1.5 text-sm text-slate-800 cursor-pointer font-medium select-none">
                   <input
                     type="radio"
                     name="forCode"
                     checked={forCode === "No"}
                     onChange={() => setForCode("No")}
-                    className="w-[18px] h-[18px] accent-indigo-650 cursor-pointer"
+                    className="w-4 h-4 accent-indigo-650 cursor-pointer"
                   />
                   No
                 </label>
               </div>
             </div>
+
+            {/* Special TVA Settings Section */}
+            <div className="pt-2 border-t border-slate-100">
+              <label className="block text-xs font-bold text-slate-650 uppercase tracking-wider mb-2">
+                Special TVA Settings
+              </label>
+              <div className="space-y-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 transition-all">
+                {/* Checkbox 1: Show in special TVA */}
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showInSpecialTva}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setShowInSpecialTva(checked);
+                      if (!checked) {
+                        setShowIndividually(false);
+                        setSharePercentage("");
+                      }
+                    }}
+                    className="mt-0.5 w-[18px] h-[18px] rounded border-slate-300 text-indigo-650 accent-indigo-650 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-sm font-semibold text-slate-800">
+                      Show in special TVA
+                    </span>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Include this brand in the special Target vs Achievement (TVA) report.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Checkbox 2: Show individually in others */}
+                {showInSpecialTva && (
+                  <div className="pt-2.5 border-t border-slate-200/70 transition-all">
+                    <label className="flex items-start gap-3 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={showIndividually}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setShowIndividually(checked);
+                          if (!checked) {
+                            setSharePercentage("");
+                          }
+                        }}
+                        className="mt-0.5 w-[18px] h-[18px] rounded border-slate-300 text-indigo-650 accent-indigo-650 cursor-pointer"
+                      />
+                      <div>
+                        <span className="text-sm font-semibold text-slate-800">
+                          Show individually in others
+                        </span>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {showIndividually
+                            ? "Checked: Display as a dedicated individual brand column with assigned share %."
+                            : "Unchecked: Group into \"Others\" (automatically receives residual share %)."}
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                )}
+
+                {/* Share Percentage Input - ONLY shown when BOTH checkboxes are checked */}
+                {showInSpecialTva && showIndividually && (
+                  <div className="pt-2.5 border-t border-slate-200/70 space-y-2">
+                    <label className="block text-xs font-bold text-slate-650 uppercase tracking-wider">
+                      Share Percentage (%) <span className="text-rose-650">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        value={sharePercentage}
+                        onChange={(e) => setSharePercentage(e.target.value)}
+                        placeholder="e.g. 35.00"
+                        required
+                        className="w-full border-[1.5px] border-slate-300 rounded-[9px] px-3.5 py-2 text-sm outline-none text-slate-800 focus:border-indigo-650 transition-colors pr-8"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-semibold text-xs select-none">
+                        %
+                      </span>
+                    </div>
+
+                    {/* Live Residual Share Preview */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs bg-indigo-50/70 border border-indigo-100 rounded-lg p-2.5 gap-1.5 text-indigo-900">
+                      <div>
+                        <span className="text-slate-500">Other Individual Brands: </span>
+                        <span className="font-bold">{otherIndividualBrandsSum.toFixed(2)}%</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Residual for Others: </span>
+                        <span className={`font-bold ${rawRemaining < 0 ? "text-amber-700" : "text-emerald-700"}`}>
+                          {remainingForOthers.toFixed(2)}%
+                        </span>
+                        {rawRemaining < 0 && (
+                          <span className="text-[10px] text-amber-600 ml-1 font-medium">(Exceeds 100%, clamped to 0)</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Modal Footer */}
-          <div className="px-7 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
+          <div className="px-6 py-3 border-t border-slate-100 flex justify-end gap-3 bg-slate-50 shrink-0">
             <button type="button" onClick={onClose} disabled={saving}
-              className="px-5 py-2 rounded-lg border-[1.5px] border-slate-300 text-slate-600 bg-white font-semibold text-[13px] cursor-pointer hover:bg-slate-55 transition-colors disabled:opacity-50">
+              className="px-4 py-1.5 rounded-lg border-[1.5px] border-slate-300 text-slate-600 bg-white font-semibold text-[13px] cursor-pointer hover:bg-slate-55 transition-colors disabled:opacity-50">
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving || !mobileBrand.trim()}
-              className="px-6 py-2 rounded-lg border-none text-white font-bold text-[13px] transition-all bg-gradient-to-br from-indigo-600 to-indigo-750 shadow-[0_2px_8px_rgba(104,4,161,0.35)] cursor-pointer disabled:bg-slate-400 disabled:cursor-not-allowed disabled:shadow-none hover:opacity-95">
+              className="px-5 py-1.5 rounded-lg border-none text-white font-bold text-[13px] transition-all bg-gradient-to-br from-indigo-600 to-indigo-750 shadow-[0_2px_8px_rgba(104,4,161,0.35)] cursor-pointer disabled:bg-slate-400 disabled:cursor-not-allowed disabled:shadow-none hover:opacity-95">
               {saving ? "Saving…" : isEdit ? "Save Changes" : "Create Brand"}
             </button>
           </div>
@@ -140,16 +296,23 @@ export default function MobileBrandMaster() {
     loadBrands();
   }, []);
 
-  const handleSave = async (id, mobileBrand, forCode) => {
+  const handleSave = async (id, mobileBrand, forCode, sharePercentage, showInSpecialTva, showIndividually) => {
     setSaving(true);
     try {
+      const payload = {
+        mobileBrand,
+        forCode,
+        sharePercentage,
+        showInSpecialTva,
+        showIndividually
+      };
       if (id) {
         // Edit Mode
-        await updateMobileBrand(id, { mobileBrand, forCode });
+        await updateMobileBrand(id, payload);
         toast.success("Brand updated successfully");
       } else {
         // Create Mode
-        await createMobileBrand({ mobileBrand, forCode });
+        await createMobileBrand(payload);
         toast.success("Brand created successfully");
       }
       setIsModalOpen(false);
@@ -186,12 +349,72 @@ export default function MobileBrandMaster() {
         render: (row) => <span className="font-bold text-slate-900">{row.mobile_brand}</span>
       },
       {
+        key: "share_percentage", label: "Share %", minWidth: "110px",
+        render: (row) => {
+          const isIndividual = Boolean(row.show_in_special_tva) && Boolean(row.show_individually);
+          if (!isIndividual) {
+            return <span className="text-slate-400 text-xs font-medium">—</span>;
+          }
+          const val = parseFloat(row.share_percentage) || 0;
+          return (
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+              val > 0 
+                ? "bg-indigo-50 text-indigo-700 border border-indigo-200" 
+                : "bg-slate-100 text-slate-500"
+            }`}>
+              {val.toFixed(2)}%
+            </span>
+          );
+        }
+      },
+      {
         key: "for_code", label: "For Code",
         render: (row) => (
           <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${row.for_code === "Yes" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
             {row.for_code || "No"}
           </span>
         )
+      },
+      {
+        key: "show_in_special_tva",
+        label: "Special TVA",
+        minWidth: "120px",
+        render: (row) => {
+          const isSpecial = Boolean(row.show_in_special_tva);
+          return (
+            <span
+              className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                isSpecial
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "bg-slate-100 text-slate-500"
+              }`}
+            >
+              {isSpecial ? "Yes" : "No"}
+            </span>
+          );
+        }
+      },
+      {
+        key: "show_individually",
+        label: "TVA Display",
+        minWidth: "140px",
+        render: (row) => {
+          if (!row.show_in_special_tva) {
+            return <span className="text-slate-400 text-xs font-medium">—</span>;
+          }
+          const isIndividual = Boolean(row.show_individually);
+          return (
+            <span
+              className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                isIndividual
+                  ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                  : "bg-amber-50 text-amber-700 border border-amber-200"
+              }`}
+            >
+              {isIndividual ? "Individually" : "In Others"}
+            </span>
+          );
+        }
       }
     ];
 
@@ -249,6 +472,7 @@ export default function MobileBrandMaster() {
         }}
         onSave={handleSave}
         saving={saving}
+        allBrands={brands}
       />
 
       <main className="flex-1 flex flex-col w-full mx-auto px-[30px] py-8">
@@ -257,6 +481,7 @@ export default function MobileBrandMaster() {
             {error}
           </div>
         )}
+
         <DataTable
           tableId="mobile_brand_master"
           title="Brand Master"

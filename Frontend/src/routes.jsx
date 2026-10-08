@@ -14,6 +14,8 @@ import BankMaster from "./pages/admin/BankMaster";
 import FinanceMachineMaster from "./pages/admin/FinanceMachineMaster";
 import StateMaster from "./pages/admin/StateMaster";
 import LandingTypeMaster from "./pages/admin/LandingTypeMaster";
+import TicketTypeMaster from "./pages/admin/TicketTypeMaster";
+import SubTicketTypeMaster from "./pages/admin/SubTicketTypeMaster";
 import SupportMaster from "./pages/admin/SupportMaster";
 import ProductTypeMaster from "./pages/admin/ProductTypeMaster";
 import ItemModelMaster from "./pages/admin/ItemModelMaster";
@@ -27,6 +29,7 @@ import Offers from "./pages/admin/Offers";
 import Home from "./pages/admin/Home";
 import OfferForm from "./pages/admin/OfferForm";
 import TargetVsAchievement from "./pages/admin/TargetVsAchievement";
+import BrandwiseTargetVsAchievement from "./pages/admin/BrandwiseTargetVsAchievement";
 import ABMWiseTvAReport from "./pages/admin/ABMWiseTvAReport";
 import StockVsCashDepositReport from "./pages/admin/StockVsCashDepositReport";
 import FinanceBrandMappingList from "./pages/admin/FinanceBrandMappingList";
@@ -41,6 +44,11 @@ import PriceListData from "./pages/admin/PriceListData";
 import PriceListReport from "./pages/admin/PriceListReport";
 import PriceListView from "./pages/admin/PriceListView";
 import IcatSettingsForm from "./pages/admin/IcatSettingsForm";
+import CreateTicket from "./pages/tickets/CreateTicket";
+import TicketList from "./pages/tickets/TicketList";
+import SpecialTvaMaster from "./pages/admin/SpecialTvaMaster";
+import SpecialTvaReport from "./pages/admin/SpecialTvaReport";
+import PriceListTemplateMaster from "./pages/admin/PriceListTemplateMaster";
 
 
 export default function AppRoutes() {
@@ -71,6 +79,14 @@ export default function AppRoutes() {
                 <Route
                     path="/profile"
                     element={<Profile />}
+                />
+                <Route
+                    path="/tickets"
+                    element={<TicketList />}
+                />
+                <Route
+                    path="/tickets/create"
+                    element={<CreateTicket />}
                 />
             </Route>
 
@@ -124,6 +140,13 @@ export default function AppRoutes() {
                 />
             </Route>
 
+            <Route element={<ProtectedRoute requiredMaster="brandwise_target_vs_achievement" requiredAction="read" />}>
+                <Route
+                    path="/admin/brandwise-target-vs-achievement"
+                    element={<BrandwiseTargetVsAchievement />}
+                />
+            </Route>
+
             <Route element={<ProtectedRoute requiredMaster="abm_wise_tva" requiredAction="read" />}>
                 <Route
                     path="/admin/abm-wise-tva"
@@ -135,6 +158,20 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/stock-vs-cash-deposit"
                     element={<StockVsCashDepositReport />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredMaster="special_tva_master" requiredAction="read" />}>
+                <Route
+                    path="/admin/special-tva-master"
+                    element={<SpecialTvaMaster />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredMaster={["special_tva_report", "special_tva_master"]} requiredAction="read" />}>
+                <Route
+                    path="/admin/special-tva-report/:id"
+                    element={<SpecialTvaReport />}
                 />
             </Route>
 
@@ -219,6 +256,20 @@ export default function AppRoutes() {
                 />
             </Route>
 
+            <Route element={<ProtectedRoute requiredMaster="ticket_type_master" requiredAction="read" />}>
+                <Route
+                    path="/admin/ticket-types"
+                    element={<TicketTypeMaster />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredMaster="sub_ticket_type_master" requiredAction="read" />}>
+                <Route
+                    path="/admin/sub-ticket-types"
+                    element={<SubTicketTypeMaster />}
+                />
+            </Route>
+
             <Route element={<ProtectedRoute requiredMaster="support_master" requiredAction="read" />}>
                 <Route
                     path="/admin/support"
@@ -295,6 +346,13 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/settings/icat"
                     element={<IcatSettingsForm />}
+                />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredMasters={["price_list_template_master", "variation_master", "price_list"]} requiredAction="read" />}>
+                <Route
+                    path="/admin/price-list-templates"
+                    element={<PriceListTemplateMaster />}
                 />
             </Route>
 

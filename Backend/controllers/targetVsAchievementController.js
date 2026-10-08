@@ -195,6 +195,100 @@ const calculateAchievementsForTargetDate = async (targetDateStr, baseRecords) =>
         if (b.name) branchNameLookup[b.name.toUpperCase()] = b.name;
     }
 
+    // Load Model Master items to match item codes to brands
+    let modelMap = {};
+    try {
+        const [models] = await db.execute("SELECT item_code, brand_name FROM item_model_master");
+        for (const m of models) {
+            if (m.item_code) {
+                modelMap[m.item_code.trim()] = m.brand_name ? m.brand_name.trim() : null;
+            }
+        }
+    } catch (modelErr) {
+        console.warn("Failed to load item_model_master for brand mapping:", modelErr.message);
+    }
+
+    // Helpers to resolve and standardize brand names
+    const getBrandName = (itemCode, itemDescription) => {
+        const code = (itemCode || '').trim();
+        if (code && modelMap[code]) {
+            return modelMap[code];
+        }
+        const desc = (itemDescription || '').toLowerCase();
+        if (desc.includes('samsung')) return 'Samsung';
+        if (desc.includes('vivo')) return 'Vivo';
+        if (desc.includes('oppo')) return 'Oppo';
+        if (desc.includes('realme')) return 'Realme';
+        if (desc.includes('apple') || desc.includes('iphone') || desc.includes('ipad')) return 'Apple';
+        if (desc.includes('oneplus')) return 'OnePlus';
+        if (desc.includes('xiaomi') || desc.includes('redmi') || desc.includes(' mi ')) return 'Xiaomi';
+        if (desc.includes('infinix')) return 'Infinix';
+        if (desc.includes('poco')) return 'Poco';
+        if (desc.includes('motorola') || desc.includes('moto ')) return 'Motorola';
+        if (desc.includes('nokia')) return 'Nokia';
+        if (desc.includes('techno') || desc.includes('tecno')) return 'Tecno';
+        if (desc.includes('iqoo')) return 'iQOO';
+        if (desc.includes('lava')) return 'Lava';
+        if (desc.includes('itel')) return 'Itel';
+
+        const parts = (itemDescription || '').split(':');
+        if (parts.length > 1) {
+            const candidate = parts[parts.length - 1].trim();
+            if (candidate && candidate.length < 30 && !candidate.toUpperCase().includes('PHONE') && !candidate.toUpperCase().includes('TABLET') && !candidate.toUpperCase().includes('MODEL')) {
+                return candidate;
+            }
+            if (parts.length > 2) {
+                return parts[parts.length - 2].trim();
+            }
+        }
+        return 'Others';
+    };
+
+    const standardizeBrand = (brand) => {
+        if (!brand) return 'Others';
+        const b = brand.trim().toLowerCase();
+        if (b.includes('vivo')) return 'Vivo';
+        if (b.includes('oppo')) return 'Oppo';
+        if (b.includes('samsung')) return 'Samsung';
+        if (b.includes('apple') || b.includes('iphone') || b.includes('ipad')) return 'Apple';
+        if (b.includes('realme')) return 'Realme';
+        if (b.includes('xiaomi') || b.includes('redmi') || b === 'mi') return 'Xiaomi';
+        if (b.includes('oneplus')) return 'OnePlus';
+        if (b.includes('infinix')) return 'Infinix';
+        if (b.includes('motorola') || b.includes('moto')) return 'Motorola';
+        if (b.includes('nokia')) return 'Nokia';
+        if (b.includes('tecno') || b.includes('techno')) return 'Tecno';
+        if (b.includes('iqoo')) return 'iQOO';
+        if (b.includes('poco')) return 'Poco';
+        if (b.includes('lava')) return 'Lava';
+        if (b.includes('itel')) return 'Itel';
+        return brand.trim().charAt(0).toUpperCase() + brand.trim().slice(1).toLowerCase();
+    };
+
+    // Load Brand Master share percentages
+    let brandMasterMap = {};
+    let configuredBrands = [];
+    try {
+        const [bMasterRows] = await db.execute("SELECT mobile_brand, share_percentage FROM mobile_brand_master");
+        for (const bm of bMasterRows) {
+            if (bm.mobile_brand) {
+                const rawName = bm.mobile_brand.trim();
+                const stdName = standardizeBrand(rawName);
+                const share = parseFloat(bm.share_percentage) || 0;
+                brandMasterMap[stdName] = share;
+                brandMasterMap[rawName.toLowerCase()] = share;
+                if (share > 0) {
+                    configuredBrands.push({
+                        brand_name: stdName,
+                        share_percentage: share
+                    });
+                }
+            }
+        }
+    } catch (bmErr) {
+        console.warn("Failed to load mobile_brand_master for share mapping:", bmErr.message);
+    }
+
     // Initialize achievement statistics map for all branches
     const achievementsMap = {};
     for (const b of branches) {
@@ -213,13 +307,32 @@ const calculateAchievementsForTargetDate = async (targetDateStr, baseRecords) =>
             ddr_qty: 0,
             ddr_value: 0.00,
             growth_qty_percentage: 0.00,
-            growth_value_percentage: 0.00
+            growth_value_percentage: 0.00,
+            brandsMap: {}
         };
+
+        // Pre-populate brands that have a configured share > 0
+        for (const cb of configuredBrands) {
+            achievementsMap[b.name].brandsMap[cb.brand_name] = {
+                brand_name: cb.brand_name,
+                share_percentage: cb.share_percentage,
+                ftd_qty_ach: 0,
+                ftd_value_ach: 0.00,
+                lmftd_qty_ach: 0,
+                lmftd_value_ach: 0.00,
+                mtd_qty_ach: 0,
+                mtd_value_ach: 0.00,
+                lmtd_qty_ach: 0,
+                lmtd_value_ach: 0.00,
+                growth_qty_percentage: 0.00,
+                growth_value_percentage: 0.00
+            };
+        }
     }
 
-    // Query sales_invoice_cache
+    // Query sales_invoice_cache (including item_code & item_model_name for brand determination)
     const [dbRows] = await db.execute(
-        `SELECT branch_code, branch_name, invoice_date, qty, amount AS net_amount
+        `SELECT branch_code, branch_name, invoice_date, item_code, item_model_name, qty, amount AS net_amount
          FROM sales_invoice_cache
          WHERE record_type = 'INVOICE'
            AND invoice_date BETWEEN ? AND ?`,
@@ -227,7 +340,7 @@ const calculateAchievementsForTargetDate = async (targetDateStr, baseRecords) =>
     );
 
     const [dbSrnRows] = await db.execute(
-        `SELECT branch_code, branch_name, invoice_date AS sales_return_date, qty, amount AS net_amount
+        `SELECT branch_code, branch_name, invoice_date AS sales_return_date, item_code, item_model_name, qty, amount AS net_amount
          FROM sales_invoice_cache
          WHERE record_type = 'RETURN'
            AND invoice_date BETWEEN ? AND ?`,
@@ -249,21 +362,52 @@ const calculateAchievementsForTargetDate = async (targetDateStr, baseRecords) =>
         const qty = parseFloat(row.qty) || 0;
         const value = parseFloat(row.net_amount) || 0;
 
+        const rawBrand = getBrandName(row.item_code, row.item_model_name);
+        const brand = standardizeBrand(rawBrand);
+        const branchData = achievementsMap[branchName];
+
+        if (!branchData.brandsMap[brand]) {
+            const share = brandMasterMap[brand] !== undefined ? brandMasterMap[brand] : (brandMasterMap[rawBrand.toLowerCase()] || 0);
+            branchData.brandsMap[brand] = {
+                brand_name: brand,
+                share_percentage: share,
+                ftd_qty_ach: 0,
+                ftd_value_ach: 0.00,
+                lmftd_qty_ach: 0,
+                lmftd_value_ach: 0.00,
+                mtd_qty_ach: 0,
+                mtd_value_ach: 0.00,
+                lmtd_qty_ach: 0,
+                lmtd_value_ach: 0.00,
+                growth_qty_percentage: 0.00,
+                growth_value_percentage: 0.00
+            };
+        }
+        const bAch = branchData.brandsMap[brand];
+
         if (invYYYYMMDD === ftdYYYYMMDD) {
-            achievementsMap[branchName].ftd_qty_ach += qty;
-            achievementsMap[branchName].ftd_value_ach += value;
+            branchData.ftd_qty_ach += qty;
+            branchData.ftd_value_ach += value;
+            bAch.ftd_qty_ach += qty;
+            bAch.ftd_value_ach += value;
         }
         if (invYYYYMMDD === lmftdYYYYMMDD) {
-            achievementsMap[branchName].lmftd_qty_ach += qty;
-            achievementsMap[branchName].lmftd_value_ach += value;
+            branchData.lmftd_qty_ach += qty;
+            branchData.lmftd_value_ach += value;
+            bAch.lmftd_qty_ach += qty;
+            bAch.lmftd_value_ach += value;
         }
         if (invYYYYMMDD >= mtdStartYYYYMMDD && invYYYYMMDD <= ftdYYYYMMDD) {
-            achievementsMap[branchName].mtd_qty_ach += qty;
-            achievementsMap[branchName].mtd_value_ach += value;
+            branchData.mtd_qty_ach += qty;
+            branchData.mtd_value_ach += value;
+            bAch.mtd_qty_ach += qty;
+            bAch.mtd_value_ach += value;
         }
         if (invYYYYMMDD >= lmtdStartYYYYMMDD && invYYYYMMDD <= lmftdYYYYMMDD) {
-            achievementsMap[branchName].lmtd_qty_ach += qty;
-            achievementsMap[branchName].lmtd_value_ach += value;
+            branchData.lmtd_qty_ach += qty;
+            branchData.lmtd_value_ach += value;
+            bAch.lmtd_qty_ach += qty;
+            bAch.lmtd_value_ach += value;
         }
     }
 
@@ -278,25 +422,56 @@ const calculateAchievementsForTargetDate = async (targetDateStr, baseRecords) =>
         const qty = parseFloat(row.qty) || 0;
         const value = parseFloat(row.net_amount) || 0;
 
+        const rawBrand = getBrandName(row.item_code, row.item_model_name);
+        const brand = standardizeBrand(rawBrand);
+        const branchData = achievementsMap[branchName];
+
+        if (!branchData.brandsMap[brand]) {
+            const share = brandMasterMap[brand] !== undefined ? brandMasterMap[brand] : (brandMasterMap[rawBrand.toLowerCase()] || 0);
+            branchData.brandsMap[brand] = {
+                brand_name: brand,
+                share_percentage: share,
+                ftd_qty_ach: 0,
+                ftd_value_ach: 0.00,
+                lmftd_qty_ach: 0,
+                lmftd_value_ach: 0.00,
+                mtd_qty_ach: 0,
+                mtd_value_ach: 0.00,
+                lmtd_qty_ach: 0,
+                lmtd_value_ach: 0.00,
+                growth_qty_percentage: 0.00,
+                growth_value_percentage: 0.00
+            };
+        }
+        const bAch = branchData.brandsMap[brand];
+
         if (srnYYYYMMDD === ftdYYYYMMDD) {
-            achievementsMap[branchName].ftd_qty_ach -= qty;
-            achievementsMap[branchName].ftd_value_ach -= value;
+            branchData.ftd_qty_ach -= qty;
+            branchData.ftd_value_ach -= value;
+            bAch.ftd_qty_ach -= qty;
+            bAch.ftd_value_ach -= value;
         }
         if (srnYYYYMMDD === lmftdYYYYMMDD) {
-            achievementsMap[branchName].lmftd_qty_ach -= qty;
-            achievementsMap[branchName].lmftd_value_ach -= value;
+            branchData.lmftd_qty_ach -= qty;
+            branchData.lmftd_value_ach -= value;
+            bAch.lmftd_qty_ach -= qty;
+            bAch.lmftd_value_ach -= value;
         }
         if (srnYYYYMMDD >= mtdStartYYYYMMDD && srnYYYYMMDD <= ftdYYYYMMDD) {
-            achievementsMap[branchName].mtd_qty_ach += qty;
-            achievementsMap[branchName].mtd_value_ach += value;
+            branchData.mtd_qty_ach -= qty;
+            branchData.mtd_value_ach -= value;
+            bAch.mtd_qty_ach -= qty;
+            bAch.mtd_value_ach -= value;
         }
         if (srnYYYYMMDD >= lmtdStartYYYYMMDD && srnYYYYMMDD <= lmftdYYYYMMDD) {
-            achievementsMap[branchName].lmtd_qty_ach += qty;
-            achievementsMap[branchName].lmtd_value_ach += value;
+            branchData.lmtd_qty_ach -= qty;
+            branchData.lmtd_value_ach -= value;
+            bAch.lmtd_qty_ach -= qty;
+            bAch.lmtd_value_ach -= value;
         }
     }
 
-    // Clamp negative achievements to 0
+    // Clamp negative achievements to 0 and filter zero-activity brands
     for (const bName of Object.keys(achievementsMap)) {
         const ach = achievementsMap[bName];
         if (ach.ftd_qty_ach < 0) ach.ftd_qty_ach = 0;
@@ -307,6 +482,53 @@ const calculateAchievementsForTargetDate = async (targetDateStr, baseRecords) =>
         if (ach.mtd_value_ach < 0) ach.mtd_value_ach = 0;
         if (ach.lmtd_qty_ach < 0) ach.lmtd_qty_ach = 0;
         if (ach.lmtd_value_ach < 0) ach.lmtd_value_ach = 0;
+
+        // Process brands for this branch
+        const nonZeroBrands = [];
+        const branchHasCurrentSales = ach.mtd_qty_ach > 0 || ach.ftd_qty_ach > 0;
+
+        for (const brandKey of Object.keys(ach.brandsMap)) {
+            const b = ach.brandsMap[brandKey];
+            if (b.ftd_qty_ach < 0) b.ftd_qty_ach = 0;
+            if (b.ftd_value_ach < 0) b.ftd_value_ach = 0;
+            if (b.lmftd_qty_ach < 0) b.lmftd_qty_ach = 0;
+            if (b.lmftd_value_ach < 0) b.lmftd_value_ach = 0;
+            if (b.mtd_qty_ach < 0) b.mtd_qty_ach = 0;
+            if (b.mtd_value_ach < 0) b.mtd_value_ach = 0;
+            if (b.lmtd_qty_ach < 0) b.lmtd_qty_ach = 0;
+            if (b.lmtd_value_ach < 0) b.lmtd_value_ach = 0;
+
+            // Zero check:
+            // 1. If branch has current sales (MTD or FTD > 0), only show brands with MTD or FTD > 0
+            // 2. If branch has 0 current sales, show brands with past sales (LMTD or LMFTD > 0)
+            // 3. Or if brand has a configured share_percentage > 0 in Brand Master
+            let hasSales = false;
+            if (branchHasCurrentSales) {
+                hasSales = (b.mtd_qty_ach > 0 || b.ftd_qty_ach > 0 || b.mtd_value_ach > 0 || b.ftd_value_ach > 0);
+            } else {
+                hasSales = (
+                    b.mtd_qty_ach > 0 || b.ftd_qty_ach > 0 ||
+                    b.lmftd_qty_ach > 0 || b.lmtd_qty_ach > 0 ||
+                    b.mtd_value_ach > 0 || b.ftd_value_ach > 0 ||
+                    b.lmftd_value_ach > 0 || b.lmtd_value_ach > 0
+                );
+            }
+
+            const hasShare = (parseFloat(b.share_percentage) || 0) > 0;
+
+            if (hasSales || hasShare) {
+                b.growth_qty_percentage = b.mtd_qty_ach !== 0
+                    ? ((b.mtd_qty_ach - b.lmtd_qty_ach) / b.mtd_qty_ach) * 100
+                    : 0.00;
+                b.growth_value_percentage = b.mtd_value_ach !== 0
+                    ? ((b.mtd_value_ach - b.lmtd_value_ach) / b.mtd_value_ach) * 100
+                    : 0.00;
+
+                nonZeroBrands.push(b);
+            }
+        }
+
+        ach.brands = nonZeroBrands;
     }
 
     const totalDays = new Date(targetYear, targetMonth + 1, 0).getDate();
@@ -319,7 +541,8 @@ const calculateAchievementsForTargetDate = async (targetDateStr, baseRecords) =>
             ftd_qty_ach: 0, ftd_value_ach: 0.00,
             lmftd_qty_ach: 0, lmftd_value_ach: 0.00,
             mtd_qty_ach: 0, mtd_value_ach: 0.00,
-            lmtd_qty_ach: 0, lmtd_value_ach: 0.00
+            lmtd_qty_ach: 0, lmtd_value_ach: 0.00,
+            brands: []
         };
 
         const qtyTgt = parseFloat(record.qty_tgt) || 0;
@@ -342,6 +565,48 @@ const calculateAchievementsForTargetDate = async (targetDateStr, baseRecords) =>
         const growthQtyPct = mtdQtyAch !== 0 ? ((mtdQtyAch - lmtdQtyAch) / mtdQtyAch) * 100 : 0.00;
         const growthValPct = mtdValAch !== 0 ? ((mtdValAch - lmtdValAch) / mtdValAch) * 100 : 0.00;
 
+        // Calculate brand targets and derived statistics based on brand share %
+        const processedBrands = (ach.brands || []).map(b => {
+            const sharePct = parseFloat(b.share_percentage) || 0;
+            const brandQtyTgt = sharePct > 0 ? Math.round((qtyTgt * sharePct) / 100) : null;
+            const brandValTgt = sharePct > 0 ? Number(((valTgt * sharePct) / 100).toFixed(2)) : null;
+
+            const brandMtdQtyPct = (brandQtyTgt !== null && brandQtyTgt > 0)
+                ? (b.mtd_qty_ach / brandQtyTgt) * 100
+                : null;
+            const brandMtdValPct = (brandValTgt !== null && brandValTgt > 0)
+                ? (b.mtd_value_ach / brandValTgt) * 100
+                : null;
+
+            const brandBtdQty = brandQtyTgt !== null ? (brandQtyTgt - b.mtd_qty_ach) : null;
+            const brandBtdVal = brandValTgt !== null ? (brandValTgt - b.mtd_value_ach) : null;
+
+            const brandDdrQty = brandBtdQty !== null ? (brandBtdQty / remDays) : null;
+            const brandDdrVal = brandBtdVal !== null ? (brandBtdVal / remDays) : null;
+
+            return {
+                ...b,
+                share_percentage: sharePct,
+                qty_tgt: brandQtyTgt,
+                value_tgt: brandValTgt,
+                mtd_qty_percentage_ach: brandMtdQtyPct,
+                mtd_value_percentage_ach: brandMtdValPct,
+                btd_qty: brandBtdQty,
+                btd_value: brandBtdVal,
+                ddr_qty: brandDdrQty,
+                ddr_value: brandDdrVal
+            };
+        });
+
+        // Sort brands: higher share_percentage first, then higher MTD QTY ACH, then brand_name ASC
+        processedBrands.sort((a, b) => {
+            const shareDiff = (b.share_percentage || 0) - (a.share_percentage || 0);
+            if (shareDiff !== 0) return shareDiff;
+            const qtyDiff = (b.mtd_qty_ach || 0) - (a.mtd_qty_ach || 0);
+            if (qtyDiff !== 0) return qtyDiff;
+            return a.brand_name.localeCompare(b.brand_name);
+        });
+
         return {
             ...record,
             ftd_qty_ach: ach.ftd_qty_ach,
@@ -359,7 +624,8 @@ const calculateAchievementsForTargetDate = async (targetDateStr, baseRecords) =>
             ddr_qty: ddrQty,
             ddr_value: ddrVal,
             growth_qty_percentage: growthQtyPct,
-            growth_value_percentage: growthValPct
+            growth_value_percentage: growthValPct,
+            brands: processedBrands
         };
     });
 };
@@ -382,10 +648,9 @@ const getAllTargetVsAchievementsController = async (req, res) => {
         // Filter out any dummy TOTAL row
         records = records.filter(r => r.branch_name && String(r.branch_name).trim().toUpperCase() !== 'TOTAL');
 
-        // If date parameter is passed, dynamically compute achievements for that target date
-        if (req.query.date) {
-            records = await calculateAchievementsForTargetDate(req.query.date, records);
-        }
+        // Dynamically compute achievements for target date (default to today if date not provided)
+        const targetDate = req.query.date || formatToDbDateStr(new Date());
+        records = await calculateAchievementsForTargetDate(targetDate, records);
 
         res.status(200).json({
             success: true,
@@ -416,10 +681,9 @@ const getABMWiseTargetVsAchievementsController = async (req, res) => {
         // Filter out any dummy TOTAL row
         records = records.filter(r => r.branch_name && String(r.branch_name).trim().toUpperCase() !== 'TOTAL' && (!r.abm_name || String(r.abm_name).trim().toUpperCase() !== 'TOTAL'));
 
-        // If date parameter is passed, dynamically compute achievements for that target date
-        if (req.query.date) {
-            records = await calculateAchievementsForTargetDate(req.query.date, records);
-        }
+        // Dynamically compute achievements for target date (default to today if date not provided)
+        const targetDate = req.query.date || formatToDbDateStr(new Date());
+        records = await calculateAchievementsForTargetDate(targetDate, records);
 
         res.status(200).json({
             success: true,

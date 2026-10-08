@@ -4,6 +4,7 @@ import { logoutUser } from "../api/authApi";
 import { usePermission } from "../context/PermissionContext";
 import { getOffers } from "../api/offerApi";
 import { getVariations } from "../api/variationApi";
+import { getAllSpecialTvas } from "../api/specialTvaApi";
 
 const logo = "/Jasmin-Logo.png";
 
@@ -29,7 +30,9 @@ export default function Navbar() {
     const [isReportsOpen, setIsReportsOpen] = useState(false);
     const [isOffersOpen, setIsOffersOpen] = useState(false);
     const [isPriceListOpen, setIsPriceListOpen] = useState(false);
+    const [isTicketsOpen, setIsTicketsOpen] = useState(false);
     const [priceFormats, setPriceFormats] = useState([]);
+    const [specialTvas, setSpecialTvas] = useState([]);
     const { hasPermission } = usePermission();
     const [runningOffers, setRunningOffers] = useState([]);
 
@@ -39,6 +42,7 @@ export default function Navbar() {
         setIsOffersOpen(false);
         setIsReportsOpen(false);
         setIsProfileOpen(false);
+        setIsTicketsOpen(false);
     };
 
     const togglePriceListMenu = () => {
@@ -47,6 +51,7 @@ export default function Navbar() {
         setIsOffersOpen(false);
         setIsReportsOpen(false);
         setIsProfileOpen(false);
+        setIsTicketsOpen(false);
     };
 
     const toggleOffersMenu = () => {
@@ -55,6 +60,7 @@ export default function Navbar() {
         setIsPriceListOpen(false);
         setIsReportsOpen(false);
         setIsProfileOpen(false);
+        setIsTicketsOpen(false);
     };
 
     const toggleReportsMenu = () => {
@@ -63,6 +69,7 @@ export default function Navbar() {
         setIsPriceListOpen(false);
         setIsOffersOpen(false);
         setIsProfileOpen(false);
+        setIsTicketsOpen(false);
     };
 
     const toggleProfileMenu = () => {
@@ -71,6 +78,16 @@ export default function Navbar() {
         setIsPriceListOpen(false);
         setIsOffersOpen(false);
         setIsReportsOpen(false);
+        setIsTicketsOpen(false);
+    };
+
+    const toggleTicketsMenu = () => {
+        setIsTicketsOpen(prev => !prev);
+        setIsOpen(false);
+        setIsPriceListOpen(false);
+        setIsOffersOpen(false);
+        setIsReportsOpen(false);
+        setIsProfileOpen(false);
     };
 
     useEffect(() => {
@@ -113,6 +130,23 @@ export default function Navbar() {
     }, [isAdmin, hasPermission, location.pathname]);
 
     useEffect(() => {
+        const fetchSpecialTvas = async () => {
+            try {
+                const res = await getAllSpecialTvas();
+                if (res.data?.success && Array.isArray(res.data.data)) {
+                    setSpecialTvas(res.data.data);
+                }
+            } catch (err) {
+                console.error("Failed to fetch special TVAs:", err);
+            }
+        };
+        const canViewSpecialTva = isAdmin || hasPermission("special_tva_report", "read") || hasPermission("special_tva_master", "read");
+        if (canViewSpecialTva) {
+            fetchSpecialTvas();
+        }
+    }, [isAdmin, hasPermission, location.pathname]);
+
+    useEffect(() => {
         const handleOutsideClick = (e) => {
             if (isOpen && !e.target.closest("#custom-nav-dropdown")) {
                 setIsOpen(false);
@@ -129,10 +163,13 @@ export default function Navbar() {
             if (isPriceListOpen && !e.target.closest("#price-list-dropdown")) {
                 setIsPriceListOpen(false);
             }
+            if (isTicketsOpen && !e.target.closest("#support-dropdown") && !e.target.closest("#tickets-dropdown")) {
+                setIsTicketsOpen(false);
+            }
         };
         document.addEventListener("click", handleOutsideClick);
         return () => document.removeEventListener("click", handleOutsideClick);
-    }, [isOpen, isProfileOpen, isReportsOpen, isOffersOpen, isPriceListOpen]);
+    }, [isOpen, isProfileOpen, isReportsOpen, isOffersOpen, isPriceListOpen, isTicketsOpen]);
 
     useEffect(() => {
         setIsOpen(false);
@@ -140,6 +177,7 @@ export default function Navbar() {
         setIsReportsOpen(false);
         setIsOffersOpen(false);
         setIsPriceListOpen(false);
+        setIsTicketsOpen(false);
     }, [location.pathname]);
 
     const canSeePriceListView = isAdmin || hasPermission("price_list_view", "read");
@@ -247,6 +285,24 @@ export default function Navbar() {
             desc: "Manage Excel pricing formula rules"
         },
         {
+            name: "Price List Template Master",
+            path: "/admin/price-list-templates",
+            masterKeys: ["price_list_template_master", "variation_master", "price_list"],
+            icon: "fa-solid fa-sliders",
+            color: "bg-indigo-50 text-indigo-600 border border-indigo-100/50",
+            activeColor: "bg-indigo-100 text-indigo-700",
+            desc: "Custom Price List export templates"
+        },
+        {
+            name: "Special TVA Master",
+            path: "/admin/special-tva-master",
+            masterKey: "special_tva_master",
+            icon: "fa-solid fa-bullseye",
+            color: "bg-amber-50 text-amber-600 border border-amber-100/50",
+            activeColor: "bg-amber-100 text-amber-700",
+            desc: "Campaign periods & brand target allocation"
+        },
+        {
             name: "Support Master",
             path: "/admin/support",
             masterKey: "support_master",
@@ -254,6 +310,24 @@ export default function Navbar() {
             color: "bg-indigo-50 text-indigo-600 border border-indigo-100/50",
             activeColor: "bg-indigo-100 text-indigo-700",
             desc: "Manage support staff details"
+        },
+        {
+            name: "Ticket Type Master",
+            path: "/admin/ticket-types",
+            masterKey: "ticket_type_master",
+            icon: "fa-solid fa-ticket",
+            color: "bg-indigo-50 text-indigo-600 border border-indigo-100/50",
+            activeColor: "bg-indigo-100 text-indigo-700",
+            desc: "Manage ticket classification types"
+        },
+        {
+            name: "Sub Ticket Type Master",
+            path: "/admin/sub-ticket-types",
+            masterKey: "sub_ticket_type_master",
+            icon: "fa-solid fa-tags",
+            color: "bg-purple-50 text-purple-600 border border-purple-100/50",
+            activeColor: "bg-purple-100 text-purple-700",
+            desc: "Manage subticket types & assignees"
         },
         {
             name: "Product Type Master",
@@ -340,6 +414,11 @@ export default function Navbar() {
             icon: "fa-solid fa-bullseye",
         },
         {
+            name: "Brandwise Target vs Achievement",
+            path: "/admin/brandwise-target-vs-achievement",
+            icon: "fa-solid fa-layer-group",
+        },
+        {
             name: "ABM wise TvA Report",
             path: "/admin/abm-wise-tva",
             icon: "fa-solid fa-ranking-star",
@@ -365,6 +444,9 @@ export default function Navbar() {
         if (r.path === "/admin/target-vs-achievement") {
             return isAdmin || hasPermission("target_vs_achievement", "read");
         }
+        if (r.path === "/admin/brandwise-target-vs-achievement") {
+            return isAdmin || hasPermission("brandwise_target_vs_achievement", "read");
+        }
         if (r.path === "/admin/abm-wise-tva") {
             return isAdmin || hasPermission("abm_wise_tva", "read");
         }
@@ -384,7 +466,7 @@ export default function Navbar() {
     });
 
     let marqueeText = runningOffers.length > 0
-        ? runningOffers.map(o => `🔥 [${o.brand_name}] ${o.offer_type} (Valid: ${formatNavbarDate(o.from_date)} to ${formatNavbarDate(o.to_date)})`).join("   |   ")
+        ? runningOffers.map(o => `[${o.brand_name}] ${o.offer_type} (Valid: ${formatNavbarDate(o.from_date)} to ${formatNavbarDate(o.to_date)})`).join("   |   ")
         : "";
 
     // Repeat the text to ensure it's wide enough for a seamless circular loop
@@ -518,18 +600,18 @@ export default function Navbar() {
 
             {/* Second Row: Custom Navigation & Master Dropdown */}
             {user.role && (
-                <div className="bg-[#6804a1] border-t border-slate-200 px-4 sm:px-6 lg:px-8 py-0 flex flex-wrap items-center gap-4">
-                    <div className="flex items-center relative z-30" id="custom-nav-dropdown">
+                <div className="bg-[#6804a1] border-t border-slate-200 px-4 sm:px-6 lg:px-8 py-0 flex items-center">
+                    <div className="w-full flex items-center relative z-30" id="custom-nav-dropdown">
                         {/* User Dashboard Tab */}
-                        <div className="relative">
+                        <div className="relative flex-1 min-w-0">
                             <button
                                 onClick={() => {
                                     navigate("/user/home");
                                 }}
-                                className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-l border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname === "/user/home" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-l border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname === "/user/home" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
                                     }`}
                             >
-                                <span className="flex items-center gap-2.5 truncate mx-auto">
+                                <span className="flex items-center justify-center gap-1.5 sm:gap-2 truncate w-full px-1">
                                     <span className="font-semibold text-white truncate">User Dashboard</span>
                                 </span>
                             </button>
@@ -537,15 +619,15 @@ export default function Navbar() {
 
                         {/* Admin Home Tab */}
                         {isAdmin && (
-                            <div className="relative">
+                            <div className="relative flex-1 min-w-0">
                                 <button
                                     onClick={() => {
                                         navigate("/admin/home");
                                     }}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname === "/admin/home" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                    className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname === "/admin/home" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
                                 >
-                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                    <span className="flex items-center justify-center gap-1.5 sm:gap-2 truncate w-full px-1">
                                         <span className="font-semibold text-white truncate">Home</span>
                                     </span>
                                 </button>
@@ -554,13 +636,13 @@ export default function Navbar() {
 
                         {/* Masters Dropdown */}
                         {availableMasters.length > 0 && (
-                            <div className="relative">
+                            <div className="relative flex-1 min-w-0">
                                 <button
                                     onClick={toggleMastersMenu}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isOpen ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                    className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isOpen ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
                                 >
-                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                    <span className="flex items-center justify-center gap-1.5 sm:gap-2 truncate w-full px-1">
                                         <span className="font-semibold text-white truncate">Masters</span>
                                         <svg
                                             xmlns="http://www.w3.org/2000/svg"
@@ -568,7 +650,7 @@ export default function Navbar() {
                                             viewBox="0 0 24 24"
                                             strokeWidth={2.5}
                                             stroke="currentColor"
-                                            className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-200 ${isOpen ? "rotate-180 text-white" : ""}`}
+                                            className={`w-3.5 h-3.5 text-slate-300 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180 text-white" : ""}`}
                                         >
                                             <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                                         </svg>
@@ -618,15 +700,15 @@ export default function Navbar() {
 
                         {/* Price List Dropdown */}
                         {canSeePriceListTab && (
-                            <div className="relative" id="price-list-dropdown">
+                            <div className="relative flex-1 min-w-0" id="price-list-dropdown">
                                 <button
                                     onClick={togglePriceListMenu}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isPriceListOpen || location.pathname.startsWith("/admin/price-list")
+                                    className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isPriceListOpen || location.pathname.startsWith("/admin/price-list")
                                         ? "bg-white/15"
                                         : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
                                 >
-                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                    <span className="flex items-center justify-center gap-1.5 sm:gap-2 truncate w-full px-1">
                                         <span className="font-semibold text-white truncate">Price List</span>
                                         <svg
                                             xmlns="http://www.w3.org/2000/svg"
@@ -634,7 +716,7 @@ export default function Navbar() {
                                             viewBox="0 0 24 24"
                                             strokeWidth={2.5}
                                             stroke="currentColor"
-                                            className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-200 ${isPriceListOpen ? "rotate-180 text-white" : ""}`}
+                                            className={`w-3.5 h-3.5 text-slate-300 shrink-0 transition-transform duration-200 ${isPriceListOpen ? "rotate-180 text-white" : ""}`}
                                         >
                                             <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                                         </svg>
@@ -734,6 +816,18 @@ export default function Navbar() {
                                                 )}
                                             </div>
                                         )}
+                                        <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between px-1">
+                                            <button
+                                                onClick={() => {
+                                                    navigate("/admin/price-list-templates");
+                                                    setIsPriceListOpen(false);
+                                                }}
+                                                className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 hover:text-indigo-900 transition cursor-pointer"
+                                            >
+                                                <i className="fa-solid fa-sliders text-xs"></i>
+                                                <span>Price List Template Master</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -741,32 +835,130 @@ export default function Navbar() {
 
                         {/* Alert Master Tab */}
                         {(isAdmin || hasPermission("alert_master", "read")) && (
-                            <div className="relative">
+                            <div className="relative flex-1 min-w-0">
                                 <button
                                     onClick={() => {
                                         navigate("/admin/alerts");
                                     }}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname === "/admin/alerts" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
+                                    className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${location.pathname === "/admin/alerts" ? "bg-white/15" : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
                                 >
-                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                    <span className="flex items-center justify-center gap-1.5 sm:gap-2 truncate w-full px-1">
                                         <span className="font-semibold text-white truncate">Alert Master</span>
                                     </span>
                                 </button>
                             </div>
                         )}
 
+                        {/* Support Dropdown */}
+                        <div className="relative flex-1 min-w-0" id="support-dropdown">
+                            <button
+                                onClick={toggleTicketsMenu}
+                                className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${
+                                    isTicketsOpen || location.pathname.startsWith("/tickets")
+                                        ? "bg-white/15"
+                                        : "bg-[#6804a1] hover:bg-white/5"
+                                }`}
+                            >
+                                <span className="flex items-center justify-center gap-1.5 sm:gap-2 truncate w-full px-1">
+                                    <span className="font-semibold text-white truncate">Support</span>
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        strokeWidth={2.5}
+                                        stroke="currentColor"
+                                        className={`w-3.5 h-3.5 text-slate-300 shrink-0 transition-transform duration-200 ${isTicketsOpen ? "rotate-180 text-white" : ""}`}
+                                    >
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                                    </svg>
+                                </span>
+                            </button>
+
+                            {isTicketsOpen && (
+                                <div className="absolute left-0 top-full mt-1.5 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 z-50 origin-top animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="flex flex-col gap-1">
+                                        <button
+                                            onClick={() => {
+                                                navigate("/tickets/create");
+                                                setIsTicketsOpen(false);
+                                            }}
+                                            className={`relative group flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all cursor-pointer text-left border border-transparent ${
+                                                location.pathname === "/tickets/create"
+                                                    ? "bg-indigo-50/70 text-indigo-700 font-semibold border-indigo-100/50"
+                                                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
+                                            }`}
+                                        >
+                                            {/* Side Highlight Bar */}
+                                            <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${
+                                                location.pathname === "/tickets/create" ? "bg-indigo-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"
+                                            }`} />
+
+                                            <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${
+                                                location.pathname === "/tickets/create"
+                                                    ? "bg-indigo-100/80 text-indigo-700"
+                                                    : "bg-slate-100/80 text-slate-500 group-hover:scale-105"
+                                            }`}>
+                                                <i className="fa-solid fa-plus text-xs"></i>
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${
+                                                    location.pathname === "/tickets/create" ? "text-indigo-900 font-bold" : "text-slate-800 group-hover:text-slate-950"
+                                                }`}>
+                                                    Raise Ticket
+                                                </p>
+                                                <p className="text-[11px] text-slate-400">Create a new support request</p>
+                                            </div>
+                                        </button>
+
+                                        <button
+                                            onClick={() => {
+                                                navigate("/tickets");
+                                                setIsTicketsOpen(false);
+                                            }}
+                                            className={`relative group flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all cursor-pointer text-left border border-transparent ${
+                                                location.pathname === "/tickets"
+                                                    ? "bg-indigo-50/70 text-indigo-700 font-semibold border-indigo-100/50"
+                                                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
+                                            }`}
+                                        >
+                                            {/* Side Highlight Bar */}
+                                            <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${
+                                                location.pathname === "/tickets" ? "bg-indigo-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"
+                                            }`} />
+
+                                            <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${
+                                                location.pathname === "/tickets"
+                                                    ? "bg-indigo-100/80 text-indigo-700"
+                                                    : "bg-slate-100/80 text-slate-500 group-hover:scale-105"
+                                            }`}>
+                                                <i className="fa-solid fa-ticket-simple text-xs"></i>
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${
+                                                    location.pathname === "/tickets" ? "text-indigo-900 font-bold" : "text-slate-800 group-hover:text-slate-950"
+                                                }`}>
+                                                    All Tickets
+                                                </p>
+                                                <p className="text-[11px] text-slate-400">Active & history tickets list</p>
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         {/* Offers Dropdown */}
                         {(isAdmin || hasPermission("offer_master", "read")) && (
-                            <div className="relative" id="offers-dropdown">
+                            <div className="relative flex-1 min-w-0" id="offers-dropdown">
                                 <button
                                     onClick={toggleOffersMenu}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isOffersOpen || location.pathname.startsWith("/admin/offers")
+                                    className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isOffersOpen || location.pathname.startsWith("/admin/offers")
                                         ? "bg-white/15"
                                         : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
                                 >
-                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                    <span className="flex items-center justify-center gap-1.5 sm:gap-2 truncate w-full px-1">
                                         <span className="font-semibold text-white truncate">Offers</span>
                                         <svg
                                             xmlns="http://www.w3.org/2000/svg"
@@ -774,7 +966,7 @@ export default function Navbar() {
                                             viewBox="0 0 24 24"
                                             strokeWidth={2.5}
                                             stroke="currentColor"
-                                            className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-200 ${isOffersOpen ? "rotate-180 text-white" : ""}`}
+                                            className={`w-3.5 h-3.5 text-slate-300 shrink-0 transition-transform duration-200 ${isOffersOpen ? "rotate-180 text-white" : ""}`}
                                         >
                                             <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                                         </svg>
@@ -833,16 +1025,16 @@ export default function Navbar() {
                             </div>
                         )}
                         {/* Reports Dropdown */}
-                        {(availableReports.length > 0 || (canSeePriceListReports && priceFormats.length > 0)) && (
-                            <div className="relative" id="reports-dropdown">
+                        {(availableReports.length > 0 || (canSeePriceListReports && priceFormats.length > 0) || (canViewSpecialTva && specialTvas.length > 0)) && (
+                            <div className="relative flex-1 min-w-0" id="reports-dropdown">
                                 <button
                                     onClick={toggleReportsMenu}
-                                    className={`flex items-center justify-between w-40 px-4 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/abm-wise-tva") || location.pathname.startsWith("/admin/stock-vs-cash-deposit") || location.pathname.startsWith("/admin/finance-brand-mapping") || location.pathname.startsWith("/admin/finance-brand-report") || location.pathname.startsWith("/admin/price-list-report")
+                                    className={`flex items-center justify-center w-full px-2 py-2.5 text-sm border-r border-white/10 rounded-none focus:outline-none transition-all duration-200 font-semibold text-white cursor-pointer ${isReportsOpen || location.pathname.startsWith("/admin/report") || location.pathname.startsWith("/admin/target-vs-achievement") || location.pathname.startsWith("/admin/brandwise-target-vs-achievement") || location.pathname.startsWith("/admin/abm-wise-tva") || location.pathname.startsWith("/admin/stock-vs-cash-deposit") || location.pathname.startsWith("/admin/finance-brand-mapping") || location.pathname.startsWith("/admin/finance-brand-report") || location.pathname.startsWith("/admin/price-list-report") || location.pathname.startsWith("/admin/special-tva-report")
                                         ? "bg-white/15"
                                         : "bg-[#6804a1] hover:bg-white/5"
                                         }`}
                                 >
-                                    <span className="flex items-center gap-2.5 truncate mx-auto">
+                                    <span className="flex items-center justify-center gap-1.5 sm:gap-2 truncate w-full px-1">
                                         <span className="font-semibold text-white truncate">Reports</span>
                                         <svg
                                             xmlns="http://www.w3.org/2000/svg"
@@ -850,7 +1042,7 @@ export default function Navbar() {
                                             viewBox="0 0 24 24"
                                             strokeWidth={2.5}
                                             stroke="currentColor"
-                                            className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-200 ${isReportsOpen ? "rotate-180 text-white" : ""}`}
+                                            className={`w-3.5 h-3.5 text-slate-300 shrink-0 transition-transform duration-200 ${isReportsOpen ? "rotate-180 text-white" : ""}`}
                                         >
                                             <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                                         </svg>
@@ -858,17 +1050,22 @@ export default function Navbar() {
                                 </button>
 
                                 {isReportsOpen && (() => {
+                                    const canSeeSpecialTvaReports = isAdmin || hasPermission("special_tva_report", "read") || hasPermission("special_tva_master", "read");
                                     const hasGeneralReports = availableReports.length > 0;
                                     const hasPriceListReports = canSeePriceListReports && priceFormats.length > 0;
+                                    const hasSpecialTvaReports = canSeeSpecialTvaReports && specialTvas.length > 0;
                                     let reportsColsCount = 0;
                                     if (hasGeneralReports) reportsColsCount++;
                                     if (hasPriceListReports) reportsColsCount++;
+                                    if (hasSpecialTvaReports) reportsColsCount++;
 
                                     let reportsDropdownWidthClass = "w-80";
                                     if (reportsColsCount === 2) reportsDropdownWidthClass = "w-[560px]";
+                                    if (reportsColsCount >= 3) reportsDropdownWidthClass = "w-[820px]";
 
                                     let reportsGridColsClass = "grid-cols-1 gap-3";
                                     if (reportsColsCount === 2) reportsGridColsClass = "grid-cols-2 divide-x divide-slate-100 gap-4";
+                                    if (reportsColsCount >= 3) reportsGridColsClass = "grid-cols-3 divide-x divide-slate-100 gap-4";
 
                                     return (
                                         <div className={`absolute right-0 top-full mt-1.5 ${reportsDropdownWidthClass} bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 origin-top-right animate-in fade-in slide-in-from-top-2 duration-200`}>
@@ -941,6 +1138,46 @@ export default function Navbar() {
                                                                         </div>
                                                                         <div className="flex-1">
                                                                             <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-emerald-900 font-bold" : "text-slate-800 group-hover:text-slate-950"}`}>
+                                                                                {label}
+                                                                            </p>
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Section 3: Special TVA Reports */}
+                                                {hasSpecialTvaReports && (
+                                                    <div className={`flex flex-col gap-1.5 ${(hasGeneralReports || hasPriceListReports) ? "pl-4" : ""}`}>
+                                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1 flex items-center gap-1.5">
+                                                            <i className="fa-solid fa-bullseye text-amber-500"></i>
+                                                            Special TVA Reports
+                                                        </p>
+                                                        <div className="flex flex-col gap-1">
+                                                            {specialTvas.map((st, idx) => {
+                                                                const label = `${st.title} Report`;
+                                                                const path = `/admin/special-tva-report/${st.id}`;
+                                                                const isActive = location.pathname === path;
+                                                                return (
+                                                                    <button
+                                                                        key={idx}
+                                                                        onClick={() => {
+                                                                            navigate(path);
+                                                                            setIsReportsOpen(false);
+                                                                        }}
+                                                                        className={`relative group flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border border-transparent ${isActive
+                                                                            ? "bg-amber-50/70 text-amber-700 font-semibold border-amber-100/50"
+                                                                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100"
+                                                                            }`}
+                                                                    >
+                                                                        <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all duration-200 ${isActive ? "bg-amber-600 scale-y-100" : "bg-transparent scale-y-0 group-hover:scale-y-50 group-hover:bg-slate-300"}`} />
+                                                                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm shrink-0 ${isActive ? "bg-amber-100/80 text-amber-700" : "bg-slate-100/80 text-slate-500 group-hover:scale-105"}`}>
+                                                                            <i className="fa-solid fa-chart-column text-xs"></i>
+                                                                        </div>
+                                                                        <div className="flex-1">
+                                                                            <p className={`text-sm font-semibold leading-snug py-0.5 transition-colors whitespace-normal break-words ${isActive ? "text-amber-900 font-bold" : "text-slate-800 group-hover:text-slate-950"}`}>
                                                                                 {label}
                                                                             </p>
                                                                         </div>

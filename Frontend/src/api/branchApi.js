@@ -31,3 +31,7 @@ export const saveBranchFinanceCodes = async (branchId, data) => {
 export const getEligibleAbms = async () => {
     return apiClient.get("/branches/eligible-abms");
 };
+
+export const toggleBranchInternalStatus = async (id, internal_status) => {
+    return apiClient.patch(`/branches/internal-status/${id}`, { internal_status });
+};

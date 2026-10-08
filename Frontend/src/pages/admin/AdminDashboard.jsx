@@ -195,7 +195,7 @@ export default function AdminDashboard() {
                 role: editForm.role,
                 userTypeId: editForm.userTypeId || null,
                 password: editForm.password || undefined,
-                deviceVerificationRequired: editForm.deviceVerificationRequired,
+                deviceVerificationRequired: user.role === "super admin" ? editForm.deviceVerificationRequired : undefined,
                 active: editForm.active,
                 webAccess: editForm.webAccess,
                 mobileAccess: editForm.mobileAccess
@@ -1076,15 +1076,17 @@ export default function AdminDashboard() {
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                                        <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700 select-none">
-                                            <input
-                                                type="checkbox"
-                                                checked={editForm.deviceVerificationRequired}
-                                                onChange={(e) => setEditForm(prev => ({ ...prev, deviceVerificationRequired: e.target.checked }))}
-                                                className="accent-[#6804a1] h-4 w-4"
-                                            />
-                                            Device Verification Required
-                                        </label>
+                                        {user.role === "super admin" && (
+                                            <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700 select-none">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={editForm.deviceVerificationRequired}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, deviceVerificationRequired: e.target.checked }))}
+                                                    className="accent-[#6804a1] h-4 w-4"
+                                                />
+                                                Device Verification Required
+                                            </label>
+                                        )}
                                         <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700 select-none">
                                             <input
                                                 type="checkbox"

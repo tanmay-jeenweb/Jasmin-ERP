@@ -1,12 +1,20 @@
 const path = require("path");
 const fs = require("fs");
 
+const port = process.env.PORT || 5005;
 const rawUploadDir = process.env.UPLOAD_DIR || "uploads";
+const isWindows = process.platform === "win32";
 
-// Resolve upload directory path. If relative, resolve from Backend root directory.
-const uploadDir = path.isAbsolute(rawUploadDir)
-    ? rawUploadDir
-    : path.resolve(__dirname, "..", rawUploadDir);
+// Resolve upload directory path.
+// On Windows (local development), Linux absolute paths like /home/... MUST always resolve to local Backend/uploads
+let uploadDir;
+if (isWindows && (rawUploadDir.startsWith("/home/") || rawUploadDir.includes("adminjasminmobil"))) {
+    uploadDir = path.resolve(__dirname, "..", "uploads");
+} else {
+    uploadDir = path.isAbsolute(rawUploadDir)
+        ? rawUploadDir
+        : path.resolve(__dirname, "..", rawUploadDir);
+}
 
 // Ensure the directory exists
 if (!fs.existsSync(uploadDir)) {
@@ -15,18 +23,89 @@ if (!fs.existsSync(uploadDir)) {
         console.log(`Created uploads directory at: ${uploadDir}`);
     } catch (err) {
         console.error(`Failed to create uploads directory at ${uploadDir}:`, err);
+        uploadDir = path.resolve(__dirname, "..", "uploads");
+        if (!fs.existsSync(uploadDir)) {
+            try {
+                fs.mkdirSync(uploadDir, { recursive: true });
+            } catch (mkdirErr) {
+                console.error("Failed to create fallback uploads directory:", mkdirErr);
+            }
+        }
     }
 }
 
+// Determine APK directory (public_html/apk path on production / local)
+let apkDir;
+if (process.env.APK_DIR) {
+    apkDir = path.isAbsolute(process.env.APK_DIR)
+        ? process.env.APK_DIR
+        : path.resolve(__dirname, "..", process.env.APK_DIR);
+} else if (rawUploadDir.includes("public_html")) {
+    const publicHtmlRoot = rawUploadDir.split("uploads")[0];
+    apkDir = path.join(publicHtmlRoot, "apk");
+} else {
+    apkDir = path.resolve(__dirname, "..", "public_html", "apk");
+}
+
+if (isWindows && (apkDir.startsWith("/home/") || apkDir.includes("adminjasminmobil"))) {
+    apkDir = path.resolve(__dirname, "..", "public_html", "apk");
+}
+
+if (!fs.existsSync(apkDir)) {
+    try {
+        fs.mkdirSync(apkDir, { recursive: true });
+        console.log(`Created public_html/apk directory at: ${apkDir}`);
+    } catch (err) {
+        console.error(`Failed to create apk directory at ${apkDir}:`, err);
+    }
+}
+
+// Ensure apk subdirectory in uploads as fallback
+const apkUploadDir = path.join(uploadDir, "apk");
+if (!fs.existsSync(apkUploadDir)) {
+    try {
+        fs.mkdirSync(apkUploadDir, { recursive: true });
+    } catch (err) {
+        // ignore
+    }
+}
+
+// Determine uploadBaseUrl:
+// If running on Windows and UPLOAD_BASE_URL points to the remote production domain (interlink.jasminmobile.com),
+// use local http://localhost:${port}/uploads so locally uploaded files can be loaded by the browser.
+const defaultUploadBaseUrl = `http://localhost:${port}/uploads`;
+let uploadBaseUrl = process.env.UPLOAD_BASE_URL || defaultUploadBaseUrl;
+
+if (isWindows && uploadBaseUrl.includes("interlink.jasminmobile.com")) {
+    uploadBaseUrl = defaultUploadBaseUrl;
+}
+
+const serveMethod = isWindows ? "express" : (process.env.UPLOAD_SERVE_METHOD || "express");
+
 module.exports = {
     uploadDir,
-    uploadBaseUrl: process.env.UPLOAD_BASE_URL || "http://localhost:5000/uploads",
-    serveMethod: process.env.UPLOAD_SERVE_METHOD || "express",
+    apkDir,
+    apkUploadDir,
+    uploadBaseUrl,
+    serveMethod,
     
     // Helper to generate public URL for a file
     getFileUrl: (filename) => {
-        const baseUrl = process.env.UPLOAD_BASE_URL || "http://localhost:5000/uploads";
-        // Ensure base URL doesn't end with a slash, and filename doesn't start with one
+        if (!filename) return "";
+        if (filename.startsWith("http://") || filename.startsWith("https://")) {
+            // If running on Windows/localhost and someone has an interlink URL, rewrite to local backend
+            if (isWindows && filename.includes("interlink.jasminmobile.com/uploads/")) {
+                const cleanName = filename.split("/uploads/").pop();
+                const activePort = process.env.PORT || 5005;
+                return `http://localhost:${activePort}/uploads/${cleanName}`;
+            }
+            return filename;
+        }
+        const activePort = process.env.PORT || 5005;
+        let baseUrl = process.env.UPLOAD_BASE_URL || `http://localhost:${activePort}/uploads`;
+        if (isWindows && baseUrl.includes("interlink.jasminmobile.com")) {
+            baseUrl = `http://localhost:${activePort}/uploads`;
+        }
         const cleanBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
         const cleanFilename = filename.startsWith("/") ? filename.slice(1) : filename;
         return `${cleanBaseUrl}/${cleanFilename}`;
