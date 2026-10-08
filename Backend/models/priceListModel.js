@@ -355,9 +355,11 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
                 o.offer_type,
                 DATE_FORMAT(o.from_date, '%Y-%m-%d') AS from_date,
                 DATE_FORMAT(o.to_date, '%Y-%m-%d') AS to_date,
-                omg.model_group_name
+                COALESCE(mgm.model_group_name, omg.model_group_name) AS model_group_name,
+                omg.model_group_name AS snapshot_name
             FROM offers o
             JOIN offer_model_groups omg ON o.id = omg.offer_id
+            LEFT JOIN model_group_master mgm ON omg.model_group_id = mgm.id
         `;
         const offerParams = [];
         if (targetDate && typeof targetDate === 'string' && targetDate.trim() !== '') {
@@ -385,10 +387,18 @@ const getPriceListReportData = async (variationId, targetDate = null) => {
                         transactions: []
                     });
                 }
-                if (!groupOfferMap.has(r.model_group_name)) {
-                    groupOfferMap.set(r.model_group_name, new Set());
+                if (r.model_group_name) {
+                    if (!groupOfferMap.has(r.model_group_name)) {
+                        groupOfferMap.set(r.model_group_name, new Set());
+                    }
+                    groupOfferMap.get(r.model_group_name).add(r.id);
                 }
-                groupOfferMap.get(r.model_group_name).add(r.id);
+                if (r.snapshot_name && r.snapshot_name !== r.model_group_name) {
+                    if (!groupOfferMap.has(r.snapshot_name)) {
+                        groupOfferMap.set(r.snapshot_name, new Set());
+                    }
+                    groupOfferMap.get(r.snapshot_name).add(r.id);
+                }
             }
 
             // Fetch transactions for unique offers in a single efficient query (no Cartesian product duplication)
