@@ -154,8 +154,8 @@ const getTicketsForUser = async ({ userId, isAdmin, tab = 'active', search = '',
     // Role-based visibility:
     // If not admin: must be either ticket creator OR in assigned_to list
     if (!isAdmin) {
-        whereClauses.push(`(t.created_by = ? OR JSON_CONTAINS(t.assigned_to, CAST(? AS JSON)))`);
-        params.push(userId, JSON.stringify(userId));
+        whereClauses.push(`(t.created_by = ? OR JSON_CONTAINS(t.assigned_to, ?))`);
+        params.push(userId, JSON.stringify(parseInt(userId, 10) || userId));
     }
 
     // Optional Filter by Ticket Type
@@ -436,8 +436,8 @@ const getTicketStatsForUser = async ({ userId, isAdmin }) => {
     let params = [];
 
     if (!isAdmin) {
-        baseWhere = `WHERE (created_by = ? OR JSON_CONTAINS(assigned_to, CAST(? AS JSON)))`;
-        params = [userId, JSON.stringify(userId)];
+        baseWhere = `WHERE (created_by = ? OR JSON_CONTAINS(assigned_to, ?))`;
+        params = [userId, JSON.stringify(parseInt(userId, 10) || userId)];
     }
 
     const query = `
@@ -445,13 +445,13 @@ const getTicketStatsForUser = async ({ userId, isAdmin }) => {
             COUNT(*) AS total,
             COUNT(CASE WHEN status != 'COMPLETED' THEN 1 END) AS active_count,
             COUNT(CASE WHEN status = 'COMPLETED' THEN 1 END) AS history_count,
-            COUNT(CASE WHEN JSON_CONTAINS(assigned_to, CAST(? AS JSON)) AND status != 'COMPLETED' THEN 1 END) AS assigned_to_me_active
+            COUNT(CASE WHEN JSON_CONTAINS(assigned_to, ?) AND status != 'COMPLETED' THEN 1 END) AS assigned_to_me_active
         FROM tickets
         ${baseWhere}
     `;
 
     // Parameter order: the assigned_to_me check takes userId, followed by baseWhere params if not admin
-    const statsParams = [JSON.stringify(userId), ...params];
+    const statsParams = [JSON.stringify(parseInt(userId, 10) || userId), ...params];
     const [rows] = await db.execute(query, statsParams);
 
     return rows[0] || {

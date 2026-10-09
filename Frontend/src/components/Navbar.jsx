@@ -384,13 +384,13 @@ export default function Navbar() {
             desc: "Configure Price List exclusions"
         },
         {
-            name: "Contest Winnings Master",
+            name: "Winning Master",
             path: "/admin/contest-winnings-master",
             masterKey: "contest_winnings_master",
             icon: "fa-solid fa-gift",
             color: "bg-orange-50 text-orange-600 border border-orange-100/50",
             activeColor: "bg-orange-100 text-orange-700",
-            desc: "Live Scratch & Win contest master & sync"
+            desc: "Live Scratch & Win winning master & sync"
         }
     ];
 
