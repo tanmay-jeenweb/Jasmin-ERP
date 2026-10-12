@@ -10,6 +10,8 @@ import { getBranches } from "../../api/branchApi";
 import toast from "react-hot-toast";
 import { usePermission } from "../../context/PermissionContext";
 import ExcelJS from "exceljs";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 // Format date time helper (IST)
 const formatDateTime = (val) => {
@@ -32,12 +34,14 @@ const formatDateTime = (val) => {
 };
 
 export default function ContestWinningMaster() {
-  const { hasPermission } = usePermission();
+  const { hasPermission, isAdmin } = usePermission();
   const canWrite = hasPermission("contest_winnings_master", "write") || hasPermission("scratch_win_reconciliation", "write");
 
   const [winnings, setWinnings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [serverAllowedBranchCodes, setServerAllowedBranchCodes] = useState(null);
   const [lastSync, setLastSync] = useState(null);
 
   // Filters
@@ -75,6 +79,9 @@ export default function ContestWinningMaster() {
         }));
         setWinnings(indexed);
         if (res.data.lastSync) setLastSync(res.data.lastSync);
+        if (res.data.allowedBranchCodes !== undefined) {
+          setServerAllowedBranchCodes(res.data.allowedBranchCodes);
+        }
       }
     } catch (err) {
       console.error("Failed to fetch contest winnings", err);
@@ -83,6 +90,35 @@ export default function ContestWinningMaster() {
       setLoading(false);
     }
   };
+
+  const localUser = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}");
+    } catch {
+      return {};
+    }
+  }, []);
+
+  const isUserAdmin = Boolean(
+    isAdmin ||
+    (localUser.role && (localUser.role.toLowerCase() === "admin" || localUser.role.toLowerCase() === "super admin")) ||
+    (localUser.user_role && localUser.user_role.toLowerCase() === "admin")
+  );
+
+  const authorizedBranchCodes = useMemo(() => {
+    if (isUserAdmin) return null;
+    const codes = new Set();
+    if (Array.isArray(serverAllowedBranchCodes)) {
+      serverAllowedBranchCodes.forEach((c) => codes.add(String(c).trim().toUpperCase()));
+    }
+    if (Array.isArray(branches)) {
+      branches.forEach((b) => {
+        const c = String(b.code || b.branch_code || "").trim().toUpperCase();
+        if (c) codes.add(c);
+      });
+    }
+    return codes;
+  }, [isUserAdmin, serverAllowedBranchCodes, branches]);
 
   useEffect(() => {
     fetchWinnings();
@@ -229,6 +265,188 @@ export default function ContestWinningMaster() {
     } catch (err) {
       console.error("Export error:", err);
       toast.error("Failed to export Excel file");
+    }
+  };
+
+  // Handle PDF Export (Strictly restricted to user's authorized branches)
+  const handleDownloadPdf = async () => {
+    if (winnings.length === 0) {
+      toast.error("No data available to download");
+      return;
+    }
+
+    setDownloadingPdf(true);
+    const toastId = toast.loading("Generating PDF report...");
+
+    try {
+      let exportRows = winnings;
+
+      if (!isUserAdmin) {
+        if (!authorizedBranchCodes || authorizedBranchCodes.size === 0) {
+          toast.error("You are not authorized to view any branches", { id: toastId });
+          setDownloadingPdf(false);
+          return;
+        }
+
+        exportRows = exportRows.filter((row) => {
+          const bCode = String(row.branch_code || "").trim().toUpperCase();
+          return bCode && authorizedBranchCodes.has(bCode);
+        });
+      }
+
+      if (selectedBranch) {
+        const selCode = String(selectedBranch).trim().toUpperCase();
+        exportRows = exportRows.filter((row) => String(row.branch_code || "").trim().toUpperCase() === selCode);
+      }
+
+      if (exportRows.length === 0) {
+        toast.error("No authorized records found for the selected criteria", { id: toastId });
+        setDownloadingPdf(false);
+        return;
+      }
+
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4"
+      });
+
+      doc.setFillColor(15, 23, 42); // Slate 900
+      doc.rect(0, 0, 297, 16, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text("Jasmin ERP - Winning Master (Scratch & Win)", 10, 10.5);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(226, 232, 240);
+      const generatedAtStr = new Date().toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true
+      });
+      const userNameStr = localUser.name ? `User: ${localUser.name} | ` : "";
+      doc.text(`${userNameStr}Generated: ${generatedAtStr}`, 287, 10.5, { align: "right" });
+
+      doc.setTextColor(51, 65, 85);
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "bold");
+      const dateRangeText = (fromDate || toDate) ? `Date: ${fromDate || "Start"} to ${toDate || "Present"}` : "Date: All Time";
+      doc.text(dateRangeText, 10, 21);
+
+      let branchText = "";
+      if (isUserAdmin) {
+        branchText = selectedBranch ? `|  Branch: ${selectedBranch}` : "|  Branches: All Branches (Admin)";
+      } else {
+        const authArr = Array.from(authorizedBranchCodes || []);
+        branchText = selectedBranch ? `|  Branch (Filtered): ${selectedBranch}` : `|  Authorized Branches (${authArr.length}): ${authArr.join(", ")}`;
+      }
+      doc.setFont("helvetica", "normal");
+      doc.text(branchText, 60, 21);
+
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(15, 23, 42);
+      doc.text(`Total Records: ${exportRows.length}`, 287, 21, { align: "right" });
+
+      const headers = [[
+        "Sr",
+        "Win ID",
+        "Prize Won",
+        "Campaign",
+        "Customer Name",
+        "Customer Phone",
+        "Branch Code",
+        "Branch Name",
+        "City",
+        "Invoice No",
+        "Status",
+        "Scratch Time (IST)"
+      ]];
+
+      const body = exportRows.map((row, idx) => [
+        idx + 1,
+        row.external_id || (row.id ? `#${row.id}` : "—"),
+        row.product_name || "Gift Prize",
+        row.form_name || "Scratch & Win",
+        row.customer_name || "—",
+        row.customer_phone || "—",
+        row.branch_code || "—",
+        row.branch_name || "—",
+        row.branch_city || "—",
+        row.invoice_number || "—",
+        (row.status || "claimed").toUpperCase(),
+        formatDateTime(row.scratch_created_at)
+      ]);
+
+      autoTable(doc, {
+        head: headers,
+        body: body,
+        startY: 25,
+        theme: "grid",
+        headStyles: {
+          fillColor: [30, 41, 59],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 7.2,
+          halign: "center",
+          valign: "middle",
+          cellPadding: 1.5
+        },
+        bodyStyles: {
+          fontSize: 6.5,
+          textColor: [30, 41, 59],
+          cellPadding: 1.5,
+          valign: "middle"
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252]
+        },
+        columnStyles: {
+          0: { halign: "center", cellWidth: 8 },
+          1: { halign: "center", cellWidth: 16 },
+          2: { halign: "left", cellWidth: 30 },
+          3: { halign: "left", cellWidth: 26 },
+          4: { halign: "left", cellWidth: 28 },
+          5: { halign: "center", cellWidth: 24 },
+          6: { halign: "center", cellWidth: 18 },
+          7: { halign: "left", cellWidth: 28 },
+          8: { halign: "left", cellWidth: 20 },
+          9: { halign: "center", cellWidth: 22 },
+          10: { halign: "center", cellWidth: 18 },
+          11: { halign: "center", cellWidth: 28 }
+        },
+        margin: { left: 8, right: 8, bottom: 12 },
+        didDrawPage: (data) => {
+          const pageCount = doc.internal.getNumberOfPages();
+          const currentPage = data.pageNumber;
+          doc.setFontSize(6.8);
+          doc.setTextColor(148, 163, 184);
+          doc.text(
+            `Jasmin ERP | Winning Master Report | Authorized Branch Access Only`,
+            8,
+            204
+          );
+          doc.text(
+            `Page ${currentPage} of ${pageCount}`,
+            289,
+            204,
+            { align: "right" }
+          );
+        }
+      });
+
+      doc.save(`Winning_Master_${new Date().toISOString().slice(0, 10)}.pdf`);
+      toast.success("PDF report downloaded successfully!", { id: toastId });
+    } catch (err) {
+      console.error("PDF export error:", err);
+      toast.error("Failed to generate PDF report", { id: toastId });
+    } finally {
+      setDownloadingPdf(false);
     }
   };
 
@@ -466,6 +684,31 @@ export default function ContestWinningMaster() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 <span>Export</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                disabled={downloadingPdf || winnings.length === 0}
+                title="Download PDF report (Authorized branches only)"
+                className="flex h-10 items-center gap-1.5 px-3.5 rounded-lg text-white font-semibold text-xs bg-rose-600 hover:bg-rose-700 shadow-sm disabled:opacity-50 cursor-pointer transition-all whitespace-nowrap"
+              >
+                {downloadingPdf ? (
+                  <>
+                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span>Generating PDF...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-6 4h4" />
+                    </svg>
+                    <span>Download PDF</span>
+                  </>
+                )}
               </button>
             </div>
           }

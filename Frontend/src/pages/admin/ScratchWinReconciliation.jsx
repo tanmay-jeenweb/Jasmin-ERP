@@ -9,6 +9,8 @@ import { getBranches } from "../../api/branchApi";
 import toast from "react-hot-toast";
 import { usePermission } from "../../context/PermissionContext";
 import ExcelJS from "exceljs";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 // Format date time helper (IST)
 const formatDateTime = (val) => {
@@ -37,15 +39,17 @@ const formatCurrency = (val) => {
 };
 
 export default function ScratchWinReconciliation() {
-  const { hasPermission } = usePermission();
+  const { hasPermission, isAdmin } = usePermission();
   const canWrite = hasPermission("contest_winnings_master", "write") || hasPermission("scratch_win_reconciliation", "write");
 
   const [allRecords, setAllRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [summary, setSummary] = useState({});
   const [lastSync, setLastSync] = useState(null);
   const [lastInvoiceSync, setLastInvoiceSync] = useState(null);
+  const [serverAllowedBranchCodes, setServerAllowedBranchCodes] = useState(null);
 
   // Filters
   const [startDate, setStartDate] = useState("2026-10-05");
@@ -113,6 +117,9 @@ export default function ScratchWinReconciliation() {
         setSummary(res.data.summary || {});
         if (res.data.lastSync) setLastSync(res.data.lastSync);
         if (res.data.lastInvoiceSync) setLastInvoiceSync(res.data.lastInvoiceSync);
+        if (res.data.allowedBranchCodes !== undefined) {
+          setServerAllowedBranchCodes(res.data.allowedBranchCodes);
+        }
       }
     } catch (err) {
       console.error("Failed to load reconciliation data", err);
@@ -121,6 +128,36 @@ export default function ScratchWinReconciliation() {
       setLoading(false);
     }
   };
+
+  const localUser = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}");
+    } catch {
+      return {};
+    }
+  }, []);
+
+  const isUserAdmin = Boolean(
+    isAdmin ||
+    (localUser.role && (localUser.role.toLowerCase() === "admin" || localUser.role.toLowerCase() === "super admin")) ||
+    (localUser.user_role && localUser.user_role.toLowerCase() === "admin")
+  );
+
+  // Set of authorized branch codes for non-admin user
+  const authorizedBranchCodes = useMemo(() => {
+    if (isUserAdmin) return null; // Admin has unrestricted access to all branches
+    const codes = new Set();
+    if (Array.isArray(serverAllowedBranchCodes)) {
+      serverAllowedBranchCodes.forEach((c) => codes.add(String(c).trim().toUpperCase()));
+    }
+    if (Array.isArray(branches)) {
+      branches.forEach((b) => {
+        const c = String(b.code || b.branch_code || "").trim().toUpperCase();
+        if (c) codes.add(c);
+      });
+    }
+    return codes;
+  }, [isUserAdmin, serverAllowedBranchCodes, branches]);
 
   // Derive filtered records based on activeTab in frontend memory (instant 0ms switching!)
   const records = useMemo(() => {
@@ -321,6 +358,248 @@ export default function ScratchWinReconciliation() {
     } catch (err) {
       console.error("Export error:", err);
       toast.error("Failed to export Excel file");
+    }
+  };
+
+  // Export to PDF (Strictly restricted to user's authorized branches)
+  const handleDownloadPdf = async () => {
+    if (records.length === 0) {
+      toast.error("No data available to download");
+      return;
+    }
+
+    setDownloadingPdf(true);
+    const toastId = toast.loading("Generating PDF report...");
+
+    try {
+      // 1. Strictly enforce branch authorization for non-admin users
+      let exportRows = records;
+
+      if (!isUserAdmin) {
+        if (!authorizedBranchCodes || authorizedBranchCodes.size === 0) {
+          toast.error("You are not authorized to view any branches", { id: toastId });
+          setDownloadingPdf(false);
+          return;
+        }
+
+        exportRows = exportRows.filter((row) => {
+          const invCode = String(row.invoice_branch_code || "").trim().toUpperCase();
+          const winCode = String(row.contest_branch_code || "").trim().toUpperCase();
+          return (invCode && authorizedBranchCodes.has(invCode)) || (winCode && authorizedBranchCodes.has(winCode));
+        });
+      }
+
+      // 2. Apply dropdown selected branches filter if active
+      if (selectedBranches.length > 0) {
+        const selectedSet = new Set(selectedBranches.map((c) => String(c).trim().toUpperCase()));
+        exportRows = exportRows.filter((row) => {
+          const invCode = String(row.invoice_branch_code || "").trim().toUpperCase();
+          const winCode = String(row.contest_branch_code || "").trim().toUpperCase();
+          return (invCode && selectedSet.has(invCode)) || (winCode && selectedSet.has(winCode));
+        });
+      }
+
+      if (exportRows.length === 0) {
+        toast.error("No authorized records found for the selected criteria", { id: toastId });
+        setDownloadingPdf(false);
+        return;
+      }
+
+      // 3. Initialize landscape A4 jsPDF
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4"
+      });
+
+      // Top Header Banner
+      doc.setFillColor(15, 23, 42); // Slate 900
+      doc.rect(0, 0, 297, 16, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text("Jasmin ERP - Scratch & Win Contest vs Invoice Reconciliation", 10, 10.5);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(226, 232, 240);
+      const generatedAtStr = new Date().toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true
+      });
+      const userNameStr = localUser.name ? `User: ${localUser.name} | ` : "";
+      doc.text(`${userNameStr}Generated: ${generatedAtStr}`, 287, 10.5, { align: "right" });
+
+      // Secondary Info Bar: Filters and Authorized Branches
+      doc.setTextColor(51, 65, 85);
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "bold");
+      doc.text(`Date Range: ${startDate} to ${endDate}`, 10, 21);
+
+      const tabLabel = activeTab === "ALL" ? "All Categories" : (exportRows[0]?.match_status_label || activeTab);
+      doc.setFont("helvetica", "normal");
+      doc.text(`|  Status: ${tabLabel}`, 58, 21);
+
+      // Determine branch label
+      let branchLabelText = "";
+      if (isUserAdmin) {
+        if (selectedBranches.length > 0) {
+          branchLabelText = `|  Branches: ${selectedBranches.join(", ")}`;
+        } else {
+          branchLabelText = `|  Branches: All Branches (Admin)`;
+        }
+      } else {
+        const authArr = Array.from(authorizedBranchCodes || []);
+        if (selectedBranches.length > 0) {
+          branchLabelText = `|  Branches (Filtered): ${selectedBranches.join(", ")}`;
+        } else {
+          branchLabelText = `|  Authorized Branches (${authArr.length}): ${authArr.join(", ")}`;
+        }
+      }
+      doc.text(branchLabelText, 98, 21);
+
+      // Stats KPI summary line on right
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(15, 23, 42);
+      const kpiStr = `Total: ${exportRows.length}  |  Matched: ${summary.fullyMatchedCount || 0}  |  Partial: ${summary.partiallyMatchedCount || 0}  |  No Scratch: ${summary.invoiceNotScratchedCount || 0}  |  No Inv: ${summary.winningNoInvoiceCount || 0}`;
+      doc.text(kpiStr, 287, 21, { align: "right" });
+
+      // Prepare autoTable headers and body
+      const headers = [[
+        "Sr",
+        "Status",
+        "Branch",
+        "Invoice No",
+        "Invoice Date/Time",
+        "ERP Customer",
+        "Inv Value (Rs.)",
+        "Win ID",
+        "Contest Customer",
+        "Prize Won",
+        "Scratch Time",
+        "Time Diff"
+      ]];
+
+      const body = exportRows.map((row, idx) => {
+        const bCode = row.invoice_branch_code || row.contest_branch_code || "—";
+        const bName = row.invoice_branch_name || row.contest_branch_name || "";
+        const branchCell = bName ? `${bCode}\n${bName}` : bCode;
+
+        const erpCust = [row.invoice_customer_name, row.invoice_customer_phone].filter(Boolean).join("\n") || "—";
+        const winCust = [row.contest_customer_name, row.contest_customer_phone].filter(Boolean).join("\n") || "—";
+
+        const invDateTime = row.invoice_datetime ? formatDateTime(row.invoice_datetime) : (row.invoice_date || "—");
+        const scratchDateTime = row.contest_scratch_time ? formatDateTime(row.contest_scratch_time) : "—";
+
+        const numVal = Number(row.invoice_value);
+        const invVal = row.invoice_value !== null && row.invoice_value !== undefined && !isNaN(numVal) && String(row.invoice_value).trim() !== ""
+          ? numVal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : "—";
+
+        const winId = row.contest_external_id || (row.contest_id ? `#${row.contest_id}` : "—");
+
+        return [
+          idx + 1,
+          row.match_status_label || row.match_status || "—",
+          branchCell,
+          row.invoice_number || row.contest_invoice_number || "—",
+          invDateTime,
+          erpCust,
+          invVal,
+          winId,
+          winCust,
+          row.contest_prize || "—",
+          scratchDateTime,
+          row.time_diff_human || "—"
+        ];
+      });
+
+      autoTable(doc, {
+        head: headers,
+        body: body,
+        startY: 25,
+        theme: "grid",
+        headStyles: {
+          fillColor: [30, 41, 59], // Slate 800
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 7,
+          halign: "center",
+          valign: "middle",
+          cellPadding: 1.5
+        },
+        bodyStyles: {
+          fontSize: 6.2,
+          textColor: [30, 41, 59],
+          cellPadding: 1.5,
+          valign: "middle"
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252]
+        },
+        columnStyles: {
+          0: { halign: "center", cellWidth: 7 },   // Sr
+          1: { halign: "center", cellWidth: 24 },  // Status
+          2: { halign: "left", cellWidth: 26 },    // Branch
+          3: { halign: "center", cellWidth: 23 },  // Invoice No
+          4: { halign: "center", cellWidth: 26 },  // Invoice Date/Time
+          5: { halign: "left", cellWidth: 28 },    // ERP Customer
+          6: { halign: "right", cellWidth: 24, fontStyle: "bold" }, // Inv Value (Rs.)
+          7: { halign: "center", cellWidth: 15 },  // Win ID
+          8: { halign: "left", cellWidth: 28 },    // Contest Customer
+          9: { halign: "left", cellWidth: 28 },    // Prize Won
+          10: { halign: "center", cellWidth: 26 }, // Scratch Time
+          11: { halign: "center", cellWidth: 22 }  // Time Diff
+        },
+        didParseCell: (data) => {
+          if (data.section === "body") {
+            const rawRow = exportRows[data.row.index];
+            if (rawRow) {
+              if (rawRow.match_status === "MATCHED") {
+                data.cell.styles.fillColor = [240, 253, 244]; // emerald-50
+              } else if (rawRow.match_status === "PARTIALLY_MATCHED") {
+                data.cell.styles.fillColor = [240, 249, 255]; // sky-50
+              } else if (rawRow.match_status === "INVOICE_NOT_SCRATCHED") {
+                data.cell.styles.fillColor = [255, 251, 235]; // amber-50
+              } else if (rawRow.match_status === "WINNING_NO_INVOICE") {
+                data.cell.styles.fillColor = [254, 242, 242]; // red-50
+              }
+            }
+          }
+        },
+        margin: { left: 10, right: 10, bottom: 12 },
+        didDrawPage: (data) => {
+          const pageCount = doc.internal.getNumberOfPages();
+          const currentPage = data.pageNumber;
+          doc.setFontSize(6.8);
+          doc.setTextColor(148, 163, 184);
+          doc.text(
+            `Jasmin ERP | Scratch & Win Reconciliation Report | Authorized Branch Access Only`,
+            10,
+            204
+          );
+          doc.text(
+            `Page ${currentPage} of ${pageCount}`,
+            287,
+            204,
+            { align: "right" }
+          );
+        }
+      });
+
+      const cleanTab = activeTab.toLowerCase().replace(/_/g, "-");
+      doc.save(`Scratch_Win_Reconciliation_${cleanTab}_${startDate}_to_${endDate}.pdf`);
+      toast.success("PDF report downloaded successfully!", { id: toastId });
+    } catch (err) {
+      console.error("PDF export error:", err);
+      toast.error("Failed to generate PDF report", { id: toastId });
+    } finally {
+      setDownloadingPdf(false);
     }
   };
 
@@ -779,6 +1058,31 @@ export default function ScratchWinReconciliation() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               <span>Export Excel</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={downloadingPdf || records.length === 0}
+              title="Download PDF report (Authorized branches only)"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-sm transition cursor-pointer disabled:opacity-50 whitespace-nowrap"
+            >
+              {downloadingPdf ? (
+                <>
+                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>Generating PDF...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-6 4h4" />
+                  </svg>
+                  <span>Download PDF</span>
+                </>
+              )}
             </button>
           </div>
         </div>

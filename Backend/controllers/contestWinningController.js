@@ -382,6 +382,7 @@ const getContestWinningsMasterController = async (req, res) => {
             page: result.page,
             limit: result.limit,
             totalPages: result.totalPages,
+            allowedBranchCodes,
             lastSync
         });
     } catch (error) {
@@ -840,6 +841,7 @@ const getScratchWinReconciliationController = async (req, res) => {
                 branchCode,
                 statusFilter
             },
+            allowedBranchCodes,
             lastSync,
             lastInvoiceSync: invoiceCountInfo?.last_synced || null
         });
