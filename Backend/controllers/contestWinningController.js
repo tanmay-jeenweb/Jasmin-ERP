@@ -1,5 +1,6 @@
 const https = require('https');
 const http = require('http');
+const db = require('../config/db.js');
 const {
     upsertContestWinnings,
     getAllContestWinnings,
@@ -94,6 +95,52 @@ const formatTimeDiff = (diffMinutes) => {
     }
 
     return isNegative ? `${timeStr} before bill (Pre-scratch)` : `${timeStr} after bill`;
+};
+
+/**
+ * Helper: Get allowed branch codes for a user from user_branch_mappings.
+ * Returns `null` if user is an Admin (can access all branches).
+ * Returns array of branch codes if user is Non-Admin.
+ */
+const getUserAllowedBranchCodes = async (user) => {
+    if (!user || !user.id) return [];
+
+    try {
+        // Fetch user details & user_type to check for admin privileges
+        const [userRows] = await db.execute(
+            `SELECT u.id, u.role, ut.user_role, ut.type_name
+             FROM users u
+             LEFT JOIN user_types ut ON u.user_type_id = ut.id
+             WHERE u.id = ?`,
+            [user.id]
+        );
+
+        if (userRows.length > 0) {
+            const u = userRows[0];
+            const isAdm = 
+                (u.role && (u.role.toLowerCase() === 'admin' || u.role.toLowerCase() === 'super admin')) ||
+                (u.user_role && u.user_role.toLowerCase() === 'admin') ||
+                (u.type_name && u.type_name.toLowerCase() === 'admin');
+
+            if (isAdm) {
+                return null; // Admin has access to all branches
+            }
+        }
+
+        // Fetch mapped branch codes for non-admin user from user_branch_mappings
+        const [mappingRows] = await db.execute(
+            `SELECT bm.code AS branch_code
+             FROM user_branch_mappings ubm
+             JOIN branch_master bm ON ubm.branch_id = bm.id
+             WHERE ubm.user_id = ? AND bm.code IS NOT NULL AND bm.code != ''`,
+            [user.id]
+        );
+
+        return mappingRows.map(r => String(r.branch_code).trim()).filter(Boolean);
+    } catch (err) {
+        console.error('Error fetching user allowed branch codes:', err);
+        return [];
+    }
 };
 
 /**
@@ -289,9 +336,34 @@ const getContestWinningsMasterController = async (req, res) => {
             exportAll = false
         } = req.query;
 
+        // Resolve branch access control based on user role and user_branch_mappings
+        const allowedBranchCodes = await getUserAllowedBranchCodes(req.user);
+        let effectiveBranch = branch_code;
+
+        if (allowedBranchCodes !== null) {
+            if (allowedBranchCodes.length === 0) {
+                return res.status(200).json({
+                    success: true,
+                    data: [],
+                    total: 0,
+                    stats: { total: 0, claimed: 0, pending: 0, rejected: 0 },
+                    page: 1,
+                    limit: parseInt(limit),
+                    totalPages: 1,
+                    lastSync: await getLastSyncLog()
+                });
+            }
+
+            if (branch_code && branch_code.trim()) {
+                effectiveBranch = allowedBranchCodes.includes(branch_code.trim()) ? branch_code.trim() : '__NO_ACCESS__';
+            } else {
+                effectiveBranch = allowedBranchCodes;
+            }
+        }
+
         const result = await getAllContestWinnings({
             search,
-            branch_code,
+            branch_code: effectiveBranch,
             status,
             from_date,
             to_date,
@@ -375,10 +447,59 @@ const getScratchWinReconciliationController = async (req, res) => {
 
         console.log(`[Reconciliation] Running comparison for date range: ${effectiveStartDate} (${startYYYYMMDD}) to ${effectiveEndDate} (${endYYYYMMDD})`);
 
-        // Parse multiple branches if provided (comma-separated or single)
-        const branchList = (req.query.branchCodes || req.query.branchCode || '')
+        // Resolve branch access control based on user role and user_branch_mappings
+        const allowedBranchCodes = await getUserAllowedBranchCodes(req.user);
+
+        // Parse requested branches from query (comma-separated or single)
+        const requestedBranches = (req.query.branchCodes || req.query.branchCode || '')
             ? String(req.query.branchCodes || req.query.branchCode).split(',').map(s => s.trim()).filter(Boolean)
             : [];
+
+        let branchList = [];
+
+        if (allowedBranchCodes === null) {
+            // Admin: full access to all branches (or filtered by requested branches)
+            branchList = requestedBranches;
+        } else {
+            // Non-Admin: strictly restricted to assigned branches
+            if (allowedBranchCodes.length === 0) {
+                // User has no assigned branches at all -> return empty report
+                return res.status(200).json({
+                    success: true,
+                    data: [],
+                    summary: {
+                        totalInvoices: 0,
+                        totalWinnings: 0,
+                        matchedCount: 0,
+                        fullyMatchedCount: 0,
+                        partiallyMatchedCount: 0,
+                        invoiceNotScratchedCount: 0,
+                        winningNoInvoiceCount: 0,
+                        totalAllReconciled: 0,
+                        matchRatePercent: 0,
+                        avgTimeDiffMinutes: 0,
+                        avgTimeDiffHuman: 'N/A'
+                    },
+                    pagination: { total: 0, page: 1, limit: parseInt(req.query.limit || 50), totalPages: 1 },
+                    filters: { startDate: effectiveStartDate, endDate: effectiveEndDate, branchCode: '', statusFilter },
+                    lastSync: await getLastSyncLog(),
+                    lastInvoiceSync: null
+                });
+            }
+
+            if (requestedBranches.length > 0) {
+                // Intersect requested branches with allowed branches
+                const validRequested = requestedBranches.filter(b => allowedBranchCodes.includes(b));
+                if (validRequested.length === 0) {
+                    branchList = ['__NO_ACCESS__'];
+                } else {
+                    branchList = validRequested;
+                }
+            } else {
+                // Default: show ALL of this user's assigned branches
+                branchList = allowedBranchCodes;
+            }
+        }
 
         const forceSync = req.query.forceSync === 'true' || req.query.forceRefresh === 'true';
 

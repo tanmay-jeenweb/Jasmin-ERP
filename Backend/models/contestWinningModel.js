@@ -194,9 +194,20 @@ const getAllContestWinnings = async ({
         params.push(s, s, s, s, s);
     }
 
-    if (branch_code && branch_code.trim()) {
-        whereConditions.push('branch_code = ?');
-        params.push(branch_code.trim());
+    if (branch_code) {
+        if (Array.isArray(branch_code) && branch_code.length > 0) {
+            if (branch_code.length === 1) {
+                whereConditions.push('branch_code = ?');
+                params.push(branch_code[0]);
+            } else {
+                const placeholders = branch_code.map(() => '?').join(',');
+                whereConditions.push(`branch_code IN (${placeholders})`);
+                params.push(...branch_code);
+            }
+        } else if (typeof branch_code === 'string' && branch_code.trim()) {
+            whereConditions.push('branch_code = ?');
+            params.push(branch_code.trim());
+        }
     }
 
     if (status && status.trim() && status.toLowerCase() !== 'all') {

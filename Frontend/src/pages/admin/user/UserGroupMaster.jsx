@@ -58,6 +58,8 @@ const MASTER_GROUPS = [
       { key: "activity_report", label: "Activity Log Report" },
       { key: "special_tva_master", label: "Special TVA Master", note: "Write = Create & Import Target" },
       { key: "special_tva_report", label: "Special TVA Report", note: "Read & Export Reports" },
+      { key: "contest_winnings_master", label: "Contest Winnings Master", note: "Write = Sync Winnings" },
+      { key: "scratch_win_reconciliation", label: "Scratch & Win Reconciliation", note: "Read & Export Reports" },
     ]
   },
   {
