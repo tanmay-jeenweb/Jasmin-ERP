@@ -185,6 +185,18 @@ const createUserTypePermissionsTable = async () => {
             WHERE master_name = 'variation_master'
         `);
 
+        // Seed initial contest_winnings_master and scratch_win_reconciliation permission rows for existing user types
+        await db.execute(`
+            INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete)
+            SELECT id, 'contest_winnings_master', 0, 0, 0, 0
+            FROM user_types
+        `);
+        await db.execute(`
+            INSERT IGNORE INTO user_type_permissions (user_type_id, master_name, can_read, can_write, can_update, can_delete)
+            SELECT id, 'scratch_win_reconciliation', 0, 0, 0, 0
+            FROM user_types
+        `);
+
         console.log("✅ Permission keys migrated/seeded successfully.");
     } catch (err) {
         console.error("Migration of user permissions failed:", err.message);
