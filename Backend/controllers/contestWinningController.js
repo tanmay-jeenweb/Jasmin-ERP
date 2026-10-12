@@ -101,7 +101,7 @@ const syncContestWinningsController = async (req, res) => {
     const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Web';
 
     const apiUrl = process.env.CONTEST_WINNINGS_API_URL || 'https://win.jasminmobile.com/api/winnings';
-    const token = process.env.CONTEST_WINNINGS_API_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NCwicm9sZSI6ImFkbWluIiwibmFtZSI6InRhdHZhbV9zaGFoIiwidXNlcm5hbWUiOiJ0YXR2YW1fc2hhaCIsIm1vYl9ubyI6Ijk4MjQwNjE2MjAiLCJpYXQiOjE3OTE0NTM2NzYsImV4cCI6MTc5MTU0MDA3Nn0.c2s3tWLj27w-Xsh2ImBOuD3851kP8z4KdaB8CfDj9Mc';
+    const token = process.env.CONTEST_WINNINGS_API_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NCwicm9sZSI6ImFkbWluIiwibmFtZSI6InRhdHZhbV9zaGFoIiwidXNlcm5hbWUiOiJ0YXR2YW1fc2hhaCIsIm1vYl9ubyI6Ijk4MjQwNjE2MjAiLCJpYXQiOjE3OTE3ODIyNjcsImV4cCI6MTc5MTg2ODY2N30.2RGaWVJmzLMIc1Brk-KzNSO2bMi-9t1mVX-Ew-t_5Kk';
 
     try {
         console.log(`[ContestSync] Fetching winnings from ${apiUrl}...`);

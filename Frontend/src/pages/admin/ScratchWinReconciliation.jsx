@@ -774,51 +774,6 @@ export default function ScratchWinReconciliation() {
           </div>
         </div>
 
-        {/* Summary Metric Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {/* Total Invoices */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Invoices</div>
-            <div className="text-xl font-bold text-slate-900 mt-1">{summary.totalInvoices || 0}</div>
-            <div className="text-[10px] text-slate-400 mt-0.5">ERP Bills (from 5th Oct)</div>
-          </div>
-
-          {/* Total Winnings */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Contest Wins</div>
-            <div className="text-xl font-bold text-purple-700 mt-1">{summary.totalWinnings || 0}</div>
-            <div className="text-[10px] text-purple-500 mt-0.5">Scratch entries</div>
-          </div>
-
-          {/* Fully Matched Records */}
-          <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200 shadow-sm">
-            <div className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Fully Matched (🟢)</div>
-            <div className="text-xl font-bold text-emerald-800 mt-1">{summary.fullyMatchedCount || summary.matchedCount || 0}</div>
-            <div className="text-[10px] text-emerald-600 font-semibold mt-0.5">Bill & Phone match</div>
-          </div>
-
-          {/* Partially Matched Records */}
-          <div className="bg-sky-50/70 p-4 rounded-2xl border border-sky-200 shadow-sm">
-            <div className="text-[11px] font-bold text-sky-700 uppercase tracking-wider">Partial Match (🔵)</div>
-            <div className="text-xl font-bold text-sky-800 mt-1">{summary.partiallyMatchedCount || 0}</div>
-            <div className="text-[10px] text-sky-600 font-semibold mt-0.5">Bill OR Phone match</div>
-          </div>
-
-          {/* Invoices Not Scratched */}
-          <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-200 shadow-sm">
-            <div className="text-[11px] font-bold text-amber-700 uppercase tracking-wider">Not Scratched (🟡)</div>
-            <div className="text-xl font-bold text-amber-800 mt-1">{summary.invoiceNotScratchedCount || 0}</div>
-            <div className="text-[10px] text-amber-600 mt-0.5">Missed scratch</div>
-          </div>
-
-          {/* Winnings Without Invoice */}
-          <div className="bg-rose-50/70 p-4 rounded-2xl border border-rose-200 shadow-sm">
-            <div className="text-[11px] font-bold text-rose-700 uppercase tracking-wider">No Invoice (🔴)</div>
-            <div className="text-xl font-bold text-rose-800 mt-1">{summary.winningNoInvoiceCount || 0}</div>
-            <div className="text-[10px] text-rose-600 mt-0.5">Discrepancy / No bill</div>
-          </div>
-        </div>
-
         {/* Status Tab Navigation */}
         <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto">
           <button
