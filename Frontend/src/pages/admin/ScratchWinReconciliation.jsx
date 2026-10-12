@@ -435,15 +435,24 @@ export default function ScratchWinReconciliation() {
       const userNameStr = localUser.name ? `User: ${localUser.name} | ` : "";
       doc.text(`${userNameStr}Generated: ${generatedAtStr}`, 287, 10.5, { align: "right" });
 
-      // Secondary Info Bar: Filters and Authorized Branches
-      doc.setTextColor(51, 65, 85);
-      doc.setFontSize(7.5);
-      doc.setFont("helvetica", "bold");
-      doc.text(`Date Range: ${startDate} to ${endDate}`, 10, 21);
+      // Compute duration totals from exportRows
+      const totalDurationRecords = exportRows.length;
+      const durationMatched = exportRows.filter((r) => r.match_status === "MATCHED").length;
+      const durationPartial = exportRows.filter((r) => r.match_status === "PARTIALLY_MATCHED").length;
+      const durationNoScratch = exportRows.filter((r) => r.match_status === "INVOICE_NOT_SCRATCHED").length;
+      const durationWithoutInv = exportRows.filter((r) => r.match_status === "WINNING_NO_INVOICE").length;
+      const durationTotalPrizes = exportRows.filter((r) => Boolean(r.contest_prize && String(r.contest_prize).trim() !== "" && r.contest_prize !== "—")).length;
 
-      const tabLabel = activeTab === "ALL" ? "All Categories" : (exportRows[0]?.match_status_label || activeTab);
-      doc.setFont("helvetica", "normal");
-      doc.text(`|  Status: ${tabLabel}`, 58, 21);
+      // Prize counts breakdown for duration
+      const durationPrizeCounts = {};
+      exportRows.forEach((r) => {
+        if (r.contest_prize && String(r.contest_prize).trim() !== "" && r.contest_prize !== "—") {
+          const p = String(r.contest_prize).trim();
+          durationPrizeCounts[p] = (durationPrizeCounts[p] || 0) + 1;
+        }
+      });
+      const durationPrizeEntries = Object.entries(durationPrizeCounts).sort((a, b) => b[1] - a[1]);
+      const durationPrizeBreakdownStr = durationPrizeEntries.map(([name, count]) => `${name}: ${count}`).join(", ");
 
       // Determine branch label
       let branchLabelText = "";
@@ -461,13 +470,31 @@ export default function ScratchWinReconciliation() {
           branchLabelText = `|  Authorized Branches (${authArr.length}): ${authArr.join(", ")}`;
         }
       }
-      doc.text(branchLabelText, 98, 21);
 
-      // Stats KPI summary line on right
+      // Secondary Info Bar: Line 1 (Filters & Records Counts with all types)
+      doc.setTextColor(51, 65, 85);
+      doc.setFontSize(7.2);
       doc.setFont("helvetica", "bold");
+      const tabLabel = activeTab === "ALL" ? "All Categories" : (exportRows[0]?.match_status_label || activeTab);
+      doc.text(`Date Range: ${startDate} to ${endDate}   |   Status: ${tabLabel}   ${branchLabelText}`, 10, 19.8);
+
+      // Total Records breakdown on right
       doc.setTextColor(15, 23, 42);
-      const kpiStr = `Total: ${exportRows.length}  |  Matched: ${summary.fullyMatchedCount || 0}  |  Partial: ${summary.partiallyMatchedCount || 0}  |  No Scratch: ${summary.invoiceNotScratchedCount || 0}  |  No Inv: ${summary.winningNoInvoiceCount || 0}`;
-      doc.text(kpiStr, 287, 21, { align: "right" });
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6.8);
+      const kpiStr = `Total: ${totalDurationRecords} Records (Matched: ${durationMatched}, Partial: ${durationPartial}, No Scratch: ${durationNoScratch}, Without Invoice: ${durationWithoutInv})`;
+      doc.text(kpiStr, 287, 19.8, { align: "right" });
+
+      // Secondary Info Bar: Line 2 - DEDICATED SEPARATE LINE FOR PRIZES (Complete and untruncated)
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.2);
+      doc.setTextColor(180, 83, 9);
+      const durationPrizeLineText = durationTotalPrizes > 0
+        ? `Total Prizes for Duration: ${durationTotalPrizes.toLocaleString("en-IN")}   |   Prizes Won: ${durationPrizeBreakdownStr}`
+        : `Total Prizes for Duration: 0 (No prizes won during this duration)`;
+      const prizeLines = doc.splitTextToSize(durationPrizeLineText, 277);
+      doc.text(prizeLines, 10, 24.5);
+      const tableStartY = Math.max(28, 24.5 + (prizeLines.length * 3.8));
 
       // Prepare autoTable headers and body
       const headers = [[
@@ -485,44 +512,223 @@ export default function ScratchWinReconciliation() {
         "Time Diff"
       ]];
 
-      const body = exportRows.map((row, idx) => {
-        const bCode = row.invoice_branch_code || row.contest_branch_code || "—";
-        const bName = row.invoice_branch_name || row.contest_branch_name || "";
-        const branchCell = bName ? `${bCode}\n${bName}` : bCode;
+      // Group records by Branch Name (for ascending branch ordering and branch-wise separation)
+      const branchMap = new Map();
 
-        const erpCust = [row.invoice_customer_name, row.invoice_customer_phone].filter(Boolean).join("\n") || "—";
-        const winCust = [row.contest_customer_name, row.contest_customer_phone].filter(Boolean).join("\n") || "—";
+      exportRows.forEach((row) => {
+        const bName = String(row.invoice_branch_name || row.contest_branch_name || "").trim();
+        const bCode = String(row.invoice_branch_code || row.contest_branch_code || "").trim();
+        const displayName = bName || (bCode ? `Branch ${bCode}` : "Unassigned Branch");
+        const displayCode = bCode || "—";
+        const groupKey = displayName.toUpperCase();
 
-        const invDateTime = row.invoice_datetime ? formatDateTime(row.invoice_datetime) : (row.invoice_date || "—");
-        const scratchDateTime = row.contest_scratch_time ? formatDateTime(row.contest_scratch_time) : "—";
-
-        const numVal = Number(row.invoice_value);
-        const invVal = row.invoice_value !== null && row.invoice_value !== undefined && !isNaN(numVal) && String(row.invoice_value).trim() !== ""
-          ? numVal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-          : "—";
-
-        const winId = row.contest_external_id || (row.contest_id ? `#${row.contest_id}` : "—");
-
-        return [
-          idx + 1,
-          row.match_status_label || row.match_status || "—",
-          branchCell,
-          row.invoice_number || row.contest_invoice_number || "—",
-          invDateTime,
-          erpCust,
-          invVal,
-          winId,
-          winCust,
-          row.contest_prize || "—",
-          scratchDateTime,
-          row.time_diff_human || "—"
-        ];
+        if (!branchMap.has(groupKey)) {
+          branchMap.set(groupKey, {
+            branchName: displayName,
+            branchCode: displayCode,
+            sortKey: groupKey,
+            rows: []
+          });
+        }
+        branchMap.get(groupKey).rows.push(row);
       });
+
+      // Sort branches in strictly ascending alphabetical order by branch name (A to Z)
+      const sortedBranches = Array.from(branchMap.values()).sort((a, b) =>
+        a.sortKey.localeCompare(b.sortKey, undefined, { numeric: true, sensitivity: "base" })
+      );
+
+      const body = [];
+      let globalSrNo = 1;
+
+      sortedBranches.forEach((branchGroup, branchIdx) => {
+        // Sort rows within the branch by datetime
+        branchGroup.rows.sort((a, b) => {
+          const tA = new Date(a.invoice_datetime || a.contest_scratch_time || a.invoice_date || 0).getTime();
+          const tB = new Date(b.invoice_datetime || b.contest_scratch_time || b.invoice_date || 0).getTime();
+          return tA - tB;
+        });
+
+        // Calculate branch totals
+        const branchTotalVal = branchGroup.rows.reduce((sum, r) => {
+          const v = Number(r.invoice_value);
+          return !isNaN(v) ? sum + v : sum;
+        }, 0);
+        const branchMatched = branchGroup.rows.filter((r) => r.match_status === "MATCHED").length;
+        const branchPartial = branchGroup.rows.filter((r) => r.match_status === "PARTIALLY_MATCHED").length;
+        const branchNoScratch = branchGroup.rows.filter((r) => r.match_status === "INVOICE_NOT_SCRATCHED").length;
+        const branchWithoutInv = branchGroup.rows.filter((r) => r.match_status === "WINNING_NO_INVOICE").length;
+        const branchTotalPrizes = branchGroup.rows.filter((r) => Boolean(r.contest_prize && String(r.contest_prize).trim() !== "" && r.contest_prize !== "—")).length;
+
+        // Group prize counts for this branch
+        const branchPrizeCounts = {};
+        branchGroup.rows.forEach((r) => {
+          if (r.contest_prize && String(r.contest_prize).trim() !== "" && r.contest_prize !== "—") {
+            const p = String(r.contest_prize).trim();
+            branchPrizeCounts[p] = (branchPrizeCounts[p] || 0) + 1;
+          }
+        });
+        const branchPrizeEntries = Object.entries(branchPrizeCounts).sort((a, b) => b[1] - a[1]);
+        const branchPrizeBreakdownStr = branchPrizeEntries.map(([name, count]) => `${name}: ${count}`).join(", ");
+        const prizeSummaryText = branchTotalPrizes > 0
+          ? `Total Prizes: ${branchTotalPrizes}${branchPrizeBreakdownStr ? ` (${branchPrizeBreakdownStr})` : ""}`
+          : `Total Prizes: 0`;
+
+        // 1. Branch Section Header Row
+        const branchHeaderRow = [
+          {
+            content: `BRANCH: ${branchGroup.branchName.toUpperCase()} (${branchGroup.branchCode})  —  ${branchGroup.rows.length} ${branchGroup.rows.length === 1 ? "Record" : "Records"}`,
+            colSpan: 12,
+            styles: {
+              fillColor: [241, 245, 249], // Slate 100
+              textColor: [15, 23, 42],     // Slate 900
+              fontStyle: "bold",
+              fontSize: 7.2,
+              halign: "left",
+              cellPadding: 1.8
+            }
+          }
+        ];
+        branchHeaderRow._isSpecialRow = true;
+        body.push(branchHeaderRow);
+
+        // 2. All records for this branch together
+        branchGroup.rows.forEach((row) => {
+          const bCode = row.invoice_branch_code || row.contest_branch_code || branchGroup.branchCode;
+          const bName = row.invoice_branch_name || row.contest_branch_name || branchGroup.branchName;
+          const branchCell = bName ? `${bCode}\n${bName}` : bCode;
+
+          const erpCust = [row.invoice_customer_name, row.invoice_customer_phone].filter(Boolean).join("\n") || "—";
+          const winCust = [row.contest_customer_name, row.contest_customer_phone].filter(Boolean).join("\n") || "—";
+
+          const invDateTime = row.invoice_datetime ? formatDateTime(row.invoice_datetime) : (row.invoice_date || "—");
+          const scratchDateTime = row.contest_scratch_time ? formatDateTime(row.contest_scratch_time) : "—";
+
+          const numVal = Number(row.invoice_value);
+          const invVal = row.invoice_value !== null && row.invoice_value !== undefined && !isNaN(numVal) && String(row.invoice_value).trim() !== ""
+            ? numVal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : "—";
+
+          const winId = row.contest_external_id || (row.contest_id ? `#${row.contest_id}` : "—");
+
+          const dataRow = [
+            globalSrNo++,
+            row.match_status_label || row.match_status || "—",
+            branchCell,
+            row.invoice_number || row.contest_invoice_number || "—",
+            invDateTime,
+            erpCust,
+            invVal,
+            winId,
+            winCust,
+            row.contest_prize || "—",
+            scratchDateTime,
+            row.time_diff_human || "—"
+          ];
+          dataRow._rawRecord = row;
+          body.push(dataRow);
+        });
+
+        // 3. Clear Branch Separation Row
+        const branchSeparationRow = [
+          {
+            content: `--- End of ${branchGroup.branchName} (${branchGroup.branchCode}) | Total: ${branchGroup.rows.length} Records (Matched: ${branchMatched}, Partial: ${branchPartial}, No Scratch: ${branchNoScratch}, Without Invoice: ${branchWithoutInv}) | Branch Inv Value: Rs. ${branchTotalVal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ---`,
+            colSpan: 12,
+            styles: {
+              fillColor: [226, 232, 240], // Slate 200
+              textColor: [30, 41, 59],     // Slate 800
+              fontStyle: "bold",
+              fontSize: 6.5,
+              halign: "right",
+              cellPadding: 1.8
+            }
+          }
+        ];
+        branchSeparationRow._isSpecialRow = true;
+        body.push(branchSeparationRow);
+
+        // 4. Dedicated Separate Row for Branch Prizes
+        const branchPrizesRow = [
+          {
+            content: `Branch Prizes: Total Prizes: ${branchTotalPrizes}${branchPrizeBreakdownStr ? ` | Prizes Won: ${branchPrizeBreakdownStr}` : " (No Prizes Won)"}`,
+            colSpan: 12,
+            styles: {
+              fillColor: branchTotalPrizes > 0 ? [254, 243, 199] : [241, 245, 249], // Amber 100 if prizes won, else Slate 100
+              textColor: branchTotalPrizes > 0 ? [146, 64, 14] : [71, 85, 105],     // Amber 800 or Slate 600
+              fontStyle: "bold",
+              fontSize: 6.5,
+              halign: "right",
+              cellPadding: 1.8
+            }
+          }
+        ];
+        branchPrizesRow._isSpecialRow = true;
+        body.push(branchPrizesRow);
+
+        // Small divider spacing row between branches
+        if (branchIdx < sortedBranches.length - 1) {
+          const spacerRow = [
+            {
+              content: "",
+              colSpan: 12,
+              styles: {
+                fillColor: [255, 255, 255],
+                cellPadding: 0.6,
+                minCellHeight: 2
+              }
+            }
+          ];
+          spacerRow._isSpecialRow = true;
+          body.push(spacerRow);
+        }
+      });
+
+      // Optional Grand Total row when multiple branches exist
+      if (sortedBranches.length > 1) {
+        const overallTotalInvVal = exportRows.reduce((sum, r) => {
+          const v = Number(r.invoice_value);
+          return !isNaN(v) ? sum + v : sum;
+        }, 0);
+        const grandTotalRow = [
+          {
+            content: `=== REPORT GRAND TOTAL (${sortedBranches.length} Branches) | Total: ${totalDurationRecords} Records (Matched: ${durationMatched}, Partial: ${durationPartial}, No Scratch: ${durationNoScratch}, Without Invoice: ${durationWithoutInv}) | Overall Inv Value: Rs. ${overallTotalInvVal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ===`,
+            colSpan: 12,
+            styles: {
+              fillColor: [203, 213, 225], // Slate 300
+              textColor: [15, 23, 42],     // Slate 900
+              fontStyle: "bold",
+              fontSize: 6.8,
+              halign: "right",
+              cellPadding: 2.2
+            }
+          }
+        ];
+        grandTotalRow._isSpecialRow = true;
+        body.push(grandTotalRow);
+
+        // Dedicated Grand Total Prizes Row
+        const grandTotalPrizesRow = [
+          {
+            content: `=== GRAND TOTAL PRIZES: ${durationTotalPrizes} | Prizes Won: ${durationPrizeBreakdownStr || "No Prizes Won"} ===`,
+            colSpan: 12,
+            styles: {
+              fillColor: durationTotalPrizes > 0 ? [253, 230, 138] : [226, 232, 240], // Amber 200 or Slate 200
+              textColor: [120, 53, 15], // Amber 900
+              fontStyle: "bold",
+              fontSize: 6.8,
+              halign: "right",
+              cellPadding: 2.2
+            }
+          }
+        ];
+        grandTotalPrizesRow._isSpecialRow = true;
+        body.push(grandTotalPrizesRow);
+      }
 
       autoTable(doc, {
         head: headers,
         body: body,
-        startY: 25,
+        startY: tableStartY,
         theme: "grid",
         headStyles: {
           fillColor: [30, 41, 59], // Slate 800
@@ -558,7 +764,10 @@ export default function ScratchWinReconciliation() {
         },
         didParseCell: (data) => {
           if (data.section === "body") {
-            const rawRow = exportRows[data.row.index];
+            if (data.cell.colSpan > 1 || (data.row.raw && data.row.raw._isSpecialRow)) {
+              return;
+            }
+            const rawRow = data.row.raw && data.row.raw._rawRecord;
             if (rawRow) {
               if (rawRow.match_status === "MATCHED") {
                 data.cell.styles.fillColor = [240, 253, 244]; // emerald-50

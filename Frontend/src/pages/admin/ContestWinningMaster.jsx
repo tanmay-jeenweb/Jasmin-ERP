@@ -368,20 +368,115 @@ export default function ContestWinningMaster() {
         "Scratch Time (IST)"
       ]];
 
-      const body = exportRows.map((row, idx) => [
-        idx + 1,
-        row.external_id || (row.id ? `#${row.id}` : "—"),
-        row.product_name || "Gift Prize",
-        row.form_name || "Scratch & Win",
-        row.customer_name || "—",
-        row.customer_phone || "—",
-        row.branch_code || "—",
-        row.branch_name || "—",
-        row.branch_city || "—",
-        row.invoice_number || "—",
-        (row.status || "claimed").toUpperCase(),
-        formatDateTime(row.scratch_created_at)
-      ]);
+      // Group records by Branch Name (for ascending branch ordering and branch-wise separation)
+      const branchMap = new Map();
+
+      exportRows.forEach((row) => {
+        const bName = String(row.branch_name || "").trim();
+        const bCode = String(row.branch_code || "").trim();
+        const displayName = bName || (bCode ? `Branch ${bCode}` : "Unassigned Branch");
+        const displayCode = bCode || "—";
+        const groupKey = displayName.toUpperCase();
+
+        if (!branchMap.has(groupKey)) {
+          branchMap.set(groupKey, {
+            branchName: displayName,
+            branchCode: displayCode,
+            sortKey: groupKey,
+            rows: []
+          });
+        }
+        branchMap.get(groupKey).rows.push(row);
+      });
+
+      // Sort branches in strictly ascending alphabetical order by branch name (A to Z)
+      const sortedBranches = Array.from(branchMap.values()).sort((a, b) =>
+        a.sortKey.localeCompare(b.sortKey, undefined, { numeric: true, sensitivity: "base" })
+      );
+
+      const body = [];
+      let globalSrNo = 1;
+
+      sortedBranches.forEach((branchGroup, branchIdx) => {
+        // Sort rows chronologically
+        branchGroup.rows.sort((a, b) => {
+          const tA = new Date(a.scratch_created_at || 0).getTime();
+          const tB = new Date(b.scratch_created_at || 0).getTime();
+          return tA - tB;
+        });
+
+        // 1. Branch Section Header Row
+        const branchHeaderRow = [
+          {
+            content: `BRANCH: ${branchGroup.branchName.toUpperCase()} (${branchGroup.branchCode})  —  ${branchGroup.rows.length} ${branchGroup.rows.length === 1 ? "Winning" : "Winnings"}`,
+            colSpan: 12,
+            styles: {
+              fillColor: [241, 245, 249],
+              textColor: [15, 23, 42],
+              fontStyle: "bold",
+              fontSize: 7.2,
+              halign: "left",
+              cellPadding: 1.8
+            }
+          }
+        ];
+        branchHeaderRow._isSpecialRow = true;
+        body.push(branchHeaderRow);
+
+        // 2. All records for this branch together
+        branchGroup.rows.forEach((row) => {
+          const dataRow = [
+            globalSrNo++,
+            row.external_id || (row.id ? `#${row.id}` : "—"),
+            row.product_name || "Gift Prize",
+            row.form_name || "Scratch & Win",
+            row.customer_name || "—",
+            row.customer_phone || "—",
+            row.branch_code || branchGroup.branchCode,
+            row.branch_name || branchGroup.branchName,
+            row.branch_city || "—",
+            row.invoice_number || "—",
+            (row.status || "claimed").toUpperCase(),
+            formatDateTime(row.scratch_created_at)
+          ];
+          body.push(dataRow);
+        });
+
+        // 3. Branch Separation Row
+        const branchSeparationRow = [
+          {
+            content: `--- End of ${branchGroup.branchName} (${branchGroup.branchCode}) | Total Winnings: ${branchGroup.rows.length} ---`,
+            colSpan: 12,
+            styles: {
+              fillColor: [226, 232, 240],
+              textColor: [30, 41, 59],
+              fontStyle: "bold",
+              fontSize: 6.5,
+              halign: "right",
+              cellPadding: 1.8
+            }
+          }
+        ];
+        branchSeparationRow._isSpecialRow = true;
+        body.push(branchSeparationRow);
+
+        // Small spacer row between branches
+        if (branchIdx < sortedBranches.length - 1) {
+          const spacerRow = [
+            {
+              content: "",
+              colSpan: 12,
+              styles: {
+                fillColor: [255, 255, 255],
+                cellPadding: 0.6,
+                minCellHeight: 2
+              }
+            }
+          ];
+          spacerRow._isSpecialRow = true;
+          body.push(spacerRow);
+        }
+      });
 
       autoTable(doc, {
         head: headers,
@@ -419,6 +514,13 @@ export default function ContestWinningMaster() {
           9: { halign: "center", cellWidth: 22 },
           10: { halign: "center", cellWidth: 18 },
           11: { halign: "center", cellWidth: 28 }
+        },
+        didParseCell: (data) => {
+          if (data.section === "body") {
+            if (data.cell.colSpan > 1 || (data.row.raw && data.row.raw._isSpecialRow)) {
+              return;
+            }
+          }
         },
         margin: { left: 8, right: 8, bottom: 12 },
         didDrawPage: (data) => {
