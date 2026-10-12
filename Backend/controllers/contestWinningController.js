@@ -5,7 +5,10 @@ const {
     getAllContestWinnings,
     getContestWinningsForReconciliation,
     recordSyncLog,
-    getLastSyncLog
+    getLastSyncLog,
+    upsertContestInvoices,
+    getContestInvoicesForReconciliation,
+    getContestInvoicesCount
 } = require('../models/contestWinningModel.js');
 
 // Native fetch to avoid undici issues on shared hosting
@@ -94,6 +97,87 @@ const formatTimeDiff = (diffMinutes) => {
 };
 
 /**
+ * Helper: Fetch ERP Invoices for date range from external API and cache in MySQL table contest_invoice_cache
+ */
+const fetchAndCacheErpInvoices = async (startDate, endDate) => {
+    const startYYYYMMDD = startDate.replace(/-/g, '');
+    const endYYYYMMDD = endDate.replace(/-/g, '');
+    const invoiceApiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetExtendedInvoiceDetails?CompanyCode=JITPL&InvoiceStartDate=${startYYYYMMDD}&InvoiceEndDate=${endYYYYMMDD}&SalespersonCode=0`;
+
+    console.log(`[ContestSync] Fetching invoices from ERP API: ${startDate} (${startYYYYMMDD}) to ${endDate} (${endYYYYMMDD})...`);
+    const invoiceRes = await nativeFetch(invoiceApiUrl, {
+        method: 'GET',
+        headers: {
+            'userid': process.env.MODEL_API_USERID || 'WebSite',
+            'Securitycode': process.env.MODEL_API_SECURITYCODE || '1151-8111-6444-4166',
+            'Accept': 'application/json'
+        }
+    });
+
+    if (!invoiceRes.ok) {
+        throw new Error(`ERP Invoice API error (${invoiceRes.status}): ${invoiceRes.statusText}`);
+    }
+
+    const invoiceList = await invoiceRes.json();
+    if (!Array.isArray(invoiceList) || invoiceList.length === 0) {
+        console.log(`[ContestSync] No invoices returned from ERP API for range ${startDate} to ${endDate}.`);
+        return 0;
+    }
+
+    console.log(`[ContestSync] Received ${invoiceList.length} raw invoices from ERP API. Normalizing and caching...`);
+    const preparedInvoices = [];
+
+    for (const rawInv of invoiceList) {
+        const pData = rawInv.invoicePrimaryData || {};
+        const invNo = pData.InvoiceNo;
+        if (!invNo) continue;
+
+        const normInvNo = normalizeInvoiceNo(invNo);
+        const items = rawInv.invoiceItemData || [];
+        const itemNames = items.map(it => it.ItemDescription || it.ItemCode || '').filter(Boolean);
+        const totalQty = items.reduce((acc, it) => acc + (parseFloat(it.Qty) || 0), 0);
+
+        let invoiceDateTime = null;
+        let invoiceDateFormatted = pData.InvoiceDate || '';
+        let invoiceTimeFormatted = pData.InvoiceTime || '';
+        if (pData.InvoiceDate) {
+            const parts = pData.InvoiceDate.split('/'); // DD/MM/YYYY
+            if (parts.length === 3) {
+                const [d, m, y] = parts;
+                const timeParts = (pData.InvoiceTime || '00:00:00').split(':');
+                const hh = (timeParts[0] || '00').padStart(2, '0');
+                const mm = (timeParts[1] || '00').padStart(2, '0');
+                const ss = (timeParts[2] || '00').padStart(2, '0');
+                invoiceDateTime = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')} ${hh}:${mm}:${ss}`;
+                invoiceDateFormatted = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+            }
+        }
+
+        preparedInvoices.push({
+            invoice_number: invNo,
+            normalized_invoice_no: normInvNo,
+            invoice_date: invoiceDateFormatted,
+            invoice_time: invoiceTimeFormatted,
+            invoice_datetime: invoiceDateTime,
+            branch_code: pData.BranchCode || '',
+            branch_name: pData.BranchName || '',
+            customer_name: pData.PartyName || '',
+            customer_phone: pData.PartyContactNo || '',
+            normalized_phone: normalizePhone(pData.PartyContactNo),
+            invoice_value: parseFloat(pData.InvoiceValue) || 0,
+            salesperson_name: pData.SalespersonName || '',
+            item_summary: itemNames.slice(0, 3).join(', ') + (itemNames.length > 3 ? ` (+${itemNames.length - 3} more)` : ''),
+            item_count: items.length,
+            total_qty: totalQty
+        });
+    }
+
+    const upsertRes = await upsertContestInvoices(preparedInvoices);
+    console.log(`[ContestSync] Upserted ${preparedInvoices.length} invoices into contest_invoice_cache (affected rows: ${upsertRes.affectedRows}).`);
+    return preparedInvoices.length;
+};
+
+/**
  * Controller: Sync contest winnings from external API
  */
 const syncContestWinningsController = async (req, res) => {
@@ -137,6 +221,20 @@ const syncContestWinningsController = async (req, res) => {
         console.log(`[ContestSync] Received ${winnings.length} winning records. Upserting into DB...`);
         const result = await upsertContestWinnings(winnings);
 
+        // Also sync ERP invoices for the contest period into contest_invoice_cache
+        let invoicesSynced = 0;
+        try {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            const todayStr = `${y}-${m}-${d}`;
+            invoicesSynced = await fetchAndCacheErpInvoices('2026-10-05', todayStr);
+            console.log(`[ContestSync] Also synced ${invoicesSynced} ERP invoices into cache.`);
+        } catch (invErr) {
+            console.warn('[ContestSync] Warning auto-syncing invoices into cache:', invErr.message);
+        }
+
         await recordSyncLog({
             syncedBy,
             deviceId,
@@ -151,8 +249,9 @@ const syncContestWinningsController = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: `Successfully synced ${winnings.length} contest winnings records.`,
+            message: `Successfully synced ${winnings.length} contest winnings and ${invoicesSynced} invoices.`,
             totalFetched: winnings.length,
+            invoicesSynced,
             lastSync
         });
     } catch (error) {
@@ -281,90 +380,61 @@ const getScratchWinReconciliationController = async (req, res) => {
             ? String(req.query.branchCodes || req.query.branchCode).split(',').map(s => s.trim()).filter(Boolean)
             : [];
 
-        // 1. Fetch ERP Extended Invoices from External ERP API for date range
-        const invoiceApiUrl = `https://apxwapi.jasminmobile.com:81/api/apxapi/GetExtendedInvoiceDetails?CompanyCode=JITPL&InvoiceStartDate=${startYYYYMMDD}&InvoiceEndDate=${endYYYYMMDD}&SalespersonCode=0`;
-        
-        let invoiceList = [];
-        try {
-            const invoiceRes = await nativeFetch(invoiceApiUrl, {
-                method: 'GET',
-                headers: {
-                    'userid': process.env.MODEL_API_USERID || 'WebSite',
-                    'Securitycode': process.env.MODEL_API_SECURITYCODE || '1151-8111-6444-4166',
-                    'Accept': 'application/json'
-                }
-            });
+        const forceSync = req.query.forceSync === 'true' || req.query.forceRefresh === 'true';
 
-            if (invoiceRes.ok) {
-                invoiceList = await invoiceRes.json();
-                console.log(`[Reconciliation] Fetched ${invoiceList.length} invoice records from ERP API.`);
-            } else {
-                console.error(`[Reconciliation] ERP Invoice API returned error: ${invoiceRes.status}`);
+        // 1. Check if invoices are already in local DB contest_invoice_cache
+        const invoiceCountInfo = await getContestInvoicesCount(effectiveStartDate, effectiveEndDate);
+        let cachedInvoiceCount = Number(invoiceCountInfo.cnt || 0);
+
+        // If no invoices cached yet, or forceSync requested, fetch from ERP API & cache in DB
+        if (cachedInvoiceCount === 0 || forceSync) {
+            console.log(`[Reconciliation] Invoices not in local DB cache (count=${cachedInvoiceCount}) or forceSync=${forceSync}. Fetching from ERP API...`);
+            try {
+                await fetchAndCacheErpInvoices(effectiveStartDate, effectiveEndDate);
+            } catch (apiErr) {
+                console.error('[Reconciliation] Failed to fetch invoices from external API:', apiErr.message);
             }
-        } catch (apiErr) {
-            console.error('[Reconciliation] Failed to fetch invoices from external API:', apiErr.message);
         }
 
-        // 2. Fetch Contest Winnings from local contest_winnings_master table
+        // 2. Fetch ERP Invoices directly from local contest_invoice_cache in DB (< 10ms!)
+        const cachedInvoices = await getContestInvoicesForReconciliation(
+            effectiveStartDate,
+            effectiveEndDate,
+            branchList.length > 0 ? branchList : null
+        );
+        console.log(`[Reconciliation] Loaded ${cachedInvoices.length} invoices from local contest_invoice_cache in DB.`);
+
+        // 3. Fetch Contest Winnings from local contest_winnings_master table (< 10ms!)
         const contestWinnings = await getContestWinningsForReconciliation(effectiveStartDate, effectiveEndDate, branchList.length > 0 ? branchList : null);
         console.log(`[Reconciliation] Fetched ${contestWinnings.length} contest winning records from DB.`);
 
-        // 3. Group and structure ERP Invoices by InvoiceNo
+        // 4. Group and structure ERP Invoices by InvoiceNo
         const erpInvoicesMap = new Map();
         const erpInvoicesByNormalizedNo = new Map();
 
-        for (const rawInv of invoiceList) {
-            const pData = rawInv.invoicePrimaryData || {};
-            const invNo = pData.InvoiceNo;
+        for (const inv of cachedInvoices) {
+            const invNo = inv.invoice_number;
             if (!invNo) continue;
 
-            const normInvNo = normalizeInvoiceNo(invNo);
-
-            // If branch filter specified, check branch
-            if (branchList.length > 0 && !branchList.includes(pData.BranchCode)) {
-                continue;
-            }
-
-            // Build item descriptions summary
-            const items = rawInv.invoiceItemData || [];
-            const itemNames = items.map(it => it.ItemDescription || it.ItemCode || '').filter(Boolean);
-            const totalQty = items.reduce((acc, it) => acc + (parseFloat(it.Qty) || 0), 0);
-
-            // Parse invoice datetime
-            let invoiceDateTime = null;
-            let invoiceDateFormatted = pData.InvoiceDate || '';
-            let invoiceTimeFormatted = pData.InvoiceTime || '';
-            if (pData.InvoiceDate) {
-                const parts = pData.InvoiceDate.split('/'); // DD/MM/YYYY
-                if (parts.length === 3) {
-                    const [d, m, y] = parts;
-                    const timeParts = (pData.InvoiceTime || '00:00:00').split(':');
-                    const hh = (timeParts[0] || '00').padStart(2, '0');
-                    const mm = (timeParts[1] || '00').padStart(2, '0');
-                    const ss = (timeParts[2] || '00').padStart(2, '0');
-                    // Explicitly treat ERP invoice time as IST (UTC+05:30)
-                    invoiceDateTime = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${hh}:${mm}:${ss}+05:30`);
-                    invoiceDateFormatted = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-                }
-            }
+            const normInvNo = inv.normalized_invoice_no || normalizeInvoiceNo(invNo);
+            let invoiceDateTime = inv.invoice_datetime ? new Date(inv.invoice_datetime) : null;
 
             const invoiceObj = {
                 invoice_number: invNo,
                 normalized_invoice_no: normInvNo,
-                invoice_date: invoiceDateFormatted,
-                invoice_time: invoiceTimeFormatted,
+                invoice_date: inv.invoice_date,
+                invoice_time: inv.invoice_time || '',
                 invoice_datetime: invoiceDateTime,
-                branch_code: pData.BranchCode || '',
-                branch_name: pData.BranchName || '',
-                customer_name: pData.PartyName || '',
-                customer_phone: pData.PartyContactNo || '',
-                normalized_phone: normalizePhone(pData.PartyContactNo),
-                invoice_value: parseFloat(pData.InvoiceValue) || 0,
-                salesperson_name: pData.SalespersonName || '',
-                item_summary: itemNames.slice(0, 3).join(', ') + (itemNames.length > 3 ? ` (+${itemNames.length - 3} more)` : ''),
-                item_count: items.length,
-                total_qty: totalQty,
-                raw_items: items
+                branch_code: inv.branch_code || '',
+                branch_name: inv.branch_name || '',
+                customer_name: inv.customer_name || '',
+                customer_phone: inv.customer_phone || '',
+                normalized_phone: inv.normalized_phone || normalizePhone(inv.customer_phone),
+                invoice_value: parseFloat(inv.invoice_value) || 0,
+                salesperson_name: inv.salesperson_name || '',
+                item_summary: inv.item_summary || '',
+                item_count: inv.item_count || 0,
+                total_qty: parseFloat(inv.total_qty) || 0
             };
 
             erpInvoicesMap.set(invNo, invoiceObj);
@@ -649,7 +719,8 @@ const getScratchWinReconciliationController = async (req, res) => {
                 branchCode,
                 statusFilter
             },
-            lastSync
+            lastSync,
+            lastInvoiceSync: invoiceCountInfo?.last_synced || null
         });
     } catch (error) {
         console.error('Error generating scratch win reconciliation report:', error);
@@ -664,5 +735,6 @@ module.exports = {
     syncContestWinningsController,
     getContestWinningsMasterController,
     getLastSyncDetailsController,
-    getScratchWinReconciliationController
+    getScratchWinReconciliationController,
+    fetchAndCacheErpInvoices
 };
