@@ -40,11 +40,12 @@ export default function ScratchWinReconciliation() {
   const { hasPermission } = usePermission();
   const canWrite = hasPermission("contest_winnings_master", "write") || hasPermission("scratch_win_reconciliation", "write");
 
-  const [records, setRecords] = useState([]);
+  const [allRecords, setAllRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [summary, setSummary] = useState({});
   const [lastSync, setLastSync] = useState(null);
+  const [lastInvoiceSync, setLastInvoiceSync] = useState(null);
 
   // Filters
   const [startDate, setStartDate] = useState("2026-10-05");
@@ -81,8 +82,8 @@ export default function ScratchWinReconciliation() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isBranchDropdownOpen]);
 
-  // Fetch Reconciliation Data
-  const fetchReconciliation = async () => {
+  // Fetch Reconciliation Data (fetches ALL records so tabs switch instantaneously in memory)
+  const fetchReconciliation = async (forceSync = false) => {
     setLoading(true);
     try {
       const params = {
@@ -90,7 +91,8 @@ export default function ScratchWinReconciliation() {
         startDate: startDate || "2026-10-05",
         endDate: endDate || new Date().toLocaleDateString("en-CA"),
         branchCodes: selectedBranches.join(","),
-        statusFilter: activeTab
+        statusFilter: "ALL",
+        forceSync: forceSync ? "true" : undefined
       };
       const res = await getScratchWinReconciliation(params);
       if (res.data?.success) {
@@ -107,9 +109,10 @@ export default function ScratchWinReconciliation() {
           timestamps: item.invoice_datetime || item.contest_scratch_time || "",
           prize_details: String(item.contest_prize || "")
         }));
-        setRecords(indexedList);
+        setAllRecords(indexedList);
         setSummary(res.data.summary || {});
         if (res.data.lastSync) setLastSync(res.data.lastSync);
+        if (res.data.lastInvoiceSync) setLastInvoiceSync(res.data.lastInvoiceSync);
       }
     } catch (err) {
       console.error("Failed to load reconciliation data", err);
@@ -119,28 +122,34 @@ export default function ScratchWinReconciliation() {
     }
   };
 
-  // Immediate reactive refetch when date, branch or status tab changes
+  // Derive filtered records based on activeTab in frontend memory (instant 0ms switching!)
+  const records = useMemo(() => {
+    if (activeTab === "ALL") return allRecords;
+    return allRecords.filter((item) => item.match_status === activeTab);
+  }, [allRecords, activeTab]);
+
+  // Reactive refetch only when date range or branch filter changes (NOT on activeTab!)
   useEffect(() => {
     fetchReconciliation();
-  }, [startDate, endDate, selectedBranches, activeTab]);
+  }, [startDate, endDate, selectedBranches]);
 
-  // Sync contest winnings
+  // Sync contest winnings and ERP invoices
   const handleSync = async () => {
     if (syncing) return;
     setSyncing(true);
-    const toastId = toast.loading("Syncing contest winnings from external API...");
+    const toastId = toast.loading("Syncing contest winnings and ERP invoices...");
     try {
       const res = await syncContestWinnings();
       if (res.data?.success) {
         toast.success(res.data.message || "Synced successfully!", { id: toastId });
         if (res.data.lastSync) setLastSync(res.data.lastSync);
-        await fetchReconciliation();
+        await fetchReconciliation(true);
       } else {
         toast.error(res.data?.message || "Sync failed", { id: toastId });
       }
     } catch (err) {
       console.error("Sync error:", err);
-      toast.error(err.response?.data?.message || "Failed to sync contest winnings", { id: toastId });
+      toast.error(err.response?.data?.message || "Failed to sync contest data", { id: toastId });
     } finally {
       setSyncing(false);
     }
@@ -742,7 +751,7 @@ export default function ScratchWinReconciliation() {
           <div className="flex items-center gap-2.5 flex-wrap shrink-0">
             {lastSync && (
               <div className="text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 whitespace-nowrap">
-                Winnings Synced: <span className="font-semibold text-slate-700">{formatDateTime(lastSync.created_at)}</span>
+                Last Synced: <span className="font-semibold text-slate-700">{formatDateTime(lastSync.created_at)}</span>
               </div>
             )}
 
@@ -751,13 +760,13 @@ export default function ScratchWinReconciliation() {
                 type="button"
                 onClick={handleSync}
                 disabled={syncing}
-                title="Sync Winnings"
+                title="Sync latest Contest Winnings & ERP Invoices"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-sm transition cursor-pointer disabled:opacity-50 whitespace-nowrap"
               >
                 <svg className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                <span>{syncing ? "Syncing..." : "Sync"}</span>
+                <span>{syncing ? "Syncing..." : "Sync Data"}</span>
               </button>
             )}
 

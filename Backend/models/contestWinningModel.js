@@ -51,7 +51,35 @@ const createContestWinningsTable = async () => {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `;
     await db.execute(createLogsQuery);
-    console.log("Contest Winnings tables ready");
+
+    // 3. Create contest_invoice_cache table for fast Scratch & Win reconciliation
+    const createInvoicesQuery = `
+        CREATE TABLE IF NOT EXISTS contest_invoice_cache (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            invoice_number VARCHAR(100) NOT NULL UNIQUE,
+            normalized_invoice_no VARCHAR(100) NOT NULL,
+            invoice_date DATE NOT NULL,
+            invoice_time VARCHAR(20) NULL,
+            invoice_datetime DATETIME NULL,
+            branch_code VARCHAR(50) NULL,
+            branch_name VARCHAR(255) NULL,
+            customer_name VARCHAR(255) NULL,
+            customer_phone VARCHAR(50) NULL,
+            normalized_phone VARCHAR(20) NULL,
+            invoice_value DECIMAL(15, 2) DEFAULT 0.00,
+            salesperson_name VARCHAR(255) NULL,
+            item_summary TEXT NULL,
+            item_count INT DEFAULT 0,
+            total_qty DECIMAL(10, 2) DEFAULT 0.00,
+            synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_norm_inv (normalized_invoice_no),
+            INDEX idx_invoice_date (invoice_date),
+            INDEX idx_norm_phone (normalized_phone),
+            INDEX idx_branch_code (branch_code)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `;
+    await db.execute(createInvoicesQuery);
+    console.log("Contest Winnings & Invoice Cache tables ready");
 };
 
 const upsertContestWinnings = async (winnings) => {
@@ -310,11 +338,133 @@ const getLastSyncLog = async () => {
     return rows[0] || null;
 };
 
+const upsertContestInvoices = async (invoices) => {
+    if (!invoices || invoices.length === 0) {
+        return { affectedRows: 0 };
+    }
+
+    const query = `
+        INSERT INTO contest_invoice_cache (
+            invoice_number, normalized_invoice_no, invoice_date, invoice_time, invoice_datetime,
+            branch_code, branch_name, customer_name, customer_phone, normalized_phone,
+            invoice_value, salesperson_name, item_summary, item_count, total_qty
+        ) VALUES ?
+        ON DUPLICATE KEY UPDATE
+            normalized_invoice_no = VALUES(normalized_invoice_no),
+            invoice_date = VALUES(invoice_date),
+            invoice_time = VALUES(invoice_time),
+            invoice_datetime = VALUES(invoice_datetime),
+            branch_code = VALUES(branch_code),
+            branch_name = VALUES(branch_name),
+            customer_name = VALUES(customer_name),
+            customer_phone = VALUES(customer_phone),
+            normalized_phone = VALUES(normalized_phone),
+            invoice_value = VALUES(invoice_value),
+            salesperson_name = VALUES(salesperson_name),
+            item_summary = VALUES(item_summary),
+            item_count = VALUES(item_count),
+            total_qty = VALUES(total_qty),
+            synced_at = CURRENT_TIMESTAMP
+    `;
+
+    let totalAffected = 0;
+    const chunkSize = 200;
+    for (let i = 0; i < invoices.length; i += chunkSize) {
+        const chunk = invoices.slice(i, i + chunkSize);
+        const values = chunk.map(inv => [
+            inv.invoice_number,
+            inv.normalized_invoice_no,
+            inv.invoice_date,
+            inv.invoice_time || null,
+            inv.invoice_datetime || null,
+            inv.branch_code || null,
+            inv.branch_name || null,
+            inv.customer_name || null,
+            inv.customer_phone || null,
+            inv.normalized_phone || null,
+            inv.invoice_value || 0,
+            inv.salesperson_name || null,
+            inv.item_summary || null,
+            inv.item_count || 0,
+            inv.total_qty || 0
+        ]);
+
+        const [result] = await db.query(query, [values]);
+        totalAffected += result.affectedRows;
+    }
+
+    return { affectedRows: totalAffected };
+};
+
+const getContestInvoicesForReconciliation = async (startDateStr, endDateStr, branchCodes = null) => {
+    let whereConditions = ['1=1'];
+    const params = [];
+
+    if (startDateStr) {
+        whereConditions.push('invoice_date >= ?');
+        params.push(startDateStr);
+    }
+
+    if (endDateStr) {
+        whereConditions.push('invoice_date <= ?');
+        params.push(endDateStr);
+    }
+
+    if (branchCodes) {
+        const list = Array.isArray(branchCodes) ? branchCodes : String(branchCodes).split(',').map(s => s.trim()).filter(Boolean);
+        if (list.length === 1) {
+            whereConditions.push('branch_code = ?');
+            params.push(list[0]);
+        } else if (list.length > 1) {
+            const placeholders = list.map(() => '?').join(',');
+            whereConditions.push(`branch_code IN (${placeholders})`);
+            params.push(...list);
+        }
+    }
+
+    const whereClause = whereConditions.join(' AND ');
+
+    const [rows] = await db.execute(
+        `SELECT 
+            id, invoice_number, normalized_invoice_no, invoice_date, invoice_time, invoice_datetime,
+            branch_code, branch_name, customer_name, customer_phone, normalized_phone,
+            invoice_value, salesperson_name, item_summary, item_count, total_qty, synced_at
+         FROM contest_invoice_cache
+         WHERE ${whereClause}
+         ORDER BY invoice_date DESC, invoice_time DESC`,
+        params
+    );
+
+    return rows;
+};
+
+const getContestInvoicesCount = async (startDateStr, endDateStr) => {
+    let whereConditions = ['1=1'];
+    const params = [];
+    if (startDateStr) {
+        whereConditions.push('invoice_date >= ?');
+        params.push(startDateStr);
+    }
+    if (endDateStr) {
+        whereConditions.push('invoice_date <= ?');
+        params.push(endDateStr);
+    }
+    const whereClause = whereConditions.join(' AND ');
+    const [rows] = await db.execute(
+        `SELECT COUNT(*) as cnt, MAX(synced_at) as last_synced FROM contest_invoice_cache WHERE ${whereClause}`,
+        params
+    );
+    return rows[0] || { cnt: 0, last_synced: null };
+};
+
 module.exports = {
     createContestWinningsTable,
     upsertContestWinnings,
     getAllContestWinnings,
     getContestWinningsForReconciliation,
     recordSyncLog,
-    getLastSyncLog
+    getLastSyncLog,
+    upsertContestInvoices,
+    getContestInvoicesForReconciliation,
+    getContestInvoicesCount
 };
