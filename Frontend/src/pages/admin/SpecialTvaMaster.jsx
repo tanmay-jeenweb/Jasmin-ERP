@@ -10,6 +10,7 @@ import {
   importSpecialTvaTargets
 } from "../../api/specialTvaApi";
 import { getBranches } from "../../api/branchApi";
+import { getMobileBrands } from "../../api/mobileBrandApi";
 import toast from "react-hot-toast";
 import { usePermission } from "../../context/PermissionContext";
 import ExcelJS from "exceljs";
@@ -195,6 +196,18 @@ function SpecialTvaModal({ isOpen, row, onClose, onSave, saving }) {
   );
 }
 
+// Helper to convert 1-based column index to Excel column letter (e.g. 1 -> A, 27 -> AA)
+const getColLetter = (colIdx) => {
+  let temp = colIdx;
+  let letter = "";
+  while (temp > 0) {
+    let mod = (temp - 1) % 26;
+    letter = String.fromCharCode(65 + mod) + letter;
+    temp = Math.floor((temp - mod) / 26);
+  }
+  return letter;
+};
+
 // ─── Quick Target Import / Export Modal ───────────────────────────────────────
 function TargetImportModal({ isOpen, row, onClose, onRefresh }) {
   const [importing, setImporting] = useState(false);
@@ -203,52 +216,95 @@ function TargetImportModal({ isOpen, row, onClose, onRefresh }) {
 
   if (!isOpen || !row) return null;
 
-  // Handle Download Excel Template
+  // Handle Download Excel Template with individual brand columns
   const handleDownloadTemplate = async () => {
     setExporting(true);
     try {
-      const response = await getBranches();
-      const branches = response.data?.success ? (response.data.data || []) : (response.data || []);
+      const [branchesRes, brandsRes] = await Promise.all([
+        getBranches(),
+        getMobileBrands()
+      ]);
+      const branches = branchesRes.data?.success ? (branchesRes.data.data || []) : (branchesRes.data || []);
+      const allBrands = brandsRes.data?.success ? (brandsRes.data.data || []) : (brandsRes.data || []);
+
+      // Filter brands configured for Special TVA individually
+      const individualBrands = [];
+      for (const b of allBrands) {
+        if (Boolean(b.show_in_special_tva) && Boolean(b.show_individually)) {
+          const cleanName = (b.mobile_brand || "").trim();
+          if (cleanName && !individualBrands.includes(cleanName)) {
+            individualBrands.push(cleanName);
+          }
+        }
+      }
 
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Target Template", {
         views: [{ showGridLines: true }]
       });
 
-      worksheet.columns = [
+      const columnsDef = [
         { header: "Sr. No.", key: "sr_no", width: 10 },
         { header: "Branch Name", key: "branch_name", width: 32 },
         { header: "Type", key: "type", width: 16 },
         { header: "State", key: "state", width: 20 },
         { header: "Zone", key: "zone", width: 18 },
         { header: "MF", key: "mf", width: 14 },
-        { header: "Target", key: "target", width: 18 }
+        ...individualBrands.map(bName => ({
+          header: bName,
+          key: `brand_${bName}`,
+          width: 15
+        })),
+        { header: "Other", key: "brand_Other", width: 15 },
+        { header: "Total Target", key: "total_target", width: 18 }
       ];
 
-      // Add branch rows
+      worksheet.columns = columnsDef;
+
+      // Add branch rows with SUM formula
+      const firstBrandColLetter = getColLetter(7);
+      const otherColLetter = getColLetter(6 + individualBrands.length + 1);
+      const totalColIdx = 6 + individualBrands.length + 2;
+
       let sNo = 1;
-      branches.forEach((b) => {
+      branches.forEach((b, rIdx) => {
         if (!b.name) return;
-        worksheet.addRow({
+        const rowData = {
           sr_no: sNo++,
           branch_name: b.name || "",
           type: b.store_type ? (b.store_type.charAt(0).toUpperCase() + b.store_type.slice(1)) : "Branch",
           state: b.state_name || "",
           zone: b.branch_cls_05 || "",
-          mf: "",
-          target: ""
+          mf: ""
+        };
+        individualBrands.forEach(bName => {
+          rowData[`brand_${bName}`] = "";
         });
+        rowData["brand_Other"] = "";
+
+        const newRow = worksheet.addRow(rowData);
+        const excelRowNum = rIdx + 2; // header is row 1
+        newRow.getCell(totalColIdx).value = {
+          formula: `SUM(${firstBrandColLetter}${excelRowNum}:${otherColLetter}${excelRowNum})`
+        };
       });
 
       // Style header row
       const headerRow = worksheet.getRow(1);
       headerRow.height = 28;
-      headerRow.eachCell((cell) => {
+      headerRow.eachCell((cell, colNumber) => {
+        let bgColor = "FF4F46E5"; // Indigo for metadata
+        if (colNumber > 6 && colNumber < totalColIdx) {
+          bgColor = "FF0D9488"; // Teal for brands
+        } else if (colNumber === totalColIdx) {
+          bgColor = "FF1E293B"; // Dark slate for Total Target
+        }
+
         cell.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
         cell.fill = {
           type: "pattern",
           pattern: "solid",
-          fgColor: { argb: "FF4F46E5" } // Indigo header
+          fgColor: { argb: bgColor }
         };
         cell.alignment = { horizontal: "center", vertical: "middle" };
         cell.border = {
@@ -311,15 +367,17 @@ function TargetImportModal({ isOpen, row, onClose, onRefresh }) {
           k.toLowerCase() === "branch_name"
         );
 
-        const targetKey = keys.find(k =>
-          k.toLowerCase().includes("target") ||
-          k.toLowerCase() === "target" ||
-          k.toLowerCase().includes("2 month target")
-        );
-
         const mfKey = keys.find(k =>
           k.toLowerCase() === "mf" ||
           k.toLowerCase().includes("mf")
+        );
+
+        const totalTargetKey = keys.find(k =>
+          k.toLowerCase() === "total target" ||
+          k.toLowerCase() === "total_target" ||
+          k.toLowerCase() === "target" ||
+          k.toLowerCase() === "total" ||
+          k.toLowerCase().includes("2 month target")
         );
 
         if (!branchNameKey) {
@@ -328,17 +386,44 @@ function TargetImportModal({ isOpen, row, onClose, onRefresh }) {
           return;
         }
 
-        if (!targetKey) {
-          toast.error("Could not find 'Target' column in Excel file.");
-          setImporting(false);
-          return;
-        }
+        const metadataKeys = new Set([
+          "sr. no.", "sr no", "sr_no", "s.no.", "s_no", "sno",
+          "branch name", "party name", "branch", "branch_name",
+          "type", "store type", "store_type", "state", "state name", "state_name", "zone", "mf",
+          "total target", "total_target", "total", "2 month target"
+        ]);
 
-        const mappedRecords = jsonData.map(r => ({
-          branch_name: String(r[branchNameKey] || "").trim(),
-          target: r[targetKey] !== undefined && r[targetKey] !== "" ? Number(r[targetKey]) : 0,
-          mf: mfKey && r[mfKey] !== undefined ? String(r[mfKey]).trim() : ""
-        })).filter(r => r.branch_name && r.branch_name.toUpperCase() !== "TOTAL");
+        // Identify brand column keys (any non-metadata column)
+        const brandKeys = keys.filter(k => {
+          const lk = k.trim().toLowerCase();
+          return !metadataKeys.has(lk) && k !== totalTargetKey;
+        });
+
+        const mappedRecords = jsonData.map(r => {
+          const bName = String(r[branchNameKey] || "").trim();
+          if (!bName || bName.toUpperCase() === "TOTAL") return null;
+
+          const brandTargets = {};
+          let sumBrandTargets = 0;
+          brandKeys.forEach(bk => {
+            const val = r[bk] !== undefined && r[bk] !== "" ? Number(r[bk]) || 0 : 0;
+            brandTargets[bk.trim()] = val;
+            sumBrandTargets += val;
+          });
+
+          const totalFromCol = totalTargetKey && r[totalTargetKey] !== undefined && r[totalTargetKey] !== ""
+            ? Number(r[totalTargetKey]) || 0
+            : 0;
+
+          const finalTarget = totalFromCol > 0 ? totalFromCol : sumBrandTargets;
+
+          return {
+            branch_name: bName,
+            target: finalTarget,
+            mf: mfKey && r[mfKey] !== undefined ? String(r[mfKey]).trim() : "",
+            brand_targets: brandTargets
+          };
+        }).filter(Boolean);
 
         if (mappedRecords.length === 0) {
           toast.error("No valid branch rows found in the sheet.");

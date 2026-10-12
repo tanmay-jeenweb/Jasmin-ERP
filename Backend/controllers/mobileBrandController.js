@@ -17,15 +17,19 @@ const addMobileBrandController = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Brand name is required' });
         }
 
-        const parsedShare = sharePercentage !== undefined && sharePercentage !== null && sharePercentage !== ''
-            ? parseFloat(sharePercentage)
-            : 0.00;
-        if (isNaN(parsedShare) || parsedShare < 0 || parsedShare > 100) {
-            return res.status(400).json({ success: false, message: 'Share percentage must be between 0 and 100' });
-        }
-
         const parsedSpecialTva = Boolean(showInSpecialTva);
         const parsedShowIndividually = parsedSpecialTva ? Boolean(showIndividually) : false;
+
+        // Share percentage is only stored when both Special TVA and Show Individually are checked
+        let parsedShare = 0.00;
+        if (parsedSpecialTva && parsedShowIndividually) {
+            parsedShare = sharePercentage !== undefined && sharePercentage !== null && sharePercentage !== ''
+                ? parseFloat(sharePercentage)
+                : 0.00;
+            if (isNaN(parsedShare) || parsedShare < 0 || parsedShare > 100) {
+                return res.status(400).json({ success: false, message: 'Share percentage must be between 0 and 100' });
+            }
+        }
 
         const result = await createMobileBrand(
             mobileBrand.trim(),
@@ -106,13 +110,6 @@ const updateMobileBrandController = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Brand name is required' });
         }
 
-        const parsedShare = sharePercentage !== undefined && sharePercentage !== null && sharePercentage !== ''
-            ? parseFloat(sharePercentage)
-            : 0.00;
-        if (isNaN(parsedShare) || parsedShare < 0 || parsedShare > 100) {
-            return res.status(400).json({ success: false, message: 'Share percentage must be between 0 and 100' });
-        }
-
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
         const beforeData = await getMobileBrandById(id);
         if (!beforeData) {
@@ -121,6 +118,17 @@ const updateMobileBrandController = async (req, res) => {
 
         const parsedSpecialTva = Boolean(showInSpecialTva);
         const parsedShowIndividually = parsedSpecialTva ? Boolean(showIndividually) : false;
+
+        // Share percentage is only stored when both Special TVA and Show Individually are checked
+        let parsedShare = 0.00;
+        if (parsedSpecialTva && parsedShowIndividually) {
+            parsedShare = sharePercentage !== undefined && sharePercentage !== null && sharePercentage !== ''
+                ? parseFloat(sharePercentage)
+                : 0.00;
+            if (isNaN(parsedShare) || parsedShare < 0 || parsedShare > 100) {
+                return res.status(400).json({ success: false, message: 'Share percentage must be between 0 and 100' });
+            }
+        }
 
         await updateMobileBrand(
             id,

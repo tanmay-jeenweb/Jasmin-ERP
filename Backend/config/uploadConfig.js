@@ -34,14 +34,39 @@ if (!fs.existsSync(uploadDir)) {
     }
 }
 
-// Ensure apk subdirectory exists for APK distributions
+// Determine APK directory (public_html/apk path on production / local)
+let apkDir;
+if (process.env.APK_DIR) {
+    apkDir = path.isAbsolute(process.env.APK_DIR)
+        ? process.env.APK_DIR
+        : path.resolve(__dirname, "..", process.env.APK_DIR);
+} else if (rawUploadDir.includes("public_html")) {
+    const publicHtmlRoot = rawUploadDir.split("uploads")[0];
+    apkDir = path.join(publicHtmlRoot, "apk");
+} else {
+    apkDir = path.resolve(__dirname, "..", "public_html", "apk");
+}
+
+if (isWindows && (apkDir.startsWith("/home/") || apkDir.includes("adminjasminmobil"))) {
+    apkDir = path.resolve(__dirname, "..", "public_html", "apk");
+}
+
+if (!fs.existsSync(apkDir)) {
+    try {
+        fs.mkdirSync(apkDir, { recursive: true });
+        console.log(`Created public_html/apk directory at: ${apkDir}`);
+    } catch (err) {
+        console.error(`Failed to create apk directory at ${apkDir}:`, err);
+    }
+}
+
+// Ensure apk subdirectory in uploads as fallback
 const apkUploadDir = path.join(uploadDir, "apk");
 if (!fs.existsSync(apkUploadDir)) {
     try {
         fs.mkdirSync(apkUploadDir, { recursive: true });
-        console.log(`Created APK uploads directory at: ${apkUploadDir}`);
     } catch (err) {
-        console.error(`Failed to create APK uploads directory at ${apkUploadDir}:`, err);
+        // ignore
     }
 }
 
@@ -59,6 +84,7 @@ const serveMethod = isWindows ? "express" : (process.env.UPLOAD_SERVE_METHOD || 
 
 module.exports = {
     uploadDir,
+    apkDir,
     apkUploadDir,
     uploadBaseUrl,
     serveMethod,

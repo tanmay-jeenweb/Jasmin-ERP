@@ -147,15 +147,40 @@ export default function OfferForm() {
     }
   }, [isStateDropdownOpen]);
 
-  // Extract model groups for selected brand
+  // Set of names that exist and are active in master (lowercase trimmed for safe matching)
+  const activeMasterModelGroups = useMemo(() => {
+    const set = new Set();
+    modelGroupsList.forEach(m => {
+      if (m.is_active !== 0 && m.model_group_name) {
+        set.add(m.model_group_name.trim().toLowerCase());
+      }
+    });
+    return set;
+  }, [modelGroupsList]);
+
+  // Check if a model group name is discontinued (either marked is_active=0 OR completely missing from master)
+  const isModelDiscontinued = (mgName) => {
+    if (!mgName) return false;
+    return !activeMasterModelGroups.has(mgName.trim().toLowerCase());
+  };
+
+  // Extract model groups for selected brand (active from master, plus any currently selected in the offer)
   const modelGroupsForSelectedBrand = useMemo(() => {
     if (!brand_name) return [];
     const groups = modelGroupsList
-      .filter(item => item.brand_name === brand_name)
+      .filter(item => item.brand_name === brand_name && item.is_active !== 0)
       .map(item => item.model_group_name)
       .filter(Boolean);
+
+    // Also include any currently selected model groups (even if discontinued or missing from master)
+    selectedModelGroups.forEach(name => {
+      if (name && !groups.includes(name)) {
+        groups.push(name);
+      }
+    });
+
     return [...new Set(groups)].sort();
-  }, [brand_name, modelGroupsList]);
+  }, [brand_name, modelGroupsList, selectedModelGroups]);
 
   // Filtered model groups based on search term
   const filteredModelGroups = useMemo(() => {
@@ -266,9 +291,16 @@ export default function OfferForm() {
     }
 
     setSaving(true);
+    // Map selectedModelGroups to send both ID and Name if available in modelGroupsList
+    const mgMap = new Map(modelGroupsList.map(m => [m.model_group_name, m.id]));
+    const mappedModelGroups = selectedModelGroups.map(name => ({
+      id: mgMap.get(name) || null,
+      name: name
+    }));
+
     const payload = {
       brand_name,
-      model_groups: selectedModelGroups,
+      model_groups: mappedModelGroups,
       state_id: selectedStates[0], // first state ID for legacy/compatibility
       state_ids: selectedStates,   // list of state IDs
       offer_type,
@@ -344,6 +376,21 @@ export default function OfferForm() {
                 <h2 className="m-0 mb-5 text-base font-bold text-slate-800 border-b-[1.5px] border-slate-100 pb-3">
                   Offer Scope & Parameters
                 </h2>
+
+                {/* Discontinued models warning banner */}
+                {isEdit && selectedModelGroups.some(isModelDiscontinued) && (
+                  <div className="mb-5 bg-amber-50 border border-amber-200/90 rounded-xl p-3.5 flex items-start gap-3 text-amber-900 shadow-2xs">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-amber-600 shrink-0 mt-0.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                    </svg>
+                    <div>
+                      <p className="font-bold text-[13.5px] text-amber-950">Discontinued Model Group(s) Detected</p>
+                      <p className="text-amber-800 text-xs mt-0.5 leading-relaxed">
+                        This offer contains model group(s) that are no longer active in the ERP catalog. They are highlighted with the <span className="inline-flex font-bold text-[9.5px] uppercase tracking-wider bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded border border-amber-300">Discontinued</span> badge below. You can leave them as is or remove them.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-6">
                   
@@ -593,21 +640,35 @@ export default function OfferForm() {
                     {/* Selected items tags display */}
                     {selectedModelGroups.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mb-3">
-                        {selectedModelGroups.map((mg) => (
-                          <span
-                            key={mg}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-indigo-650 border border-purple-100"
-                          >
-                            {mg}
-                            <button
-                              type="button"
-                              onClick={() => handleModelGroupToggle(mg)}
-                              className="bg-none border-none text-purple-400 cursor-pointer px-0.5 text-sm font-bold leading-none hover:text-purple-650 transition-colors"
+                        {selectedModelGroups.map((mg) => {
+                          const isDiscontinued = isModelDiscontinued(mg);
+                          return (
+                            <span
+                              key={mg}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                isDiscontinued
+                                  ? "bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs"
+                                  : "bg-purple-50 text-indigo-650 border border-purple-100"
+                              }`}
                             >
-                              &times;
-                            </button>
-                          </span>
-                        ))}
+                              <span>{mg}</span>
+                              {isDiscontinued && (
+                                <span className="text-[9.5px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-amber-200/90 text-amber-950 border border-amber-300">
+                                  Discontinued
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleModelGroupToggle(mg)}
+                                className={`bg-none border-none cursor-pointer px-0.5 text-sm font-bold leading-none transition-colors ${
+                                  isDiscontinued ? "text-amber-600 hover:text-rose-600" : "text-purple-400 hover:text-purple-650"
+                                }`}
+                              >
+                                &times;
+                              </button>
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
 
@@ -632,6 +693,7 @@ export default function OfferForm() {
                         filteredModelGroups.length > 0 ? (
                           filteredModelGroups.map((mg) => {
                             const isChecked = selectedModelGroups.includes(mg);
+                            const isDiscontinued = isModelDiscontinued(mg);
                             return (
                               <label
                                 key={mg}
@@ -643,8 +705,13 @@ export default function OfferForm() {
                                   onChange={() => handleModelGroupToggle(mg)}
                                   className="w-4 h-4 accent-indigo-650 cursor-pointer"
                                 />
-                                <span className={isChecked ? "font-semibold text-indigo-650" : "font-normal text-slate-600"}>
-                                  {mg}
+                                <span className={isChecked ? "font-semibold text-indigo-650 flex items-center gap-1.5" : "font-normal text-slate-600 flex items-center gap-1.5"}>
+                                  <span>{mg}</span>
+                                  {isDiscontinued && (
+                                    <span className="text-[9.5px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                                      Discontinued
+                                    </span>
+                                  )}
                                 </span>
                               </label>
                             );

@@ -95,7 +95,8 @@ const syncModelGroupsController = async (req, res) => {
 
 const getAllModelGroupsController = async (req, res) => {
     try {
-        const modelGroups = await getAllModelGroups();
+        const onlyActive = req.query.active === 'true';
+        const modelGroups = await getAllModelGroups(onlyActive);
         res.status(200).json({
             success: true,
             message: 'Model groups retrieved successfully',

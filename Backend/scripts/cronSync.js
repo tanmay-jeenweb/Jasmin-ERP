@@ -4,6 +4,7 @@
  * Usage from terminal or cPanel Cron Job:
  *   node scripts/cronSync.js --type=sales
  *   node scripts/cronSync.js --type=masters
+ *   node scripts/cronSync.js --type=winnings
  *   node scripts/cronSync.js --type=all
  */
 
@@ -144,6 +145,7 @@ safetyTimeout.unref();
 const { syncBranchesController } = require('../controllers/branchController.js');
 const { syncModelGroupsController } = require('../controllers/modelGroupController.js');
 const { syncItemModelsController } = require('../controllers/itemModelController.js');
+const { syncContestWinningsController } = require('../controllers/contestWinningController.js');
 const { syncTargetVsAchievementsController } = require('../controllers/targetVsAchievementController.js');
 const { syncBrandWiseSalesController } = require('../controllers/brandWiseSalesController.js');
 
@@ -224,6 +226,16 @@ async function main() {
             console.log('\n--- Syncing Item Models ---');
             const imRes = await runController(syncItemModelsController);
             console.log(`Item Model Sync Status [${imRes.statusCode}]:`, imRes.data?.message || imRes.data);
+
+            console.log('\n--- Syncing Contest Winnings Master ---');
+            const winningRes = await runController(syncContestWinningsController);
+            console.log(`Contest Winnings Sync Status [${winningRes.statusCode}]:`, winningRes.data?.message || winningRes.data);
+        }
+
+        if (syncType === 'winnings' || syncType === 'contest') {
+            console.log('\n--- Syncing Contest Winnings Master ---');
+            const winningRes = await runController(syncContestWinningsController);
+            console.log(`Contest Winnings Sync Status [${winningRes.statusCode}]:`, winningRes.data?.message || winningRes.data);
         }
 
         if (syncType === 'sales' || syncType === 'all') {

@@ -71,6 +71,10 @@ const { createStockCacheTable } = require("./models/stockCacheModel.js");
 const { createRefreshTokensTable } = require("./models/refreshTokenModel.js");
 const { createSpecialTvaTable } = require("./models/specialTvaModel.js");
 const specialTvaRoutes = require("./routes/specialTvaRoutes.js");
+const { createPriceListTemplateTable } = require("./models/priceListTemplateModel.js");
+const priceListTemplateRoutes = require("./routes/priceListTemplateRoutes.js");
+const { createContestWinningsTable } = require("./models/contestWinningModel.js");
+const contestWinningRoutes = require("./routes/contestWinningRoutes.js");
 const appRoutes = require("./routes/appRoutes.js");
 
 
@@ -168,6 +172,8 @@ app.use("/v1/api/ticket-types", ticketTypeRoutes);
 app.use("/v1/api/sub-ticket-types", subTicketTypeRoutes);
 app.use("/v1/api/tickets", ticketRoutes);
 app.use("/v1/api/special-tva", specialTvaRoutes);
+app.use("/v1/api/price-list-templates", priceListTemplateRoutes);
+app.use("/v1/api/contest-winnings", contestWinningRoutes);
 app.use("/v1/api/external", externalRoutes);
 app.use("/v1/api/app", appRoutes);
 
@@ -224,6 +230,8 @@ const startServer = async () => {
         await createSubTicketTypeTable();
         await createTicketTables();
         await createSpecialTvaTable();
+        await createPriceListTemplateTable();
+        await createContestWinningsTable();
 
 
 
