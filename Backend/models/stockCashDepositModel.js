@@ -41,8 +41,14 @@ const getStockCashDepositReportData = async () => {
             (COALESCE(sc.opening_cash_deposit_pending, 0.00) - COALESCE(sc.cash_deposit, 0.00)) AS pending_cash_deposit,
             COALESCE(sc.credit_debit, 0.00) AS credit_debit,
             ((COALESCE(sc.stock_deposit, 0.00) + COALESCE(sc.support, 0.00) + COALESCE(sc.paid_support, 0.00)) 
-             - COALESCE(sc.current_stock, 0.00) 
-             + (COALESCE(sc.opening_cash_deposit_pending, 0.00) - COALESCE(sc.cash_deposit, 0.00))) AS available_limit
+             - (COALESCE(sc.current_stock, 0.00) + (COALESCE(sc.opening_cash_deposit_pending, 0.00) - COALESCE(sc.cash_deposit, 0.00)))) AS available_limit,
+            CASE 
+                WHEN COALESCE(sc.stock_deposit, 0.00) = 0 THEN 0.00
+                ELSE ROUND(
+                    ((COALESCE(sc.stock_deposit, 0.00) - COALESCE(sc.current_stock, 0.00) - (COALESCE(sc.opening_cash_deposit_pending, 0.00) - COALESCE(sc.cash_deposit, 0.00))) 
+                     / sc.stock_deposit) * 100, 2
+                )
+            END AS support_percent
         FROM branch_master bm
         LEFT JOIN state_master sm ON bm.state_id = sm.id
         LEFT JOIN branch_stock_cash_deposits sc ON bm.id = sc.branch_id
