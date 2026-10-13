@@ -111,6 +111,12 @@ async function populate() {
             console.log("Migrating: Adding item_code to sales_invoice_cache...");
             await db.execute("ALTER TABLE sales_invoice_cache ADD COLUMN item_code VARCHAR(100) DEFAULT NULL AFTER branch_name");
             console.log("✅ Migrated: item_code column added.");
+        }
+        const [docCols] = await db.execute("SHOW COLUMNS FROM sales_invoice_cache LIKE 'document_type'");
+        if (docCols.length === 0) {
+            console.log("Migrating: Adding document_type to sales_invoice_cache...");
+            await db.execute("ALTER TABLE sales_invoice_cache ADD COLUMN document_type VARCHAR(100) DEFAULT NULL AFTER record_type");
+            console.log("✅ Migrated: document_type column added.");
         } else {
             console.log("✅ Database schema is up to date.");
         }
@@ -187,7 +193,13 @@ async function populate() {
                     const invoiceDateStr = invoice.invoicePrimaryData?.InvoiceDate; // "DD/MM/YYYY"
                     const branchCode = invoice.invoicePrimaryData?.BranchCode;
                     const branchName = invoice.invoicePrimaryData?.BranchName;
+                    const documentType = (invoice.invoicePrimaryData?.DocumentType || 'Sales').trim();
                     if (!invoiceNo || !invoiceDateStr) continue;
+
+                    // Exclude records whose Document Type is "ISB Sales" (or invoice starts with ISB)
+                    if (documentType.toUpperCase() === 'ISB SALES' || invoiceNo.toUpperCase().startsWith('ISB')) {
+                        continue;
+                    }
 
                     const [id, im, iy] = invoiceDateStr.split('/');
                     const invoiceDbDate = `${iy}-${im.padStart(2, '0')}-${id.padStart(2, '0')}`;
@@ -226,7 +238,8 @@ async function populate() {
                                 itemModelName,
                                 qty,
                                 amount,
-                                'INVOICE'
+                                'INVOICE',
+                                documentType
                             ]);
                         }
                     }
@@ -235,17 +248,23 @@ async function populate() {
 
             if (salesReturns && salesReturns.length > 0) {
                 for (const srn of salesReturns) {
-                    const srnNo = srn.srnPrimaryData?.SRNNo || srn.srnPrimaryData?.InvoiceNo;
-                    const srnDateStr = srn.srnPrimaryData?.SRNDate || srn.srnPrimaryData?.InvoiceDate;
-                    const branchCode = srn.srnPrimaryData?.BranchCode;
-                    const branchName = srn.srnPrimaryData?.BranchName;
+                    const srnNo = srn.srnPrimaryData?.SRNNo || srn.srnPrimaryData?.InvoiceNo || srn.SRNPrimaryData?.SalesReturnNo;
+                    const srnDateStr = srn.srnPrimaryData?.SRNDate || srn.srnPrimaryData?.InvoiceDate || srn.SRNPrimaryData?.SalesReturnDate;
+                    const branchCode = srn.srnPrimaryData?.BranchCode || srn.SRNPrimaryData?.BranchCode;
+                    const branchName = srn.srnPrimaryData?.BranchName || srn.SRNPrimaryData?.BranchName;
+                    const documentType = (srn.srnPrimaryData?.DocumentType || srn.SRNPrimaryData?.DocumentType || 'Sales Return Note').trim();
                     if (!srnNo || !srnDateStr) continue;
+
+                    // Exclude records whose Document Type is "ISB Sales" (or return starts with ISB)
+                    if (documentType.toUpperCase() === 'ISB SALES' || srnNo.toUpperCase().startsWith('ISB')) {
+                        continue;
+                    }
 
                     const [sd, sm, sy] = srnDateStr.split('/');
                     const srnDbDate = `${sy}-${sm.padStart(2, '0')}-${sd.padStart(2, '0')}`;
 
-                    if (Array.isArray(srn.srnItemData)) {
-                        for (const item of srn.srnItemData) {
+                    if (Array.isArray(srn.srnItemData || srn.SRNItemData)) {
+                        for (const item of (srn.srnItemData || srn.SRNItemData)) {
                             const itemDesc = item.ItemDescription || '';
                             const parts = itemDesc.split(':');
                             if (parts.length < 2) continue;
@@ -278,7 +297,8 @@ async function populate() {
                                 itemModelName,
                                 qty,
                                 amount,
-                                'RETURN'
+                                'RETURN',
+                                documentType
                             ]);
                         }
                     }
@@ -297,7 +317,7 @@ async function populate() {
             if (insertValues.length > 0) {
                 const insertQuery = `
                     INSERT INTO sales_invoice_cache
-                    (invoice_no, invoice_date, branch_code, branch_name, item_code, item_model_name, qty, amount, record_type)
+                    (invoice_no, invoice_date, branch_code, branch_name, item_code, item_model_name, qty, amount, record_type, document_type)
                     VALUES ?
                     ON DUPLICATE KEY UPDATE
                         invoice_date = VALUES(invoice_date),
@@ -307,7 +327,8 @@ async function populate() {
                         item_model_name = VALUES(item_model_name),
                         qty = VALUES(qty),
                         amount = VALUES(amount),
-                        record_type = VALUES(record_type)
+                        record_type = VALUES(record_type),
+                        document_type = VALUES(document_type)
                 `;
                 await db.query(insertQuery, [insertValues]);
                 console.log(`Upserted ${insertValues.length} records into sales_invoice_cache.`);

@@ -185,7 +185,8 @@ export default function StockVsCashDepositReport() {
       cash_deposit: 0,
       pending_cash_deposit: 0,
       credit_debit: 0,
-      available_limit: 0
+      available_limit: 0,
+      support_percent: 0
     };
 
     filteredData.forEach(r => {
@@ -200,6 +201,10 @@ export default function StockVsCashDepositReport() {
       t.credit_debit += Number(r.credit_debit || 0);
       t.available_limit += Number(r.available_limit || 0);
     });
+
+    t.support_percent = t.stock_deposit > 0
+      ? ((t.stock_deposit - t.current_stock - t.pending_cash_deposit) / t.stock_deposit) * 100
+      : 0;
 
     return t;
   }, [filteredData]);
@@ -720,11 +725,18 @@ export default function StockVsCashDepositReport() {
         { header: "Cash Deposit", key: "cash_deposit", width: 16 },
         { header: "Pending Cash Deposit", key: "pending_cash_deposit", width: 22 },
         { header: "Credit / Debit", key: "credit_debit", width: 16 },
-        { header: "Available Limit with Cash Deposit", key: "available_limit", width: 30 }
+        { header: "Available Limit with Cash Deposit", key: "available_limit", width: 30 },
+        { header: "Support %", key: "support_percent", width: 16 }
       ];
 
       // Add data rows
       filteredData.forEach((row, index) => {
+        const supportPctVal = row.support_percent !== undefined
+          ? Number(row.support_percent)
+          : (Number(row.stock_deposit || 0) > 0
+              ? ((Number(row.stock_deposit || 0) - Number(row.current_stock || 0) - Number(row.pending_cash_deposit || 0)) / Number(row.stock_deposit || 0)) * 100
+              : 0);
+
         sheet.addRow({
           sr_no: index + 1,
           branch_name: row.branch_name || "",
@@ -742,7 +754,8 @@ export default function StockVsCashDepositReport() {
           cash_deposit: row.cash_deposit || 0,
           pending_cash_deposit: row.pending_cash_deposit || 0,
           credit_debit: row.credit_debit || 0,
-          available_limit: row.available_limit || 0
+          available_limit: row.available_limit || 0,
+          support_percent: `${supportPctVal.toFixed(2)}%`
         });
       });
 
@@ -764,7 +777,8 @@ export default function StockVsCashDepositReport() {
         cash_deposit: totals.cash_deposit || 0,
         pending_cash_deposit: totals.pending_cash_deposit || 0,
         credit_debit: totals.credit_debit || 0,
-        available_limit: totals.available_limit || 0
+        available_limit: totals.available_limit || 0,
+        support_percent: `${(totals.support_percent || 0).toFixed(2)}%`
       });
 
       // Style header row
@@ -1081,10 +1095,20 @@ export default function StockVsCashDepositReport() {
 
   // Add the "Total" row directly to the formatted data array
   const formattedData = useMemo(() => {
-    const base = filteredData.map((item, index) => ({
-      ...item,
-      sr_no: index + 1
-    }));
+    const base = filteredData.map((item, index) => {
+      const stockDeposit = Number(item.stock_deposit || 0);
+      const currentStock = Number(item.current_stock || 0);
+      const pendingCash = Number(item.pending_cash_deposit || 0);
+      const calcSupportPercent = stockDeposit > 0
+        ? ((stockDeposit - currentStock - pendingCash) / stockDeposit) * 100
+        : 0;
+
+      return {
+        ...item,
+        sr_no: index + 1,
+        support_percent: item.support_percent !== undefined ? Number(item.support_percent) : calcSupportPercent
+      };
+    });
 
     if (base.length === 0) return [];
 
@@ -1106,7 +1130,8 @@ export default function StockVsCashDepositReport() {
       cash_deposit: totals.cash_deposit,
       pending_cash_deposit: totals.pending_cash_deposit,
       credit_debit: totals.credit_debit,
-      available_limit: totals.available_limit
+      available_limit: totals.available_limit,
+      support_percent: totals.support_percent
     };
 
     return [...base, totalRow];
@@ -1231,6 +1256,26 @@ export default function StockVsCashDepositReport() {
         label: "Available Limit with Cash Deposit",
         minWidth: "240px",
         render: (row) => <span className={row.id === "Total" ? "font-extrabold text-emerald-900 text-sm" : "font-bold text-emerald-700"}>{formatVal(row.available_limit)}</span>
+      },
+      {
+        key: "support_percent",
+        label: "Support %",
+        minWidth: "130px",
+        render: (row) => {
+          const val = row.id === "Total"
+            ? totals.support_percent
+            : (row.support_percent !== undefined
+                ? Number(row.support_percent)
+                : (Number(row.stock_deposit || 0) > 0
+                    ? ((Number(row.stock_deposit || 0) - Number(row.current_stock || 0) - Number(row.pending_cash_deposit || 0)) / Number(row.stock_deposit || 0)) * 100
+                    : 0));
+          const isPositive = val >= 0;
+          return (
+            <span className={row.id === "Total" ? "font-extrabold text-blue-900 text-sm" : isPositive ? "font-bold text-blue-700" : "font-bold text-rose-600"}>
+              {val.toFixed(2)}%
+            </span>
+          );
+        }
       }
     ];
 
@@ -1872,26 +1917,52 @@ export default function StockVsCashDepositReport() {
 
                     </div>
 
-                    {/* Calculated Available Limit Prominent Display */}
-                    <div className="mt-6">
+                    {/* Calculated Available Limit & Support % Display */}
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                       {(() => {
                         const totalStockInvest = Number(editFormData.stock_deposit) + Number(editFormData.support) + Number(editFormData.paid_support);
                         const pendingCashDeposit = Number(editFormData.opening_cash_deposit_pending) - Number(editFormData.cash_deposit);
-                        const availableLimit = totalStockInvest - Number(editFormData.current_stock) + pendingCashDeposit;
+                        const availableLimit = totalStockInvest - (Number(editFormData.current_stock) + pendingCashDeposit);
                         const isPositive = availableLimit >= 0;
 
                         return (
-                          <div className={`p-4 rounded-xl border flex flex-col md:flex-row items-center justify-between text-center md:text-left gap-2.5 transition-all duration-200 ${
+                          <div className={`p-4 rounded-xl border flex flex-col justify-between gap-1.5 transition-all duration-200 ${
                             isPositive 
                               ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
                               : 'bg-rose-50 border-rose-200 text-rose-800'
                           }`}>
                             <div>
                               <span className="text-xs font-bold uppercase tracking-wider block opacity-75">Calculated Available Limit</span>
-                              <span className="text-[10px] opacity-75 mt-0.5 block">Formula: Total Stock Invest - Current Stock + Pending Cash Deposit</span>
+                              <span className="text-[10px] opacity-75 mt-0.5 block">Formula: Total Stock Invest - (Current Stock + Pending Cash Deposit)</span>
                             </div>
-                            <span className="text-2xl font-extrabold tracking-tight">
+                            <span className="text-xl font-extrabold tracking-tight">
                               {formatVal(availableLimit)}
+                            </span>
+                          </div>
+                        );
+                      })()}
+
+                      {(() => {
+                        const stockDeposit = Number(editFormData.stock_deposit) || 0;
+                        const currentStock = Number(editFormData.current_stock) || 0;
+                        const pendingCashDeposit = (Number(editFormData.opening_cash_deposit_pending) || 0) - (Number(editFormData.cash_deposit) || 0);
+                        const supportPercent = stockDeposit > 0
+                          ? ((stockDeposit - currentStock - pendingCashDeposit) / stockDeposit) * 100
+                          : 0;
+                        const isPositive = supportPercent >= 0;
+
+                        return (
+                          <div className={`p-4 rounded-xl border flex flex-col justify-between gap-1.5 transition-all duration-200 ${
+                            isPositive 
+                              ? 'bg-blue-50 border-blue-200 text-blue-800' 
+                              : 'bg-rose-50 border-rose-200 text-rose-800'
+                          }`}>
+                            <div>
+                              <span className="text-xs font-bold uppercase tracking-wider block opacity-75">Calculated Support %</span>
+                              <span className="text-[10px] opacity-75 mt-0.5 block">Formula: (Stock Deposit - Current Stock - Pending Cash Deposit) / Stock Deposit</span>
+                            </div>
+                            <span className="text-xl font-extrabold tracking-tight">
+                              {supportPercent.toFixed(2)}%
                             </span>
                           </div>
                         );

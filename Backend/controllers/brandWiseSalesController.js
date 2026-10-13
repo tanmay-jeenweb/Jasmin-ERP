@@ -277,7 +277,13 @@ const syncBrandWiseSalesController = async (req, res) => {
                 const invoiceDateStr = invoice.invoicePrimaryData?.InvoiceDate;
                 const branchCode = invoice.invoicePrimaryData?.BranchCode;
                 const branchName = invoice.invoicePrimaryData?.BranchName;
+                const documentType = (invoice.invoicePrimaryData?.DocumentType || 'Sales').trim();
                 if (!invoiceNo || !invoiceDateStr) continue;
+
+                // Exclude records whose Document Type is "ISB Sales" (or invoice starts with ISB)
+                if (documentType.toUpperCase() === 'ISB SALES' || invoiceNo.toUpperCase().startsWith('ISB')) {
+                    continue;
+                }
 
                 const [id, im, iy] = invoiceDateStr.split('/');
                 const invoiceDbDate = `${iy}-${im.padStart(2, '0')}-${id.padStart(2, '0')}`;
@@ -298,7 +304,8 @@ const syncBrandWiseSalesController = async (req, res) => {
                                 itemDesc,
                                 parseFloat(item.Qty) || 0,
                                 parseFloat(item.NetAmount) || 0,
-                                lastPart
+                                lastPart,
+                                documentType
                             ]);
                         }
                     }
@@ -307,17 +314,23 @@ const syncBrandWiseSalesController = async (req, res) => {
 
             const returnInsertValues = [];
             for (const srn of salesReturns) {
-                const srnNo = srn.SRNPrimaryData?.SalesReturnNo;
-                const srnDateStr = srn.SRNPrimaryData?.SalesReturnDate;
-                const branchCode = srn.SRNPrimaryData?.BranchCode;
-                const branchName = srn.SRNPrimaryData?.BranchName;
+                const srnNo = srn.SRNPrimaryData?.SalesReturnNo || srn.srnPrimaryData?.SalesReturnNo;
+                const srnDateStr = srn.SRNPrimaryData?.SalesReturnDate || srn.srnPrimaryData?.SalesReturnDate;
+                const branchCode = srn.SRNPrimaryData?.BranchCode || srn.srnPrimaryData?.BranchCode;
+                const branchName = srn.SRNPrimaryData?.BranchName || srn.srnPrimaryData?.BranchName;
+                const documentType = (srn.SRNPrimaryData?.DocumentType || srn.srnPrimaryData?.DocumentType || 'Sales Return Note').trim();
                 if (!srnNo || !srnDateStr) continue;
+
+                // Exclude records whose Document Type is "ISB Sales" (or return starts with ISB)
+                if (documentType.toUpperCase() === 'ISB SALES' || srnNo.toUpperCase().startsWith('ISB')) {
+                    continue;
+                }
 
                 const [sd, sm, sy] = srnDateStr.split('/');
                 const srnDbDate = `${sy}-${sm.padStart(2, '0')}-${sd.padStart(2, '0')}`;
 
-                if (Array.isArray(srn.SRNItemData)) {
-                    for (const item of srn.SRNItemData) {
+                if (Array.isArray(srn.SRNItemData || srn.srnItemData)) {
+                    for (const item of (srn.SRNItemData || srn.srnItemData)) {
                         const itemDesc = item.ItemDescription || '';
                         const parts = itemDesc.split(':');
                         const lastPart = parts[parts.length - 1]?.trim().toUpperCase();
@@ -332,7 +345,8 @@ const syncBrandWiseSalesController = async (req, res) => {
                                 itemDesc,
                                 parseFloat(item.Qty) || 0,
                                 parseFloat(item.NetAmount) || 0,
-                                lastPart
+                                lastPart,
+                                documentType
                             ]);
                         }
                     }
@@ -356,7 +370,7 @@ const syncBrandWiseSalesController = async (req, res) => {
                 if (invoiceInsertValues.length > 0) {
                     await connection.query(
                         `INSERT INTO synced_invoice_items (
-                            invoice_no, invoice_date, branch_code, branch_name, item_code, item_description, qty, net_amount, product_type
+                            invoice_no, invoice_date, branch_code, branch_name, item_code, item_description, qty, net_amount, product_type, document_type
                         ) VALUES ?`,
                         [invoiceInsertValues]
                     );
@@ -382,12 +396,13 @@ const syncBrandWiseSalesController = async (req, res) => {
                             itemModelName,
                             row[6], // qty
                             row[7], // net_amount as amount
-                            'INVOICE'
+                            'INVOICE',
+                            row[9]  // document_type
                         ];
                     });
                     await connection.query(`
                         INSERT INTO sales_invoice_cache
-                            (invoice_no, invoice_date, branch_code, branch_name, item_code, item_model_name, qty, amount, record_type)
+                            (invoice_no, invoice_date, branch_code, branch_name, item_code, item_model_name, qty, amount, record_type, document_type)
                         VALUES ?
                         ON DUPLICATE KEY UPDATE
                             invoice_date = VALUES(invoice_date),
@@ -397,14 +412,15 @@ const syncBrandWiseSalesController = async (req, res) => {
                             item_model_name = VALUES(item_model_name),
                             qty = VALUES(qty),
                             amount = VALUES(amount),
-                            record_type = VALUES(record_type)
+                            record_type = VALUES(record_type),
+                            document_type = VALUES(document_type)
                     `, [cacheInvoiceValues]);
                 }
 
                 if (returnInsertValues.length > 0) {
                     await connection.query(
                         `INSERT INTO synced_sales_return_items (
-                            sales_return_no, sales_return_date, branch_code, branch_name, item_code, item_description, qty, net_amount, product_type
+                            sales_return_no, sales_return_date, branch_code, branch_name, item_code, item_description, qty, net_amount, product_type, document_type
                         ) VALUES ?`,
                         [returnInsertValues]
                     );
@@ -430,12 +446,13 @@ const syncBrandWiseSalesController = async (req, res) => {
                             itemModelName,
                             row[6], // qty
                             row[7], // net_amount as amount
-                            'RETURN'
+                            'RETURN',
+                            row[9]  // document_type
                         ];
                     });
                     await connection.query(`
                         INSERT INTO sales_invoice_cache
-                            (invoice_no, invoice_date, branch_code, branch_name, item_code, item_model_name, qty, amount, record_type)
+                            (invoice_no, invoice_date, branch_code, branch_name, item_code, item_model_name, qty, amount, record_type, document_type)
                         VALUES ?
                         ON DUPLICATE KEY UPDATE
                             invoice_date = VALUES(invoice_date),
@@ -445,7 +462,8 @@ const syncBrandWiseSalesController = async (req, res) => {
                             item_model_name = VALUES(item_model_name),
                             qty = VALUES(qty),
                             amount = VALUES(amount),
-                            record_type = VALUES(record_type)
+                            record_type = VALUES(record_type),
+                            document_type = VALUES(document_type)
                     `, [cacheReturnValues]);
                 }
 

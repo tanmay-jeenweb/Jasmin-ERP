@@ -827,13 +827,28 @@ const syncTargetVsAchievementsController = async (req, res) => {
         const addedBy = req.user.id;
         const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
 
-        // Self-heal/ensure item_code column exists
+        // Self-heal/ensure item_code and document_type columns exist
         try {
             const [cols] = await db.execute("SHOW COLUMNS FROM sales_invoice_cache LIKE 'item_code'");
             if (cols.length === 0) {
                 console.log("Migrating (Controller): Adding item_code to sales_invoice_cache...");
                 await db.execute("ALTER TABLE sales_invoice_cache ADD COLUMN item_code VARCHAR(100) DEFAULT NULL AFTER branch_name");
                 console.log("✅ Migrated (Controller): item_code column added.");
+            }
+            const [docCols] = await db.execute("SHOW COLUMNS FROM sales_invoice_cache LIKE 'document_type'");
+            if (docCols.length === 0) {
+                await db.execute("ALTER TABLE sales_invoice_cache ADD COLUMN document_type VARCHAR(100) DEFAULT NULL AFTER record_type");
+                console.log("✅ Migrated (Controller): document_type added to sales_invoice_cache.");
+            }
+            const [siiDocCols] = await db.execute("SHOW COLUMNS FROM synced_invoice_items LIKE 'document_type'");
+            if (siiDocCols.length === 0) {
+                await db.execute("ALTER TABLE synced_invoice_items ADD COLUMN document_type VARCHAR(100) DEFAULT NULL AFTER product_type");
+                console.log("✅ Migrated (Controller): document_type added to synced_invoice_items.");
+            }
+            const [ssriDocCols] = await db.execute("SHOW COLUMNS FROM synced_sales_return_items LIKE 'document_type'");
+            if (ssriDocCols.length === 0) {
+                await db.execute("ALTER TABLE synced_sales_return_items ADD COLUMN document_type VARCHAR(100) DEFAULT NULL AFTER product_type");
+                console.log("✅ Migrated (Controller): document_type added to synced_sales_return_items.");
             }
         } catch (migrationError) {
             console.error("Controller migration check failed:", migrationError.message);
@@ -940,7 +955,13 @@ const syncTargetVsAchievementsController = async (req, res) => {
             const invoiceDateStr = invoice.invoicePrimaryData?.InvoiceDate; // "DD/MM/YYYY"
             const branchCode = invoice.invoicePrimaryData?.BranchCode;
             const branchName = invoice.invoicePrimaryData?.BranchName;
+            const documentType = (invoice.invoicePrimaryData?.DocumentType || 'Sales').trim();
             if (!invoiceNo || !invoiceDateStr) continue;
+
+            // Exclude records whose Document Type is "ISB Sales" (or invoice starts with ISB)
+            if (documentType.toUpperCase() === 'ISB SALES' || invoiceNo.toUpperCase().startsWith('ISB')) {
+                continue;
+            }
 
             const [id, im, iy] = invoiceDateStr.split('/');
             const invoiceDbDate = `${iy}-${im.padStart(2, '0')}-${id.padStart(2, '0')}`;
@@ -961,7 +982,8 @@ const syncTargetVsAchievementsController = async (req, res) => {
                             itemDesc,
                             parseFloat(item.Qty) || 0,
                             parseFloat(item.NetAmount) || 0,
-                            lastPart
+                            lastPart,
+                            documentType
                         ]);
                     }
                 }
@@ -969,17 +991,23 @@ const syncTargetVsAchievementsController = async (req, res) => {
         }
 
         for (const srn of salesReturns) {
-            const srnNo = srn.SRNPrimaryData?.SalesReturnNo;
-            const srnDateStr = srn.SRNPrimaryData?.SalesReturnDate; // "DD/MM/YYYY"
-            const branchCode = srn.SRNPrimaryData?.BranchCode;
-            const branchName = srn.SRNPrimaryData?.BranchName;
+            const srnNo = srn.SRNPrimaryData?.SalesReturnNo || srn.srnPrimaryData?.SalesReturnNo;
+            const srnDateStr = srn.SRNPrimaryData?.SalesReturnDate || srn.srnPrimaryData?.SalesReturnDate; // "DD/MM/YYYY"
+            const branchCode = srn.SRNPrimaryData?.BranchCode || srn.srnPrimaryData?.BranchCode;
+            const branchName = srn.SRNPrimaryData?.BranchName || srn.srnPrimaryData?.BranchName;
+            const documentType = (srn.SRNPrimaryData?.DocumentType || srn.srnPrimaryData?.DocumentType || 'Sales Return Note').trim();
             if (!srnNo || !srnDateStr) continue;
+
+            // Exclude records whose Document Type is "ISB Sales" (or return starts with ISB)
+            if (documentType.toUpperCase() === 'ISB SALES' || srnNo.toUpperCase().startsWith('ISB')) {
+                continue;
+            }
 
             const [sd, sm, sy] = srnDateStr.split('/');
             const srnDbDate = `${sy}-${sm.padStart(2, '0')}-${sd.padStart(2, '0')}`;
 
-            if (Array.isArray(srn.SRNItemData)) {
-                for (const item of srn.SRNItemData) {
+            if (Array.isArray(srn.SRNItemData || srn.srnItemData)) {
+                for (const item of (srn.SRNItemData || srn.srnItemData)) {
                     const itemDesc = item.ItemDescription || '';
                     const parts = itemDesc.split(':');
                     const lastPart = parts[parts.length - 1]?.trim().toUpperCase();
@@ -994,7 +1022,8 @@ const syncTargetVsAchievementsController = async (req, res) => {
                             itemDesc,
                             parseFloat(item.Qty) || 0,
                             parseFloat(item.NetAmount) || 0,
-                            lastPart
+                            lastPart,
+                            documentType
                         ]);
                     }
                 }
@@ -1020,7 +1049,7 @@ const syncTargetVsAchievementsController = async (req, res) => {
                 console.log(`Inserting ${insertValues.length} invoice items into synced_invoice_items`);
                 const insertQuery = `
                     INSERT INTO synced_invoice_items (
-                        invoice_no, invoice_date, branch_code, branch_name, item_code, item_description, qty, net_amount, product_type
+                        invoice_no, invoice_date, branch_code, branch_name, item_code, item_description, qty, net_amount, product_type, document_type
                     ) VALUES ?
                 `;
                 await connection.query(insertQuery, [insertValues]);
@@ -1030,7 +1059,7 @@ const syncTargetVsAchievementsController = async (req, res) => {
                 console.log(`Inserting ${srnInsertValues.length} return items into synced_sales_return_items`);
                 const insertQuery = `
                     INSERT INTO synced_sales_return_items (
-                        sales_return_no, sales_return_date, branch_code, branch_name, item_code, item_description, qty, net_amount, product_type
+                        sales_return_no, sales_return_date, branch_code, branch_name, item_code, item_description, qty, net_amount, product_type, document_type
                     ) VALUES ?
                 `;
                 await connection.query(insertQuery, [srnInsertValues]);
@@ -1066,12 +1095,13 @@ const syncTargetVsAchievementsController = async (req, res) => {
                     itemModelName,
                     row[6], // qty
                     row[7], // net_amount as amount
-                    'INVOICE'
+                    'INVOICE',
+                    row[9]  // document_type
                 ];
             });
             await db.query(`
                 INSERT INTO sales_invoice_cache
-                    (invoice_no, invoice_date, branch_code, branch_name, item_code, item_model_name, qty, amount, record_type)
+                    (invoice_no, invoice_date, branch_code, branch_name, item_code, item_model_name, qty, amount, record_type, document_type)
                 VALUES ?
                 ON DUPLICATE KEY UPDATE
                     invoice_date = VALUES(invoice_date),
@@ -1081,7 +1111,8 @@ const syncTargetVsAchievementsController = async (req, res) => {
                     item_model_name = VALUES(item_model_name),
                     qty = VALUES(qty),
                     amount = VALUES(amount),
-                    record_type = VALUES(record_type)
+                    record_type = VALUES(record_type),
+                    document_type = VALUES(document_type)
             `, [cacheInvoiceValues]);
             console.log(`Upserted ${cacheInvoiceValues.length} fresh invoice items into sales_invoice_cache.`);
         }
@@ -1105,12 +1136,13 @@ const syncTargetVsAchievementsController = async (req, res) => {
                     itemModelName,
                     row[6], // qty
                     row[7], // net_amount as amount
-                    'RETURN'
+                    'RETURN',
+                    row[9]  // document_type
                 ];
             });
             await db.query(`
                 INSERT INTO sales_invoice_cache
-                    (invoice_no, invoice_date, branch_code, branch_name, item_code, item_model_name, qty, amount, record_type)
+                    (invoice_no, invoice_date, branch_code, branch_name, item_code, item_model_name, qty, amount, record_type, document_type)
                 VALUES ?
                 ON DUPLICATE KEY UPDATE
                     invoice_date = VALUES(invoice_date),
@@ -1120,7 +1152,8 @@ const syncTargetVsAchievementsController = async (req, res) => {
                     item_model_name = VALUES(item_model_name),
                     qty = VALUES(qty),
                     amount = VALUES(amount),
-                    record_type = VALUES(record_type)
+                    record_type = VALUES(record_type),
+                    document_type = VALUES(document_type)
             `, [cacheReturnValues]);
             console.log(`Upserted ${cacheReturnValues.length} fresh return items into sales_invoice_cache.`);
         }

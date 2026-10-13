@@ -539,9 +539,10 @@ export default function ScratchWinReconciliation() {
       );
 
       const body = [];
-      let globalSrNo = 1;
 
       sortedBranches.forEach((branchGroup, branchIdx) => {
+        let branchSrNo = 1;
+
         // Sort rows within the branch by datetime
         branchGroup.rows.sort((a, b) => {
           const tA = new Date(a.invoice_datetime || a.contest_scratch_time || a.invoice_date || 0).getTime();
@@ -612,7 +613,7 @@ export default function ScratchWinReconciliation() {
           const winId = row.contest_external_id || (row.contest_id ? `#${row.contest_id}` : "—");
 
           const dataRow = [
-            globalSrNo++,
+            branchSrNo++,
             row.match_status_label || row.match_status || "—",
             branchCell,
             row.invoice_number || row.contest_invoice_number || "—",
