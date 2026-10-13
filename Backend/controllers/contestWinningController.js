@@ -117,7 +117,7 @@ const getUserAllowedBranchCodes = async (user) => {
 
         if (userRows.length > 0) {
             const u = userRows[0];
-            const isAdm = 
+            const isAdm =
                 (u.role && (u.role.toLowerCase() === 'admin' || u.role.toLowerCase() === 'super admin')) ||
                 (u.user_role && u.user_role.toLowerCase() === 'admin') ||
                 (u.type_name && u.type_name.toLowerCase() === 'admin');
@@ -232,7 +232,7 @@ const syncContestWinningsController = async (req, res) => {
     const deviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Web';
 
     const apiUrl = process.env.CONTEST_WINNINGS_API_URL || 'https://win.jasminmobile.com/api/winnings';
-    const token = process.env.CONTEST_WINNINGS_API_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NCwicm9sZSI6ImFkbWluIiwibmFtZSI6InRhdHZhbV9zaGFoIiwidXNlcm5hbWUiOiJ0YXR2YW1fc2hhaCIsIm1vYl9ubyI6Ijk4MjQwNjE2MjAiLCJpYXQiOjE3OTE3ODIyNjcsImV4cCI6MTc5MTg2ODY2N30.2RGaWVJmzLMIc1Brk-KzNSO2bMi-9t1mVX-Ew-t_5Kk';
+    const token = process.env.CONTEST_WINNINGS_API_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NCwicm9sZSI6ImFkbWluIiwibmFtZSI6InRhdHZhbV9zaGFoIiwidXNlcm5hbWUiOiJ0YXR2YW1fc2hhaCIsIm1vYl9ubyI6Ijk4MjQwNjE2MjAiLCJpYXQiOjE3OTE4NzAxMDcsImV4cCI6MTc5OTY0NjEwN30.lie7k6YfsaySWRGF4EUloBC9_KZI45_OFff0hmP9xx0';
 
     try {
         console.log(`[ContestSync] Fetching winnings from ${apiUrl}...`);
@@ -642,7 +642,7 @@ const getScratchWinReconciliationController = async (req, res) => {
                     phone_match: phoneMatched,
                     time_diff_minutes: timeDiffMinutes,
                     time_diff_human: timeDiffHuman,
-                    
+
                     // Invoice Details (ERP)
                     invoice_number: inv.invoice_number,
                     invoice_date: inv.invoice_date,
@@ -854,10 +854,62 @@ const getScratchWinReconciliationController = async (req, res) => {
     }
 };
 
+/**
+ * Controller: On-demand / manual trigger to generate & send reconciliation PDF email
+ */
+const sendReconciliationEmailController = async (req, res) => {
+    try {
+        const { getPreviousDateIST, getReconciliationRecords } = require('../services/reconciliationReportService.js');
+        const { generateReconciliationPdfBuffer } = require('../services/reconciliationPdfGenerator.js');
+        const { sendDailyReconciliationEmail } = require('../services/mailerService.js');
+
+        const { date, email } = req.body || {};
+        const targetDate = date || getPreviousDateIST();
+
+        const reconData = await getReconciliationRecords({
+            startDate: targetDate,
+            endDate: targetDate,
+            branchCodes: null,
+            statusFilter: 'ALL',
+            autoSync: true
+        });
+
+        const pdfBuffer = generateReconciliationPdfBuffer({
+            records: reconData.records,
+            startDate: targetDate,
+            endDate: targetDate,
+            activeTab: 'ALL',
+            generatedByName: req.user?.name || 'ERP User'
+        });
+
+        const mailResult = await sendDailyReconciliationEmail({
+            targetDate,
+            pdfBuffer,
+            summary: reconData.summary,
+            recipients: email || null
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: `Reconciliation report email for ${targetDate} dispatched successfully.`,
+            messageId: mailResult?.messageId,
+            summary: reconData.summary
+        });
+    } catch (err) {
+        console.error('Error dispatching reconciliation report email:', err);
+        return res.status(500).json({
+            success: false,
+            message: err.message || 'Failed to send reconciliation report email'
+        });
+    }
+};
+
 module.exports = {
     syncContestWinningsController,
     getContestWinningsMasterController,
     getLastSyncDetailsController,
     getScratchWinReconciliationController,
+    sendReconciliationEmailController,
     fetchAndCacheErpInvoices
 };
+

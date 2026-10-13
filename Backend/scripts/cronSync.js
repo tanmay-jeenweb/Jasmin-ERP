@@ -145,9 +145,10 @@ safetyTimeout.unref();
 const { syncBranchesController } = require('../controllers/branchController.js');
 const { syncModelGroupsController } = require('../controllers/modelGroupController.js');
 const { syncItemModelsController } = require('../controllers/itemModelController.js');
-const { syncContestWinningsController } = require('../controllers/contestWinningController.js');
+const { syncContestWinningsController, sendReconciliationEmailController } = require('../controllers/contestWinningController.js');
 const { syncTargetVsAchievementsController } = require('../controllers/targetVsAchievementController.js');
 const { syncBrandWiseSalesController } = require('../controllers/brandWiseSalesController.js');
+
 
 
 // Helper to wrap express controllers for CLI invocation with per-controller timeout
@@ -247,6 +248,13 @@ async function main() {
             const brandSalesRes = await runController(syncBrandWiseSalesController);
             console.log(`Brand Wise Sales Sync Status [${brandSalesRes.statusCode}]:`, brandSalesRes.data?.message || brandSalesRes.data);
         }
+
+        if (syncType === 'reconciliation-mail' || syncType === 'recon-mail') {
+            console.log('\n--- Generating & Emailing Daily Reconciliation Report ---');
+            const mailRes = await runController(sendReconciliationEmailController);
+            console.log(`Reconciliation Email Status [${mailRes.statusCode}]:`, mailRes.data?.message || mailRes.data);
+        }
+
 
         console.log(`\n====================================================`);
         console.log(`[${new Date().toISOString()}] Cron Sync Completed Successfully.`);
