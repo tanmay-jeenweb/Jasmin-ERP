@@ -14,9 +14,11 @@ const createTargetVsAchievementsTable = async () => {
             qty DECIMAL(15, 2) NOT NULL,
             net_amount DECIMAL(15, 2) NOT NULL,
             product_type VARCHAR(100) NOT NULL,
+            document_type VARCHAR(100) NULL,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_invoice_date (invoice_date),
-            INDEX idx_invoice_no (invoice_no)
+            INDEX idx_invoice_no (invoice_no),
+            INDEX idx_document_type (document_type)
         )
     `;
     await db.execute(createInvoicesQuery);
@@ -35,12 +37,14 @@ const createTargetVsAchievementsTable = async () => {
             qty             DECIMAL(10,2) NOT NULL DEFAULT 0,
             amount          DECIMAL(14,2) NOT NULL DEFAULT 0,
             record_type     ENUM('INVOICE','RETURN') NOT NULL DEFAULT 'INVOICE',
+            document_type   VARCHAR(100) DEFAULT NULL,
             created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             UNIQUE KEY uq_invoice_item (invoice_no, item_model_name, record_type),
             INDEX idx_invoice_date (invoice_date),
             INDEX idx_branch_code  (branch_code),
-            INDEX idx_record_type  (record_type)
+            INDEX idx_record_type  (record_type),
+            INDEX idx_document_type (document_type)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `;
     await db.execute(createCacheQuery);
@@ -59,13 +63,45 @@ const createTargetVsAchievementsTable = async () => {
             qty DECIMAL(15, 2) NOT NULL,
             net_amount DECIMAL(15, 2) NOT NULL,
             product_type VARCHAR(100) NOT NULL,
+            document_type VARCHAR(100) NULL,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_sales_return_date (sales_return_date),
-            INDEX idx_sales_return_no (sales_return_no)
+            INDEX idx_sales_return_no (sales_return_no),
+            INDEX idx_document_type (document_type)
         )
     `;
     await db.execute(createReturnsQuery);
     console.log("Synced Sales Return Items table ready");
+
+    // Ensure document_type column exists on existing tables
+    try {
+        const [sicCols] = await db.execute("SHOW COLUMNS FROM sales_invoice_cache LIKE 'document_type'");
+        if (sicCols.length === 0) {
+            await db.execute("ALTER TABLE sales_invoice_cache ADD COLUMN document_type VARCHAR(100) DEFAULT NULL AFTER record_type");
+            console.log("Added document_type column to sales_invoice_cache");
+        }
+        const [siiCols] = await db.execute("SHOW COLUMNS FROM synced_invoice_items LIKE 'document_type'");
+        if (siiCols.length === 0) {
+            await db.execute("ALTER TABLE synced_invoice_items ADD COLUMN document_type VARCHAR(100) DEFAULT NULL AFTER product_type");
+            console.log("Added document_type column to synced_invoice_items");
+        }
+        const [ssriCols] = await db.execute("SHOW COLUMNS FROM synced_sales_return_items LIKE 'document_type'");
+        if (ssriCols.length === 0) {
+            await db.execute("ALTER TABLE synced_sales_return_items ADD COLUMN document_type VARCHAR(100) DEFAULT NULL AFTER product_type");
+            console.log("Added document_type column to synced_sales_return_items");
+        }
+    } catch (migErr) {
+        console.warn("Migration check for document_type columns:", migErr.message);
+    }
+
+    // Ensure any ISB Sales records are removed
+    try {
+        await db.execute("DELETE FROM sales_invoice_cache WHERE UPPER(TRIM(invoice_no)) LIKE 'ISB%' OR UPPER(TRIM(COALESCE(document_type, ''))) = 'ISB SALES'");
+        await db.execute("DELETE FROM synced_invoice_items WHERE UPPER(TRIM(invoice_no)) LIKE 'ISB%' OR UPPER(TRIM(COALESCE(document_type, ''))) = 'ISB SALES'");
+        await db.execute("DELETE FROM synced_sales_return_items WHERE UPPER(TRIM(sales_return_no)) LIKE 'ISB%' OR UPPER(TRIM(COALESCE(document_type, ''))) = 'ISB SALES'");
+    } catch (cleanErr) {
+        console.warn("ISB Sales cleanup check:", cleanErr.message);
+    }
 
     const query = `
         CREATE TABLE IF NOT EXISTS target_vs_achievements (
