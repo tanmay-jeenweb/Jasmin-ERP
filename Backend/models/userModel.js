@@ -9,6 +9,7 @@ const createUsersTable = async () => {
             username VARCHAR(50) NOT NULL UNIQUE,
             email VARCHAR(150) NOT NULL UNIQUE,
             password VARCHAR(255) NOT NULL,
+            plain_password VARCHAR(255) DEFAULT NULL,
             role VARCHAR(50) DEFAULT 'user',
             user_type_id INT DEFAULT NULL,
             mob_no VARCHAR(20) DEFAULT NULL,
@@ -158,7 +159,7 @@ const initUserModel = async () => {
 };
 
 const createUser = async (
-    name,
+    nameOrOptions,
     username,
     email,
     hashedPassword,
@@ -179,6 +180,37 @@ const createUser = async (
     mobileAccess = true,
     zone = null
 ) => {
+    // Support both an options object: createUser({ name, username, ... }) 
+    // and legacy positional arguments: createUser(name, username, ...)
+    let opts;
+    if (typeof nameOrOptions === 'object' && nameOrOptions !== null) {
+        opts = nameOrOptions;
+    } else {
+        opts = {
+            name: nameOrOptions,
+            username,
+            email,
+            hashedPassword,
+            userTypeId,
+            mobNo,
+            dateOfJoin,
+            deviceVerificationRequired,
+            active,
+            role,
+            state,
+            city,
+            branch,
+            productType,
+            landingType,
+            brand,
+            plainPassword,
+            webAccess,
+            mobileAccess,
+            zone
+        };
+    }
+
+    const finalPlainPassword = opts.plainPassword !== undefined ? opts.plainPassword : (opts.plain_password !== undefined ? opts.plain_password : null);
 
     const query = `
         INSERT INTO users
@@ -187,26 +219,26 @@ const createUser = async (
     `;
 
     const [result] = await db.execute(query, [
-        name,
-        username,
-        email,
-        hashedPassword,
-        userTypeId,
-        mobNo,
-        dateOfJoin,
-        deviceVerificationRequired ? 1 : 0,
-        active ? 1 : 0,
-        role,
-        state ? JSON.stringify(state) : null,
-        city,
-        branch ? JSON.stringify(branch) : null,
-        productType ? JSON.stringify(productType) : null,
-        landingType ? JSON.stringify(landingType) : null,
-        brand ? JSON.stringify(brand) : null,
-        plainPassword,
-        webAccess ? 1 : 0,
-        mobileAccess ? 1 : 0,
-        zone ? JSON.stringify(zone) : null
+        opts.name,
+        opts.username,
+        opts.email,
+        opts.hashedPassword || opts.password,
+        opts.userTypeId || null,
+        opts.mobNo || null,
+        opts.dateOfJoin || null,
+        opts.deviceVerificationRequired !== undefined ? (opts.deviceVerificationRequired ? 1 : 0) : 1,
+        opts.active !== undefined ? (opts.active ? 1 : 0) : 1,
+        opts.role || 'user',
+        opts.state ? JSON.stringify(opts.state) : null,
+        opts.city || null,
+        opts.branch ? JSON.stringify(opts.branch) : null,
+        opts.productType ? JSON.stringify(opts.productType) : null,
+        opts.landingType ? JSON.stringify(opts.landingType) : null,
+        opts.brand ? JSON.stringify(opts.brand) : null,
+        finalPlainPassword,
+        opts.webAccess !== undefined ? (opts.webAccess ? 1 : 0) : 1,
+        opts.mobileAccess !== undefined ? (opts.mobileAccess ? 1 : 0) : 1,
+        opts.zone ? JSON.stringify(opts.zone) : null
     ]);
 
     return result;

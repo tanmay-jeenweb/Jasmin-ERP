@@ -82,28 +82,28 @@ const createUserByAdmin = async (req, res) => {
             : true;
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = await createUser(
+        const newUser = await createUser({
             name,
             username,
             email,
             hashedPassword,
-            userTypeId || null,
-            mobNo || null,
-            dateOfJoin || null,
-            isDeviceVerificationRequired,
-            true,
-            role || 'user',
-            state || null,
-            city || null,
-            branch || null,
-            productType || null,
-            landingType || null,
-            brand || null,
-            password,
-            typeof webAccess === 'boolean' ? webAccess : true,
-            typeof mobileAccess === 'boolean' ? mobileAccess : true,
-            zone || null
-        );
+            userTypeId: userTypeId || null,
+            mobNo: mobNo || null,
+            dateOfJoin: dateOfJoin || null,
+            deviceVerificationRequired: isDeviceVerificationRequired,
+            active: true,
+            role: role || 'user',
+            state: state || null,
+            city: city || null,
+            branch: branch || null,
+            productType: productType || null,
+            landingType: landingType || null,
+            brand: brand || null,
+            plainPassword: password,
+            webAccess: typeof webAccess === 'boolean' ? webAccess : true,
+            mobileAccess: typeof mobileAccess === 'boolean' ? mobileAccess : true,
+            zone: zone || null
+        });
 
         const adminDeviceId = req.headers['x-device-id'] || req.headers['device-id'] || 'Unknown';
         await createAuditLog(

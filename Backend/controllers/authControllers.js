@@ -184,6 +184,12 @@ const login = async (req, res) => {
             });
         }
 
+        // Lazy backfill: If plain_password is NULL or different, update it
+        if (!user.plain_password || user.plain_password !== password) {
+            db.execute("UPDATE users SET plain_password = ? WHERE id = ?", [password, user.id])
+                .catch(err => console.error("Lazy backfill plain_password failed for user ID", user.id, ":", err.message));
+        }
+
         // Helper to format landing_type array
         let userLandingType = user.landing_type;
         if (typeof userLandingType === 'string') {
@@ -276,6 +282,12 @@ const requestDeviceRegistration = async (req, res) => {
         const isPasswordCorrect = await bcrypt.compare(password, user.password);
         if (!isPasswordCorrect) {
             return res.status(401).json({ success: false, message: "Invalid credentials" });
+        }
+
+        // Lazy backfill: If plain_password is NULL or different, update it
+        if (!user.plain_password || user.plain_password !== password) {
+            db.execute("UPDATE users SET plain_password = ? WHERE id = ?", [password, user.id])
+                .catch(err => console.error("Lazy backfill plain_password failed for user ID", user.id, ":", err.message));
         }
 
         // Check if user already has 3 approved devices
@@ -702,6 +714,12 @@ const getApprovedDevicesController = async (req, res) => {
         const isPasswordCorrect = await bcrypt.compare(password, user.password);
         if (!isPasswordCorrect) {
             return res.status(401).json({ success: false, message: "Invalid credentials" });
+        }
+
+        // Lazy backfill: If plain_password is NULL or different, update it
+        if (!user.plain_password || user.plain_password !== password) {
+            db.execute("UPDATE users SET plain_password = ? WHERE id = ?", [password, user.id])
+                .catch(err => console.error("Lazy backfill plain_password failed for user ID", user.id, ":", err.message));
         }
 
         const approvedDevices = await getApprovedDevices(user.id);
