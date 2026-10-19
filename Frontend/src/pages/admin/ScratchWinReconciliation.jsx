@@ -63,6 +63,12 @@ export default function ScratchWinReconciliation() {
   const [branchSearch, setBranchSearch] = useState("");
   const branchDropdownRef = useRef(null);
 
+  // Multi-select prize dropdown state
+  const [selectedPrizes, setSelectedPrizes] = useState([]);
+  const [isPrizeDropdownOpen, setIsPrizeDropdownOpen] = useState(false);
+  const [prizeSearch, setPrizeSearch] = useState("");
+  const prizeDropdownRef = useRef(null);
+
   // Load branches from Branch Master
   useEffect(() => {
     getBranches()
@@ -85,6 +91,19 @@ export default function ScratchWinReconciliation() {
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isBranchDropdownOpen]);
+
+  // Click outside to close prize dropdown
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (prizeDropdownRef.current && !prizeDropdownRef.current.contains(e.target)) {
+        setIsPrizeDropdownOpen(false);
+      }
+    };
+    if (isPrizeDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isPrizeDropdownOpen]);
 
   // Fetch Reconciliation Data (fetches ALL records so tabs switch instantaneously in memory)
   const fetchReconciliation = async (forceSync = false) => {
@@ -159,13 +178,31 @@ export default function ScratchWinReconciliation() {
     return codes;
   }, [isUserAdmin, serverAllowedBranchCodes, branches]);
 
-  // Derive filtered records based on activeTab in frontend memory (instant 0ms switching!)
+  // Derive filtered records based on activeTab and selectedPrizes in frontend memory (instant 0ms switching!)
   const records = useMemo(() => {
-    if (activeTab === "ALL") return allRecords;
-    return allRecords.filter((item) => item.match_status === activeTab);
-  }, [allRecords, activeTab]);
+    let list = allRecords;
 
-  // Reactive refetch only when date range or branch filter changes (NOT on activeTab!)
+    if (activeTab !== "ALL") {
+      list = list.filter((item) => item.match_status === activeTab);
+    }
+
+    if (selectedPrizes.length > 0) {
+      const prizeSet = new Set(selectedPrizes);
+      const includeNoPrize = prizeSet.has("__NO_PRIZE__");
+
+      list = list.filter((item) => {
+        const p = item.contest_prize ? String(item.contest_prize).trim() : "";
+        if (p && p !== "—") {
+          return prizeSet.has(p);
+        }
+        return includeNoPrize;
+      });
+    }
+
+    return list;
+  }, [allRecords, activeTab, selectedPrizes]);
+
+  // Reactive refetch only when date range or branch filter changes (NOT on activeTab or prizes!)
   useEffect(() => {
     fetchReconciliation();
   }, [startDate, endDate, selectedBranches]);
@@ -197,6 +234,8 @@ export default function ScratchWinReconciliation() {
     setStartDate("2026-10-05");
     setEndDate(new Date().toLocaleDateString("en-CA"));
     setSelectedBranches([]);
+    setSelectedPrizes([]);
+    setPrizeSearch("");
     setActiveTab("ALL");
   };
 
@@ -227,6 +266,57 @@ export default function ScratchWinReconciliation() {
     });
   }, [branches, branchSearch]);
 
+  // Dynamic unique prizes and counts from allRecords
+  const availablePrizes = useMemo(() => {
+    const counts = {};
+    let noPrizeCount = 0;
+
+    allRecords.forEach((item) => {
+      const rawPrize = item.contest_prize ? String(item.contest_prize).trim() : "";
+      if (rawPrize && rawPrize !== "—") {
+        counts[rawPrize] = (counts[rawPrize] || 0) + 1;
+      } else {
+        noPrizeCount++;
+      }
+    });
+
+    const sortedPrizes = Object.keys(counts).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+
+    return {
+      prizes: sortedPrizes,
+      counts,
+      noPrizeCount
+    };
+  }, [allRecords]);
+
+  // Filtered prize options based on search within dropdown
+  const filteredPrizeList = useMemo(() => {
+    if (!prizeSearch.trim()) return availablePrizes.prizes;
+    const q = prizeSearch.trim().toLowerCase();
+    return availablePrizes.prizes.filter((p) => p.toLowerCase().includes(q));
+  }, [availablePrizes, prizeSearch]);
+
+  // Prize toggle handlers
+  const handleTogglePrize = (prizeName) => {
+    setSelectedPrizes((prev) =>
+      prev.includes(prizeName) ? prev.filter((p) => p !== prizeName) : [...prev, prizeName]
+    );
+  };
+
+  const handleSelectAllPrizes = () => {
+    const all = [...availablePrizes.prizes];
+    if (availablePrizes.noPrizeCount > 0) {
+      all.push("__NO_PRIZE__");
+    }
+    setSelectedPrizes(all);
+  };
+
+  const handleClearAllPrizes = () => {
+    setSelectedPrizes([]);
+  };
+
   // Export to Excel
   const handleExportExcel = async () => {
     if (records.length === 0) {
@@ -250,7 +340,10 @@ export default function ScratchWinReconciliation() {
       // Subtitle
       worksheet.mergeCells("A2:P2");
       const subCell = worksheet.getCell("A2");
-      subCell.value = `Date Range: ${startDate} to ${endDate} | Total Invoices: ${summary.totalInvoices || 0} | Total Winnings: ${summary.totalWinnings || 0} | Fully Matched: ${summary.fullyMatchedCount || 0} | Partially Matched: ${summary.partiallyMatchedCount || 0} | Exported on: ${new Date().toLocaleString("en-IN")}`;
+      const prizeExportLabel = selectedPrizes.length > 0
+        ? ` | Filtered Prizes (${selectedPrizes.length}): ${selectedPrizes.map((p) => p === "__NO_PRIZE__" ? "No Scratch Record" : p).join(", ")}`
+        : "";
+      subCell.value = `Date Range: ${startDate} to ${endDate} | Total Invoices: ${summary.totalInvoices || 0} | Total Winnings: ${summary.totalWinnings || 0} | Fully Matched: ${summary.fullyMatchedCount || 0} | Partially Matched: ${summary.partiallyMatchedCount || 0} | Exported: ${records.length} records${prizeExportLabel} | Exported on: ${new Date().toLocaleString("en-IN")}`;
       subCell.font = { name: "Calibri", size: 10, italic: true, color: { argb: "FF334155" } };
       subCell.alignment = { vertical: "middle", horizontal: "left" };
       worksheet.getRow(2).height = 20;
@@ -476,7 +569,10 @@ export default function ScratchWinReconciliation() {
       doc.setFontSize(7.2);
       doc.setFont("helvetica", "bold");
       const tabLabel = activeTab === "ALL" ? "All Categories" : (exportRows[0]?.match_status_label || activeTab);
-      doc.text(`Date Range: ${startDate} to ${endDate}   |   Status: ${tabLabel}   ${branchLabelText}`, 10, 19.8);
+      const prizePdfText = selectedPrizes.length > 0
+        ? `   |   Prizes: ${selectedPrizes.map((p) => p === "__NO_PRIZE__" ? "No Scratch Record" : p).join(", ")}`
+        : "";
+      doc.text(`Date Range: ${startDate} to ${endDate}   |   Status: ${tabLabel}   ${branchLabelText}${prizePdfText}`, 10, 19.8);
 
       // Total Records breakdown on right
       doc.setTextColor(15, 23, 42);
@@ -1062,7 +1158,7 @@ export default function ScratchWinReconciliation() {
     []
   );
 
-  // Total records across all categories
+  // Total records across all categories (unfiltered backend baseline)
   const totalAllRecordsCount = useMemo(() => {
     if (summary.totalAllReconciled !== undefined && summary.totalAllReconciled !== null) {
       return summary.totalAllReconciled;
@@ -1075,16 +1171,46 @@ export default function ScratchWinReconciliation() {
     );
   }, [summary]);
 
-  // Top row filter controls: Compact Branch multi-select + From Date + To Date + Reset
+  // Synchronized counts for status tabs reflecting active prize filters
+  const tabCounts = useMemo(() => {
+    if (selectedPrizes.length === 0) {
+      return {
+        all: totalAllRecordsCount,
+        matched: summary.fullyMatchedCount || summary.matchedCount || 0,
+        partial: summary.partiallyMatchedCount || 0,
+        notScratched: summary.invoiceNotScratchedCount || 0,
+        noInvoice: summary.winningNoInvoiceCount || 0
+      };
+    }
+
+    const prizeSet = new Set(selectedPrizes);
+    const includeNoPrize = prizeSet.has("__NO_PRIZE__");
+
+    const prizeFiltered = allRecords.filter((item) => {
+      const p = item.contest_prize ? String(item.contest_prize).trim() : "";
+      if (p && p !== "—") return prizeSet.has(p);
+      return includeNoPrize;
+    });
+
+    return {
+      all: prizeFiltered.length,
+      matched: prizeFiltered.filter((r) => r.match_status === "MATCHED").length,
+      partial: prizeFiltered.filter((r) => r.match_status === "PARTIALLY_MATCHED").length,
+      notScratched: prizeFiltered.filter((r) => r.match_status === "INVOICE_NOT_SCRATCHED").length,
+      noInvoice: prizeFiltered.filter((r) => r.match_status === "WINNING_NO_INVOICE").length
+    };
+  }, [allRecords, selectedPrizes, summary, totalAllRecordsCount]);
+
+  // Top row filter controls: Compact Branch multi-select + Prize Won multi-select + From Date + To Date + Reset
   const tableToggleActions = useMemo(() => (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
       {/* Compact Branch Multi-select Dropdown with Search */}
       <div className="relative" ref={branchDropdownRef}>
         <button
           type="button"
           onClick={() => setIsBranchDropdownOpen((v) => !v)}
           title="Filter by Branches"
-          className="h-10 w-36 sm:w-40 px-3 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50 text-slate-700 outline-none focus:border-blue-600 cursor-pointer flex items-center justify-between gap-1 shadow-sm hover:bg-slate-100 transition"
+          className="h-10 w-28 sm:w-32 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-slate-50 text-slate-700 outline-none focus:border-blue-600 cursor-pointer flex items-center justify-between gap-1 shadow-sm hover:bg-slate-100 transition"
         >
           <span className="truncate text-xs font-medium text-left">
             {selectedBranches.length === 0
@@ -1177,38 +1303,176 @@ export default function ScratchWinReconciliation() {
         )}
       </div>
 
+      {/* Multi-Select Contest Prize Won Dropdown */}
+      <div className="relative" ref={prizeDropdownRef}>
+        <button
+          type="button"
+          onClick={() => setIsPrizeDropdownOpen((v) => !v)}
+          title="Filter by Contest Prize Won"
+          className={`h-10 w-28 sm:w-32 px-2.5 py-1.5 border rounded-lg text-xs outline-none cursor-pointer flex items-center justify-between gap-1 shadow-sm transition ${
+            selectedPrizes.length > 0
+              ? "border-amber-400 bg-amber-50 text-amber-900 font-semibold"
+              : "border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100"
+          }`}
+        >
+          <div className="flex items-center gap-1.5 min-w-0 truncate">
+            <span className={`p-0.5 rounded shrink-0 ${selectedPrizes.length > 0 ? "bg-amber-200 text-amber-800" : "bg-amber-100 text-amber-600"}`}>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V6a2 2 0 10-2 2h2zm0 0H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V10a2 2 0 00-2-2h-8z" />
+              </svg>
+            </span>
+            <span className="truncate text-xs font-medium text-left">
+              {selectedPrizes.length === 0
+                ? "All Prizes"
+                : selectedPrizes.length === 1
+                ? (selectedPrizes[0] === "__NO_PRIZE__" ? "No Prize" : selectedPrizes[0])
+                : `${selectedPrizes.length} Prizes`}
+            </span>
+          </div>
+          <svg
+            className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${isPrizeDropdownOpen ? "rotate-180 text-amber-600" : ""}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {/* Floating Dropdown with Search & Checkboxes */}
+        {isPrizeDropdownOpen && (
+          <div className="absolute left-0 sm:right-0 sm:left-auto top-11 z-50 w-72 rounded-xl border border-slate-200 bg-white shadow-2xl p-2.5 space-y-2">
+            {/* Search within dropdown */}
+            <div className="relative">
+              <input
+                type="text"
+                value={prizeSearch}
+                onChange={(e) => setPrizeSearch(e.target.value)}
+                placeholder="Search prizes..."
+                className="w-full pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:border-amber-500 bg-slate-50"
+                autoFocus
+              />
+              <svg className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="flex items-center justify-between px-1 text-[11px] text-slate-500 border-b border-slate-100 pb-1.5">
+              <span>{selectedPrizes.length} selected</span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleSelectAllPrizes}
+                  className="text-amber-600 hover:text-amber-800 font-semibold cursor-pointer"
+                >
+                  Select All
+                </button>
+                <span>|</span>
+                <button
+                  type="button"
+                  onClick={handleClearAllPrizes}
+                  className="text-slate-500 hover:text-slate-700 font-semibold cursor-pointer"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable list of prizes */}
+            <div className="max-h-60 overflow-y-auto space-y-0.5 pr-1">
+              {filteredPrizeList.length === 0 && (!availablePrizes.noPrizeCount || !prizeSearch.toLowerCase().includes("no")) ? (
+                <div className="p-3 text-center text-xs text-slate-400">No prizes found</div>
+              ) : (
+                <>
+                  {filteredPrizeList.map((prizeName) => {
+                    const isChecked = selectedPrizes.includes(prizeName);
+                    const count = availablePrizes.counts[prizeName] || 0;
+                    return (
+                      <label
+                        key={prizeName}
+                        className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs cursor-pointer select-none transition ${
+                          isChecked ? "bg-amber-50 text-amber-900 font-semibold" : "hover:bg-slate-50 text-slate-700"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleTogglePrize(prizeName)}
+                            className="accent-amber-600 h-3.5 w-3.5 rounded flex-shrink-0 cursor-pointer"
+                          />
+                          <span className="truncate">{prizeName}</span>
+                        </div>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-mono">
+                          {count}
+                        </span>
+                      </label>
+                    );
+                  })}
+
+                  {/* Option for records with No Scratch / No Prize */}
+                  {availablePrizes.noPrizeCount > 0 && (!prizeSearch.trim() || "no scratch record / no prize".includes(prizeSearch.toLowerCase())) && (
+                    <label
+                      className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs cursor-pointer select-none transition border-t border-slate-100 mt-1 pt-1.5 ${
+                        selectedPrizes.includes("__NO_PRIZE__")
+                          ? "bg-slate-100 text-slate-900 font-semibold"
+                          : "hover:bg-slate-50 text-slate-500 italic"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <input
+                          type="checkbox"
+                          checked={selectedPrizes.includes("__NO_PRIZE__")}
+                          onChange={() => handleTogglePrize("__NO_PRIZE__")}
+                          className="accent-slate-600 h-3.5 w-3.5 rounded flex-shrink-0 cursor-pointer"
+                        />
+                        <span className="truncate">No Scratch Record</span>
+                      </div>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-600 font-mono">
+                        {availablePrizes.noPrizeCount}
+                      </span>
+                    </label>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* From Date */}
-      <div className="flex items-center gap-1.5">
-        <span className="text-xs font-semibold text-slate-500 whitespace-nowrap hidden sm:inline">From:</span>
+      <div className="flex items-center gap-1">
+        <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap hidden sm:inline">From:</span>
         <input
           type="date"
           min="2026-10-05"
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}
-          className="h-10 px-2.5 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50 text-slate-700 outline-none focus:border-blue-600"
+          className="h-10 w-28 sm:w-32 px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-slate-50 text-slate-700 outline-none focus:border-blue-600 cursor-pointer"
           title="From Date (Min 05-10-2026)"
         />
       </div>
 
       {/* To Date */}
-      <div className="flex items-center gap-1.5">
-        <span className="text-xs font-semibold text-slate-500 whitespace-nowrap hidden sm:inline">To:</span>
+      <div className="flex items-center gap-1">
+        <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap hidden sm:inline">To:</span>
         <input
           type="date"
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
-          className="h-10 px-2.5 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50 text-slate-700 outline-none focus:border-blue-600"
+          className="h-10 w-28 sm:w-32 px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-slate-50 text-slate-700 outline-none focus:border-blue-600 cursor-pointer"
           title="To Date"
         />
       </div>
 
       {/* Quick Reset if filters active */}
-      {(selectedBranches.length > 0 || startDate !== "2026-10-05" || endDate !== new Date().toLocaleDateString("en-CA")) && (
+      {(selectedBranches.length > 0 || selectedPrizes.length > 0 || startDate !== "2026-10-05" || endDate !== new Date().toLocaleDateString("en-CA")) && (
         <button
           type="button"
           onClick={handleResetFilters}
           title="Reset filters to default"
-          className="h-10 px-3 border border-slate-300 hover:bg-slate-100 text-slate-600 text-xs font-semibold rounded-lg transition cursor-pointer flex items-center gap-1"
+          className="h-10 px-2.5 border border-slate-300 hover:bg-slate-100 text-slate-600 text-xs font-semibold rounded-lg transition cursor-pointer flex items-center gap-1 shrink-0"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1217,7 +1481,7 @@ export default function ScratchWinReconciliation() {
         </button>
       )}
     </div>
-  ), [selectedBranches, isBranchDropdownOpen, branchSearch, filteredBranchList, startDate, endDate]);
+  ), [selectedBranches, isBranchDropdownOpen, branchSearch, filteredBranchList, selectedPrizes, isPrizeDropdownOpen, prizeSearch, filteredPrizeList, availablePrizes, startDate, endDate]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -1310,7 +1574,7 @@ export default function ScratchWinReconciliation() {
           >
             All Records
             <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === "ALL" ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-700 font-bold"}`}>
-              {totalAllRecordsCount}
+              {tabCounts.all}
             </span>
           </button>
 
@@ -1325,7 +1589,7 @@ export default function ScratchWinReconciliation() {
           >
             🟢 Fully Matched
             <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === "MATCHED" ? "bg-emerald-700 text-white" : "bg-emerald-100 text-emerald-800 font-bold"}`}>
-              {summary.fullyMatchedCount || summary.matchedCount || 0}
+              {tabCounts.matched}
             </span>
           </button>
 
@@ -1340,7 +1604,7 @@ export default function ScratchWinReconciliation() {
           >
             🔵 Partially Matched
             <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === "PARTIALLY_MATCHED" ? "bg-sky-700 text-white" : "bg-sky-100 text-sky-800 font-bold"}`}>
-              {summary.partiallyMatchedCount || 0}
+              {tabCounts.partial}
             </span>
           </button>
 
@@ -1355,7 +1619,7 @@ export default function ScratchWinReconciliation() {
           >
             🟡 Invoices Not Scratched
             <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === "INVOICE_NOT_SCRATCHED" ? "bg-amber-700 text-white" : "bg-amber-100 text-amber-800 font-bold"}`}>
-              {summary.invoiceNotScratchedCount || 0}
+              {tabCounts.notScratched}
             </span>
           </button>
 
@@ -1370,7 +1634,7 @@ export default function ScratchWinReconciliation() {
           >
             🔴 Winnings Without Invoice
             <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === "WINNING_NO_INVOICE" ? "bg-rose-700 text-white" : "bg-rose-100 text-rose-800 font-bold"}`}>
-              {summary.winningNoInvoiceCount || 0}
+              {tabCounts.noInvoice}
             </span>
           </button>
         </div>
@@ -1397,7 +1661,7 @@ export default function ScratchWinReconciliation() {
               columns={columns}
               data={records}
               toggleActions={tableToggleActions}
-              searchPlaceholder="Search Invoice, Mobile, Customer Name, Prize..."
+              searchPlaceholder="Search Invoice, Prize, Mobile..."
               initialPageSize={50}
               pageSizeOptions={[25, 50, 100, 200]}
               showColumnToggle={true}

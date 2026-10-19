@@ -31,9 +31,9 @@ async function addUser() {
 
         // Insert user
         await db.execute(
-            `INSERT INTO users (name, username, email, password, role, active, device_verification_required)
-             VALUES (?, ?, ?, ?, ?, 1, 0)`,
-            [name, username, email, hashedPassword, role]
+            `INSERT INTO users (name, username, email, password, role, active, device_verification_required, plain_password)
+             VALUES (?, ?, ?, ?, ?, 1, 0, ?)`,
+            [name, username, email, hashedPassword, role, plainPassword]
         );
 
         console.log("✅ User created successfully!\n");
